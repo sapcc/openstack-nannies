@@ -1,0 +1,5 @@
+FROM __NOVA_NANNY_BASE_IMAGE__
+
+ADD scripts scripts
+
+RUN /var/lib/kolla/venv/bin/pip install click==6.7
