@@ -135,7 +135,9 @@ def cleanup_items(host, username, password, interval, iterations, dry_run):
                 if uuid not in known:
                     missing[uuid] = location
         except vim.fault.InaccessibleDatastore as e:
-            log.warn("- something went wrong trying to access this datastore!: %s", e.msg)
+            log.warn("- something went wrong trying to access this datastore: %s", e.msg)
+        except vim.fault.FileNotFound as e:
+            log.warn("- something went wrong trying to access this datastore: %s", e.msg)
 
     tasks = []
 
