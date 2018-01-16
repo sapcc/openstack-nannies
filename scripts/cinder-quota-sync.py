@@ -175,7 +175,7 @@ def get_db_url(config_file):
     parser = ConfigParser.SafeConfigParser()
     try:
         parser.read(config_file)
-        db_url = parser.get('database', 'connection')
+        db_url = parser.get('database', 'connection', raw=True)
     except:
         print "ERROR: Check Cinder configuration file."
         sys.exit(2)
