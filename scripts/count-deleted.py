@@ -15,7 +15,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 #
-# this script checks for volume attachments of already deleted volumes in the cinder db
+# this script counts the number of elements per table with the deleted flag set
 
 import argparse
 import sys
@@ -37,19 +37,21 @@ from sqlalchemy.ext.declarative import declarative_base
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
-def get_wrong_volume_attachments(meta):
+def get_deleted(meta, table_name):
 
-    """Return a dict with indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments"""
+    """Return the number of elements with the deleted flag set, i.e. not 0 ... -1 means no deleted flag"""
 
-    wrong_attachments = {}
-    volume_attachment_t = Table('volume_attachment', meta, autoload=True)
-    volumes_t = Table('volumes', meta, autoload=True)
-    attachment_join = volume_attachment_t.join(volumes_t,volume_attachment_t.c.volume_id == volumes_t.c.id)
-    wrong_volume_attachment_q = select(columns=[volumes_t.c.id,volumes_t.c.deleted,volume_attachment_t.c.id,volume_attachment_t.c.deleted]).select_from(attachment_join).where(and_(volumes_t.c.deleted == "true",volume_attachment_t.c.deleted == "false"))
+    deleted_t = Table(table_name, meta, autoload=True)
+    try:
+        deleted_q = select(columns=[deleted_t.c.deleted])
+        deleted_count = 0
+        for i in deleted_q.execute():
+            if i[0] != 0:
+                deleted_count += 1
+    except AttributeError:
+        deleted_count = -1
 
-    for (volume_id, volume_deleted, volume_attachment_id, volume_attachment_deleted) in wrong_volume_attachment_q.execute():
-        wrong_attachments[volume_attachment_id] = volume_id
-    return wrong_attachments
+    return deleted_count
 
 def makeConnection(db_url):
 
@@ -63,6 +65,8 @@ def makeConnection(db_url):
     metadata.bind = engine
     Base = declarative_base()
     tpl = thisSession, metadata, Base
+    # reflect db schema to MetaData
+    metadata.reflect(bind=engine)
     return tpl
 
 def get_db_url(config_file):
@@ -74,7 +78,7 @@ def get_db_url(config_file):
         parser.read(config_file)
         db_url = parser.get('database', 'connection', raw=True)
     except:
-        print "ERROR: Check Cinder configuration file."
+        print "ERROR: Check configuration file."
         sys.exit(2)
     return db_url
 
@@ -82,11 +86,8 @@ def get_db_url(config_file):
 def parse_cmdline_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config",
-                        default='./cinder.conf',
+                        default='./config.conf',
                         help='configuration file')
-    parser.add_argument("--dry-run",
-                       action="store_true",
-                       help='print only what would be done without actually doing it')
     return parser.parse_args()
 
 def main():
@@ -97,22 +98,13 @@ def main():
 
     # connect to the DB
     db_url = get_db_url(args.config)
-    cinder_session, cinder_metadata, cinder_Base = makeConnection(db_url)
+    session, metadata, Base = makeConnection(db_url)
 
-    if not args.dry_run:
-        log.info("- should not get here")
-        # delete the corresponding entries
-    else:
-        wrong_attachments = get_wrong_volume_attachments(cinder_metadata)
-        if len(wrong_attachments) != 0:
-            print "- volume attachment inconsistencies found"
-            # print out what we would delete
-            ptable = PrettyTable(["volume_attachment_id", "volume_id"])
-            for volume_attachment_id in wrong_attachments:
-                ptable.add_row([volume_attachment_id,wrong_attachments[volume_attachment_id]])
-            print ptable
-        else:
-            print "- volume attachments are consistent"
+    # for all tables print the number of entries marked as deleted - -1 means: no deleted flag in that table
+    ptable = PrettyTable(["table name", "# deleted"])
+    for i in metadata.tables.keys():
+        ptable.add_row([i,get_deleted(metadata,i)])
+    print ptable
 
 if __name__ == "__main__":
     main()
