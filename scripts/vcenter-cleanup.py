@@ -190,14 +190,14 @@ def cleanup_items(host, username, password, interval, iterations, dry_run):
                 # check if the vm has a nic configured
                 for j in vm.config.hardware.device:
                     if j.key == 4000:
-                        has_no_nic = True
-                    else:
                         has_no_nic = False
+                    else:
+                        has_no_nic = True
                 # we store the openstack project id in the annotations of the vm
                 annotation = vm.config.annotation or ''
                 items = dict([line.split(':', 1) for line in annotation.splitlines()])
                 # we search for either vms with a project_id in the annotation (i.e. real vms) or
-                # for powered off vms with 128mb mem and one cpu which are stored on vvol (i.e. shadow vm for a volume)
+                # for powered off vms with 128mb, one cpu and no nic which are stored on vvol (i.e. shadow vm for a volume)
                 if 'projectid' in items or (vm.config.hardware.memoryMB == 128 and vm.config.hardware.numCPU == 1 and power_state == 'poweredOff' and is_vvol and has_no_nic):
                     # log.debug(
                     #    "{folder}: {power_state} {projectid}".format(power_state=power_state, projectid=items['projectid'],
@@ -216,6 +216,8 @@ def cleanup_items(host, username, password, interval, iterations, dry_run):
                                      dry_run, service_instance, vm, dc, content)
                 elif (vm.config.hardware.memoryMB == 128 and vm.config.hardware.numCPU == 1 and not is_vvol and power_state == 'poweredOff' and is_vvol and has_no_nic):
                     log.warn("- PLEASE CHECK MANUALLY: possible orphan shadow vm on eph storage - %s", path)
+                else:
+                    log.warn("- PLEASE CHECK MANUALLY: this vm seems to be neither a former openstack vm nor an orphan shadow vm - %s", path)
 
 
             # there is no vm anymore for the file path - planned action is to delete the file
