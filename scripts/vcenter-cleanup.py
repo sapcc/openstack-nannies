@@ -204,15 +204,15 @@ def cleanup_items(host, username, password, interval, iterations, dry_run):
                     #                                                 **location))
                     # if still powered on the planned action is to suspend it
                     if power_state == 'poweredOn':
-                        now_or_later(vm.config.uuid, vms_to_be_poweredoff, vms_seen, "suspend of vm", iterations,
+                        now_or_later(vm.config.instanceUuid, vms_to_be_poweredoff, vms_seen, "suspend of vm", iterations,
                                      dry_run, service_instance, vm, dc, content)
                     # if already suspended the planned action is to power off the vm
                     elif power_state == 'suspended':
-                        now_or_later(vm.config.uuid, vms_to_be_poweredoff, vms_seen, "power off of vm", iterations,
+                        now_or_later(vm.config.instanceUuid, vms_to_be_poweredoff, vms_seen, "power off of vm", iterations,
                                      dry_run, service_instance, vm, dc, content)
                     # if already powered off the planned action is to unregister the vm
                     else:
-                        now_or_later(vm.config.uuid, vms_to_be_unregistered, vms_seen, "unregister of vm", iterations,
+                        now_or_later(vm.config.instanceUuid, vms_to_be_unregistered, vms_seen, "unregister of vm", iterations,
                                      dry_run, service_instance, vm, dc, content)
                 elif (vm.config.hardware.memoryMB == 128 and vm.config.hardware.numCPU == 1 and not is_vvol and power_state == 'poweredOff' and is_vvol and has_no_nic):
                     log.warn("- PLEASE CHECK MANUALLY: possible orphan shadow vm on eph storage - %s", path)
