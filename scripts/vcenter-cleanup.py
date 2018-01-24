@@ -27,13 +27,26 @@ files_seen = dict()
 
 tasks = []
 
-# find files with a uuid name pattern
+
+# find vmx and vmdk files with a uuid name pattern
 def _uuids(task):
-    folder_path = task.info.result.folderPath
-    for f in task.info.result.file:
-        match = uuid_re.search(f.path)
-        if match:
-            yield match.group(0), {'datastore': folder_path, 'folder': f.path}
+    for searchresult in task.info.result:
+        folder_path = searchresult.folderPath
+        # no files in the folder
+        if not searchresult.file:
+            log.warn("- PLEASE CHECK MANUALLY - empty folder: %s", folder_path)
+        else:
+            # its ugly to do it in two loops, but an easy way to make sure to have the vms before the vmdks in the list
+            for f in searchresult.file:
+                if f.path.lower().endswith(".vmx") or f.path.lower().endswith(".vmx.renamed_by_vcenter_nanny"):
+                    match = uuid_re.search(f.path)
+                    if match:
+                        yield match.group(0), {'folderpath': folder_path, 'filepath': f.path}
+            for f in searchresult.file:
+                if f.path.lower().endswith(".vmdk") or f.path.lower().endswith(".vmdk.renamed_by_vcenter_nanny"):
+                    match = uuid_re.search(f.path)
+                    if match:
+                        yield match.group(0), {'folderpath': folder_path, 'filepath': f.path}
 
 
 # cmdline handling
@@ -44,11 +57,12 @@ def _uuids(task):
 @click.option('--password', prompt='The password')
 # every how many minutes the check should be preformed
 @click.option('--interval', prompt='Interval in minutes')
-# how often a vm should be continously a canditate for some action (delete etc.) before
+# how often a vm should be continously a candidate for some action (delete etc.) before
 # we actually do it - the idea behind is that we want to avoid actions due to short
 # temporary technical problems of any kind ... another idea is to do the actions step
-# by step (i.e. power-off - iterations - unlink - iterations - delete file path), so that
-# we have a chance to still roll back in case we notice problems due to some wrong
+# by step (i.e. suspend - iterations - power-off - iterations - unlink - iterations -
+# delete file path) for vms or rename folder (eph storage) or files (vvol storage), so
+# that we have a chance to still roll back in case we notice problems due to some wrong
 # action done
 @click.option('--iterations', prompt='Iterations')
 # dry run mode - only say what we would do without actually doing it
@@ -73,32 +87,36 @@ def reset_to_be_dict(to_be_dict, seen_dict):
 
 
 # here we decide to wait longer before doings something (delete etc.) or finally doing it
-def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, service_instance, vm, dc, content):
+def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, service_instance, vm, dc, content, detail):
     default = 0
     seen_dict[id] = 1
     if to_be_dict.get(id, default) <= int(iterations):
         if to_be_dict.get(id, default) == int(iterations):
             if dry_run:
-                log.info("- in theory i would now start the %s %s", what_to_do, id)
+                log.info("- dry-run: %s %s", what_to_do, id)
             else:
                 if what_to_do == "suspend of vm":
-                    log.info("- starting the %s %s", what_to_do, id)
+                    log.info("- action: %s %s [%s]", what_to_do, id, detail)
                     # either WaitForTask or tasks.append
                     # tasks.append(vm.suspendVM_Task(), si=service_instance)
                 elif what_to_do == "power off of vm":
-                    log.info("- starting the %s %s", what_to_do, id)
+                    log.info("- action: %s %s [%s]", what_to_do, id, detail)
                     # tasks.append(vm.powerOffVM_Task(), si=service_instance)
                 elif what_to_do == "unregister of vm":
-                    log.info("- starting the %s %s", what_to_do, id)
+                    log.info("- action: %s %s [%s]", what_to_do, id, detail)
                     # either unregisterVM_Task (safer) or destroy_Task
                     # tasks.append(vm.unregisterVM_Task(), si=service_instance)
-                elif what_to_do == "delete of datastore path":
-                    log.info("- starting the %s %s", what_to_do, id)
+                elif what_to_do == "rename of ds path":
+                    log.info("- action: %s %s [%s]", what_to_do, id, detail)
+                    newname = id.rstrip('/') + ".renamed_by_vcenter_nanny"
+                    # tasks.append(content.fileManager.MoveDatastoreFile_Task(sourceName=id, sourceDatacenter=dc, destinationName=newname, destinationDatacenter=dc))
+                elif what_to_do == "delete of ds path":
+                    log.info("- action: %s %s [%s]", what_to_do, id, detail)
                     # tasks.append(content.fileManager.DeleteDatastoreFile_Task(name=id, datacenter=dc))
                 else:
                     log.warn("- PLEASE CHECK MANUALLY: unsupported action requested for id - %s", id)
         else:
-            log.info("- considering later %s %s (%i/%i)", what_to_do, id, to_be_dict.get(id, default) + 1,
+            log.info("- plan: %s %s [%s] (%i/%i)", what_to_do, id, detail, to_be_dict.get(id, default) + 1,
                      int(iterations))
         to_be_dict[id] = to_be_dict.get(id, default) + 1
 
@@ -148,16 +166,20 @@ def cleanup_items(host, username, password, interval, iterations, dry_run):
     missing = dict()
     # iterate through all datastores in the vcenter
     for ds in dc.datastore:
+        # only consider eph and vvol datastores
         if ds.name.lower().startswith('eph') or ds.name.lower().startswith('vvol'):
             log.info("- datacenter / datastore: %s / %s", dc.name, ds.name)
 
-            task = ds.browser.SearchDatastore_Task(datastorePath="[%s] /" % ds.name,
-                                                   searchSpec=vim.HostDatastoreBrowserSearchSpec(
-                                                       query=[vim.FolderFileQuery()]))
+            # get all files and folders recursively from the datastore
+            task = ds.browser.SearchDatastoreSubFolders_Task(datastorePath="[%s] /" % ds.name,
+                                                             searchSpec=vim.HostDatastoreBrowserSearchSpec(
+                                                                 matchPattern="*"))
+            # matchPattern = ["*.vmx", "*.vmdk", "*.vmx.renamed_by_vcenter_nanny", "*,vmdk.renamed_by_vcenter_nanny"]))
 
             try:
+                # wait for the async task to finish and then find vms and vmdks with openstack uuids in the name and
+                # compare those uuids to all the uuids we know from openstack
                 WaitForTask(task, si=service_instance)
-                # find all the entities we have on the vcenter which have no relation to openstack anymore and write them to a dict
                 for uuid, location in _uuids(task):
                     if uuid not in known:
                         # multiple locations are possible for one uuid, thus we need to put the locations into a list
@@ -173,58 +195,121 @@ def cleanup_items(host, username, password, interval, iterations, dry_run):
     init_seen_dict(vms_seen)
     init_seen_dict(files_seen)
 
+    # needed to mark folder paths and full paths we already dealt with
+    vmxmarked = {}
+    vmdkmarked = {}
+    vvolmarked = {}
+
     # iterate over all entities we have on the vcenter which have no relation to openstack anymore
     for item, locationlist in six.iteritems(missing):
         for location in locationlist:
-            # find the vm correspoding to the file path
-            path = "{datastore} {folder}".format(**location)
-            vmx_path = "{datastore} {folder}/{folder}.vmx".format(**location)
-            vm = content.searchIndex.FindByDatastorePath(path=vmx_path, datacenter=dc)
-            # there is a vm for that file path
-            if vm:
-                power_state = vm.runtime.powerState
-                if vm.config.files.vmPathName.lower().startswith('[vvol'):
-                    is_vvol = True
-                else:
-                    is_vvol = False
-                # check if the vm has a nic configured
-                for j in vm.config.hardware.device:
-                    if j.key == 4000:
-                        has_no_nic = False
+            # foldername on datastore
+            path = "{folderpath}".format(**location)
+            # filename on datastore
+            filename = "{filepath}".format(**location)
+            fullpath = path + filename
+            # in the case of a vmx file we check if the vcenter still knows about it
+            if location["filepath"].lower().endswith(".vmx"):
+                vmx_path = "{folderpath}{filepath}".format(**location)
+                vm = content.searchIndex.FindByDatastorePath(path=vmx_path, datacenter=dc)
+                # there is a vm for that file path we check what to do with it
+                if vm:
+                    power_state = vm.runtime.powerState
+                    # is the vm located on vvol storage - needed later to check if its a volume shadow vm
+                    if vm.config.files.vmPathName.lower().startswith('[vvol'):
+                        is_vvol = True
                     else:
-                        has_no_nic = True
-                # we store the openstack project id in the annotations of the vm
-                annotation = vm.config.annotation or ''
-                items = dict([line.split(':', 1) for line in annotation.splitlines()])
-                # we search for either vms with a project_id in the annotation (i.e. real vms) or
-                # for powered off vms with 128mb, one cpu and no nic which are stored on vvol (i.e. shadow vm for a volume)
-                if 'projectid' in items or (vm.config.hardware.memoryMB == 128 and vm.config.hardware.numCPU == 1 and power_state == 'poweredOff' and is_vvol and has_no_nic):
-                    # log.debug(
-                    #    "{folder}: {power_state} {projectid}".format(power_state=power_state, projectid=items['projectid'],
-                    #                                                 **location))
-                    # if still powered on the planned action is to suspend it
-                    if power_state == 'poweredOn':
-                        now_or_later(vm.config.instanceUuid, vms_to_be_poweredoff, vms_seen, "suspend of vm", iterations,
-                                     dry_run, service_instance, vm, dc, content)
-                    # if already suspended the planned action is to power off the vm
-                    elif power_state == 'suspended':
-                        now_or_later(vm.config.instanceUuid, vms_to_be_poweredoff, vms_seen, "power off of vm", iterations,
-                                     dry_run, service_instance, vm, dc, content)
-                    # if already powered off the planned action is to unregister the vm
+                        is_vvol = False
+                    # check if the vm has a nic configured
+                    for j in vm.config.hardware.device:
+                        if j.key == 4000:
+                            has_no_nic = False
+                        else:
+                            has_no_nic = True
+                    # we store the openstack project id in the annotations of the vm
+                    annotation = vm.config.annotation or ''
+                    items = dict([line.split(':', 1) for line in annotation.splitlines()])
+                    # we search for either vms with a project_id in the annotation (i.e. real vms) or
+                    # for powered off vms with 128mb, one cpu and no nic which are stored on vvol (i.e. shadow vm for a volume)
+                    if 'projectid' in items or (
+                            vm.config.hardware.memoryMB == 128 and vm.config.hardware.numCPU == 1 and power_state == 'poweredOff' and is_vvol and has_no_nic):
+                        # if still powered on the planned action is to suspend it
+                        if power_state == 'poweredOn':
+                            # mark that path as already dealt with, so that we ignore it when we see it again
+                            # with vmdks later maybe
+                            vmxmarked[path] = True
+                            now_or_later(vm.config.instanceUuid, vms_to_be_poweredoff, vms_seen, "suspend of vm",
+                                         iterations,
+                                         dry_run, service_instance, vm, dc, content, filename)
+                        # if already suspended the planned action is to power off the vm
+                        elif power_state == 'suspended':
+                            vmxmarked[path] = True
+                            now_or_later(vm.config.instanceUuid, vms_to_be_poweredoff, vms_seen, "power off of vm",
+                                         iterations,
+                                         dry_run, service_instance, vm, dc, content, filename)
+                        # if already powered off the planned action is to unregister the vm
+                        else:
+                            vmxmarked[path] = True
+                            now_or_later(vm.config.instanceUuid, vms_to_be_unregistered, vms_seen, "unregister of vm",
+                                         iterations,
+                                         dry_run, service_instance, vm, dc, content, filename)
+                    # this should not happen
+                    elif (
+                            vm.config.hardware.memoryMB == 128 and vm.config.hardware.numCPU == 1 and not is_vvol and power_state == 'poweredOff' and is_vvol and has_no_nic):
+                        log.warn("- PLEASE CHECK MANUALLY: possible orphan shadow vm on eph storage - %s", path)
+                    # this neither
                     else:
-                        now_or_later(vm.config.instanceUuid, vms_to_be_unregistered, vms_seen, "unregister of vm", iterations,
-                                     dry_run, service_instance, vm, dc, content)
-                elif (vm.config.hardware.memoryMB == 128 and vm.config.hardware.numCPU == 1 and not is_vvol and power_state == 'poweredOff' and is_vvol and has_no_nic):
-                    log.warn("- PLEASE CHECK MANUALLY: possible orphan shadow vm on eph storage - %s", path)
+                        log.warn(
+                            "- PLEASE CHECK MANUALLY: this vm seems to be neither a former openstack vm nor an orphan shadow vm - %s",
+                            path)
+
+                # there is no vm anymore for the file path - planned action is to delete the file
+                elif not vmxmarked.get(path, False):
+                    vmxmarked[path] = True
+                    if path.lower().startswith("[eph"):
+                        if path.endswith(".renamed_by_vcenter_nanny/"):
+                            # if already renamed finally delete
+                            now_or_later(str(path), files_to_be_deleted, files_seen, "delete of ds path",
+                                         iterations, dry_run, service_instance, vm, dc, content, filename)
+                        else:
+                            # first rename the file before deleting them later
+                            now_or_later(str(path), files_to_be_deleted, files_seen, "rename of ds path",
+                                         iterations, dry_run, service_instance, vm, dc, content, filename)
+                    else:
+                        # vvol storage
+                        # for vvols we have to mark based on the full path, as we work on them file by file
+                        # and not on a directory base
+                        vvolmarked[fullpath] = True
+                        if fullpath.endswith(".renamed_by_vcenter_nanny/"):
+                            now_or_later(str(fullpath), files_to_be_deleted, files_seen, "delete of ds path",
+                                         iterations, dry_run, service_instance, vm, dc, content, filename)
+                        else:
+                            now_or_later(str(fullpath), files_to_be_deleted, files_seen, "rename of ds path",
+                                         iterations, dry_run, service_instance, vm, dc, content, filename)
+
+                if len(tasks) % 8 == 0:
+                    WaitForTasks(tasks[-8:], si=service_instance)
+
+            # in case of a vmdk or vmx.renamed_by_vcenter_nanny
+            # eph storage case - we work on directories
+            elif path.lower().startswith("[eph") and not vmxmarked.get(path, False) and not vmdkmarked.get(path, False):
+                # mark to not redo it for other vmdks as we are working on the dir at once
+                vmdkmarked[path] = True
+                if path.endswith(".renamed_by_vcenter_nanny/"):
+                    now_or_later(str(path), files_to_be_deleted, files_seen, "delete of ds path",
+                                 iterations, dry_run, service_instance, None, dc, content, filename)
                 else:
-                    log.warn("- PLEASE CHECK MANUALLY: this vm seems to be neither a former openstack vm nor an orphan shadow vm - %s", path)
-
-
-            # there is no vm anymore for the file path - planned action is to delete the file
-            else:
-                now_or_later(str(path), files_to_be_deleted, files_seen, "delete of datastore path",
-                         iterations, dry_run, service_instance, vm, dc, content)
-
+                    now_or_later(str(path), files_to_be_deleted, files_seen, "rename of ds path",
+                                 iterations, dry_run, service_instance, None, dc, content, filename)
+            # vvol storage case - we work file by file as we can't rename or delete the vvol folders
+            elif path.lower().startswith("[vvol") and not vvolmarked.get(fullpath, False):
+                # vvol storage
+                if fullpath.endswith(".renamed_by_vcenter_nanny"):
+                    now_or_later(str(fullpath), files_to_be_deleted, files_seen, "delete of ds path",
+                                 iterations, dry_run, service_instance, None, dc, content, filename)
+                else:
+                    now_or_later(str(fullpath), files_to_be_deleted, files_seen, "rename of ds path",
+                                 iterations, dry_run, service_instance, None, dc, content, filename)
 
             if len(tasks) % 8 == 0:
                 WaitForTasks(tasks[-8:], si=service_instance)
@@ -236,6 +321,7 @@ def cleanup_items(host, username, password, interval, iterations, dry_run):
 
     # wait the interval time
     time.sleep(60 * int(interval))
+
 
 if __name__ == '__main__':
     while True:
