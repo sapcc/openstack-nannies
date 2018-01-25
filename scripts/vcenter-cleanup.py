@@ -67,6 +67,12 @@ def _uuids(task):
 @click.option('--iterations', prompt='Iterations')
 # dry run mode - only say what we would do without actually doing it
 @click.option('--dry-run', is_flag=True)
+# do not power off vms
+@click.option('--power-off', is_flag=True)
+# do not unregister vms
+@click.option('--unregister', is_flag=True)
+# do not delete datastore files or folders
+@click.option('--delete', is_flag=True)
 def run_me(host, username, password, interval, iterations, dry_run):
     while True:
         cleanup_items(host, username, password, interval, iterations, dry_run)
@@ -100,20 +106,23 @@ def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, ser
                     # either WaitForTask or tasks.append
                     # tasks.append(vm.suspendVM_Task(), si=service_instance)
                 elif what_to_do == "power off of vm":
-                    log.info("- action: %s %s [%s]", what_to_do, id, detail)
-                    # tasks.append(vm.powerOffVM_Task(), si=service_instance)
-                elif what_to_do == "unregister of vm":
-                    log.info("- action: %s %s [%s]", what_to_do, id, detail)
-                    # either unregisterVM_Task (safer) or destroy_Task
-                    # tasks.append(vm.unregisterVM_Task(), si=service_instance)
+                    if power_off:
+                        log.info("- action: %s %s [%s]", what_to_do, id, detail)
+                        # tasks.append(vm.powerOffVM_Task(), si=service_instance)
+                        if what_to_do == "unregister of vm":
+                            if unregister:
+                            log.info("- action: %s %s [%s]", what_to_do, id, detail)
+                            # either unregisterVM_Task (safer) or destroy_Task
+                            # tasks.append(vm.unregisterVM_Task(), si=service_instance)
                 elif what_to_do == "rename of ds path":
                     log.info("- action: %s %s [%s]", what_to_do, id, detail)
                     newname = id.rstrip('/') + ".renamed_by_vcenter_nanny"
                     # tasks.append(content.fileManager.MoveDatastoreFile_Task(sourceName=id, sourceDatacenter=dc, destinationName=newname, destinationDatacenter=dc))
                 elif what_to_do == "delete of ds path":
+                    if delete:
                     log.info("- action: %s %s [%s]", what_to_do, id, detail)
                     # tasks.append(content.fileManager.DeleteDatastoreFile_Task(name=id, datacenter=dc))
-                else:
+                elif not what_to_do == "unregister of vm":
                     log.warn("- PLEASE CHECK MANUALLY: unsupported action requested for id - %s", id)
         else:
             log.info("- plan: %s %s [%s] (%i/%i)", what_to_do, id, detail, to_be_dict.get(id, default) + 1,
