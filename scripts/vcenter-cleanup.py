@@ -19,10 +19,12 @@ uuid_re = re.compile('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
+vms_to_be_suspended = dict()
 vms_to_be_poweredoff = dict()
 vms_to_be_unregistered = dict()
 vms_seen = dict()
 files_to_be_deleted = dict()
+files_to_be_renamed = dict()
 files_seen = dict()
 
 tasks = []
@@ -73,9 +75,9 @@ def _uuids(task):
 @click.option('--unregister', is_flag=True)
 # do not delete datastore files or folders
 @click.option('--delete', is_flag=True)
-def run_me(host, username, password, interval, iterations, dry_run):
+def run_me(host, username, password, interval, iterations, dry_run, power_off, unregister, delete):
     while True:
-        cleanup_items(host, username, password, interval, iterations, dry_run)
+        cleanup_items(host, username, password, interval, iterations, dry_run, power_off, unregister, delete)
 
 
 # init dict of all vms or files we have seen already
@@ -93,7 +95,7 @@ def reset_to_be_dict(to_be_dict, seen_dict):
 
 
 # here we decide to wait longer before doings something (delete etc.) or finally doing it
-def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, service_instance, vm, dc, content, detail):
+def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, power_off, unregister, delete, vm, dc, content, detail):
     default = 0
     seen_dict[id] = 1
     if to_be_dict.get(id, default) <= int(iterations):
@@ -104,24 +106,24 @@ def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, ser
                 if what_to_do == "suspend of vm":
                     log.info("- action: %s %s [%s]", what_to_do, id, detail)
                     # either WaitForTask or tasks.append
-                    # tasks.append(vm.suspendVM_Task(), si=service_instance)
+                    tasks.append(vm.SuspendVM_Task())
                 elif what_to_do == "power off of vm":
                     if power_off:
                         log.info("- action: %s %s [%s]", what_to_do, id, detail)
-                        # tasks.append(vm.powerOffVM_Task(), si=service_instance)
+                        tasks.append(vm.PowerOffVM_Task())
                         if what_to_do == "unregister of vm":
                             if unregister:
-                            log.info("- action: %s %s [%s]", what_to_do, id, detail)
-                            # either unregisterVM_Task (safer) or destroy_Task
-                            # tasks.append(vm.unregisterVM_Task(), si=service_instance)
+                                log.info("- action: %s %s [%s]", what_to_do, id, detail)
+                                # either unregisterVM_Task (safer) or destroy_Task
+                                tasks.append(vm.UnregisterVM_Task())
                 elif what_to_do == "rename of ds path":
                     log.info("- action: %s %s [%s]", what_to_do, id, detail)
                     newname = id.rstrip('/') + ".renamed_by_vcenter_nanny"
-                    # tasks.append(content.fileManager.MoveDatastoreFile_Task(sourceName=id, sourceDatacenter=dc, destinationName=newname, destinationDatacenter=dc))
+                    tasks.append(content.fileManager.MoveDatastoreFile_Task(sourceName=id, sourceDatacenter=dc, destinationName=newname, destinationDatacenter=dc))
                 elif what_to_do == "delete of ds path":
                     if delete:
-                    log.info("- action: %s %s [%s]", what_to_do, id, detail)
-                    # tasks.append(content.fileManager.DeleteDatastoreFile_Task(name=id, datacenter=dc))
+                        log.info("- action: %s %s [%s]", what_to_do, id, detail)
+                        tasks.append(content.fileManager.DeleteDatastoreFile_Task(name=id, datacenter=dc))
                 elif not what_to_do == "unregister of vm":
                     log.warn("- PLEASE CHECK MANUALLY: unsupported action requested for id - %s", id)
         else:
@@ -131,7 +133,7 @@ def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, ser
 
 
 # main cleanup function
-def cleanup_items(host, username, password, interval, iterations, dry_run):
+def cleanup_items(host, username, password, interval, iterations, dry_run, power_off, unregister, delete):
     # openstack connection
     conn = connection.Connection(auth_url=os.getenv('OS_AUTH_URL'),
                                  project_name=os.getenv('OS_PROJECT_NAME'),
@@ -247,21 +249,21 @@ def cleanup_items(host, username, password, interval, iterations, dry_run):
                             # mark that path as already dealt with, so that we ignore it when we see it again
                             # with vmdks later maybe
                             vmxmarked[path] = True
-                            now_or_later(vm.config.instanceUuid, vms_to_be_poweredoff, vms_seen, "suspend of vm",
+                            now_or_later(vm.config.instanceUuid, vms_to_be_suspended, vms_seen, "suspend of vm",
                                          iterations,
-                                         dry_run, service_instance, vm, dc, content, filename)
+                                         dry_run, power_off, unregister, delete, vm, dc, content, filename)
                         # if already suspended the planned action is to power off the vm
                         elif power_state == 'suspended':
                             vmxmarked[path] = True
                             now_or_later(vm.config.instanceUuid, vms_to_be_poweredoff, vms_seen, "power off of vm",
                                          iterations,
-                                         dry_run, service_instance, vm, dc, content, filename)
+                                         dry_run, power_off, unregister, delete, vm, dc, content, filename)
                         # if already powered off the planned action is to unregister the vm
                         else:
                             vmxmarked[path] = True
                             now_or_later(vm.config.instanceUuid, vms_to_be_unregistered, vms_seen, "unregister of vm",
                                          iterations,
-                                         dry_run, service_instance, vm, dc, content, filename)
+                                         dry_run, power_off, unregister, delete, vm, dc, content, filename)
                     # this should not happen
                     elif (
                             vm.config.hardware.memoryMB == 128 and vm.config.hardware.numCPU == 1 and not is_vvol and power_state == 'poweredOff' and is_vvol and has_no_nic):
@@ -279,11 +281,11 @@ def cleanup_items(host, username, password, interval, iterations, dry_run):
                         if path.endswith(".renamed_by_vcenter_nanny/"):
                             # if already renamed finally delete
                             now_or_later(str(path), files_to_be_deleted, files_seen, "delete of ds path",
-                                         iterations, dry_run, service_instance, vm, dc, content, filename)
+                                         iterations, dry_run, power_off, unregister, delete, vm, dc, content, filename)
                         else:
                             # first rename the file before deleting them later
-                            now_or_later(str(path), files_to_be_deleted, files_seen, "rename of ds path",
-                                         iterations, dry_run, service_instance, vm, dc, content, filename)
+                            now_or_later(str(path), files_to_be_renamed, files_seen, "rename of ds path",
+                                         iterations, dry_run, power_off, unregister, delete, vm, dc, content, filename)
                     else:
                         # vvol storage
                         # for vvols we have to mark based on the full path, as we work on them file by file
@@ -291,10 +293,10 @@ def cleanup_items(host, username, password, interval, iterations, dry_run):
                         vvolmarked[fullpath] = True
                         if fullpath.endswith(".renamed_by_vcenter_nanny/"):
                             now_or_later(str(fullpath), files_to_be_deleted, files_seen, "delete of ds path",
-                                         iterations, dry_run, service_instance, vm, dc, content, filename)
+                                         iterations, dry_run, power_off, unregister, delete, vm, dc, content, filename)
                         else:
-                            now_or_later(str(fullpath), files_to_be_deleted, files_seen, "rename of ds path",
-                                         iterations, dry_run, service_instance, vm, dc, content, filename)
+                            now_or_later(str(fullpath), files_to_be_renamed, files_seen, "rename of ds path",
+                                         iterations, dry_run, power_off, unregister, delete, vm, dc, content, filename)
 
                 if len(tasks) % 8 == 0:
                     WaitForTasks(tasks[-8:], si=service_instance)
@@ -306,27 +308,29 @@ def cleanup_items(host, username, password, interval, iterations, dry_run):
                 vmdkmarked[path] = True
                 if path.endswith(".renamed_by_vcenter_nanny/"):
                     now_or_later(str(path), files_to_be_deleted, files_seen, "delete of ds path",
-                                 iterations, dry_run, service_instance, None, dc, content, filename)
+                                 iterations, dry_run, power_off, unregister, delete, None, dc, content, filename)
                 else:
-                    now_or_later(str(path), files_to_be_deleted, files_seen, "rename of ds path",
-                                 iterations, dry_run, service_instance, None, dc, content, filename)
+                    now_or_later(str(path), files_to_be_renamed, files_seen, "rename of ds path",
+                                 iterations, dry_run, power_off, unregister, delete, None, dc, content, filename)
             # vvol storage case - we work file by file as we can't rename or delete the vvol folders
             elif path.lower().startswith("[vvol") and not vvolmarked.get(fullpath, False):
                 # vvol storage
                 if fullpath.endswith(".renamed_by_vcenter_nanny"):
                     now_or_later(str(fullpath), files_to_be_deleted, files_seen, "delete of ds path",
-                                 iterations, dry_run, service_instance, None, dc, content, filename)
+                                 iterations, dry_run, power_off, unregister, delete, None, dc, content, filename)
                 else:
-                    now_or_later(str(fullpath), files_to_be_deleted, files_seen, "rename of ds path",
-                                 iterations, dry_run, service_instance, None, dc, content, filename)
+                    now_or_later(str(fullpath), files_to_be_renamed, files_seen, "rename of ds path",
+                                 iterations, dry_run, power_off, unregister, delete, None, dc, content, filename)
 
             if len(tasks) % 8 == 0:
                 WaitForTasks(tasks[-8:], si=service_instance)
 
     # reset the dict of vms or files we plan to do something with for all machines we did not see or which disappeared
+    reset_to_be_dict(vms_to_be_suspended, vms_seen)
     reset_to_be_dict(vms_to_be_poweredoff, vms_seen)
     reset_to_be_dict(vms_to_be_unregistered, vms_seen)
     reset_to_be_dict(files_to_be_deleted, files_seen)
+    reset_to_be_dict(files_to_be_renamed, files_seen)
 
     # wait the interval time
     time.sleep(60 * int(interval))

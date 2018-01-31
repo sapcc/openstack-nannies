@@ -39,7 +39,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
 def get_wrong_volume_attachments(meta):
 
-    """Return a dict with indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments"""
+    """Return a dict indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments"""
 
     wrong_attachments = {}
     volume_attachment_t = Table('volume_attachment', meta, autoload=True)
@@ -49,6 +49,18 @@ def get_wrong_volume_attachments(meta):
 
     for (volume_id, volume_deleted, volume_attachment_id, volume_attachment_deleted) in wrong_volume_attachment_q.execute():
         wrong_attachments[volume_attachment_id] = volume_id
+    return wrong_attachments
+
+def fix_wrong_volume_attachments(meta, wrong_attachments):
+
+    """Return a dict indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments"""
+
+    volume_attachment_t = Table('volume_attachment', meta, autoload=True)
+
+    for volume_attachment_id in wrong_attachments:
+        print "- volume attachment id to be deleted: " + volume_attachment_id
+        delete_volume_attachment_q = volume_attachment_t.delete().where(volume_attachment_t.c.id == volume_attachment_id)
+        delete_volume_attachment_q.execute()
     return wrong_attachments
 
 def makeConnection(db_url):
@@ -99,20 +111,24 @@ def main():
     db_url = get_db_url(args.config)
     cinder_session, cinder_metadata, cinder_Base = makeConnection(db_url)
 
-    if not args.dry_run:
-        log.info("- should not get here")
-        # delete the corresponding entries
-    else:
-        wrong_attachments = get_wrong_volume_attachments(cinder_metadata)
-        if len(wrong_attachments) != 0:
-            print "- volume attachment inconsistencies found"
-            # print out what we would delete
-            ptable = PrettyTable(["volume_attachment_id", "volume_id"])
-            for volume_attachment_id in wrong_attachments:
-                ptable.add_row([volume_attachment_id,wrong_attachments[volume_attachment_id]])
+    wrong_attachments = get_wrong_volume_attachments(cinder_metadata)
+    if len(wrong_attachments) != 0:
+        print "- volume attachment inconsistencies found"
+        # print out what we would delete
+        ptable = PrettyTable(["volume_attachment_id", "deleted volume_id"])
+        for volume_attachment_id in wrong_attachments:
+            ptable.add_row([volume_attachment_id,wrong_attachments[volume_attachment_id]])
+        print ptable
+        if not args.dry_run:
+            print "- deleting volume attachment inconsistencies found"
+            deleted_attachments = fix_wrong_volume_attachments(cinder_metadata, wrong_attachments)
+            # print out what we will delete
+            ptable = PrettyTable(["deleted attachment_id", "deleted volume_id"])
+            for deleted_attachment_id in deleted_attachments:
+                ptable.add_row([deleted_attachment_id, deleted_attachments[deleted_attachment_id]])
             print ptable
-        else:
-            print "- volume attachments are consistent"
+    else:
+        print "- volume attachments are consistent"
 
 if __name__ == "__main__":
     main()

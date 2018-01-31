@@ -4,5 +4,7 @@ USER root
 
 ADD scripts scripts
 
-RUN /var/lib/kolla/venv/bin/pip install click==6.7 python-openstackclient==3.12.0
-#RUN /var/lib/kolla/venv/bin/pip install click==6.7 python-openstackclient==3.12.0 pyvmomi==6.5.0.2017.5.post1
+RUN /var/lib/kolla/venv/bin/pip install click==6.7 python-openstackclient==3.12.0 openstacksdk==0.9.19
+
+# in case pyvmomi is not around
+#RUN /var/lib/kolla/venv/bin/pip install click==6.7 python-openstackclient==3.12.0 openstacksdk==0.9.19 pyvmomi==6.5.0.2017.5.post1

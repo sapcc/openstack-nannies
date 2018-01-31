@@ -4,4 +4,4 @@ USER root
 
 ADD scripts scripts
 
-RUN /var/lib/kolla/venv/bin/pip install click==6.7 python-openstackclient==3.12.0
+RUN /var/lib/kolla/venv/bin/pip install click==6.7 python-openstackclient==3.12.0 openstacksdk==0.9.19
