@@ -37,6 +37,28 @@ from sqlalchemy.ext.declarative import declarative_base
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
+def get_missing_deleted_at(meta, table_names):
+
+    missing_deleted_at = {}
+    for t in table_names:
+        a_table_t = Table(t, meta, autoload=True)
+        a_table_select_deleted_at_q = a_table_t.select().where(
+            and_(a_table_t.c.deleted == True, a_table_t.c.deleted_at == None))
+
+        for row in a_table_select_deleted_at_q.execute():
+            missing_deleted_at[row.id] = t
+    return missing_deleted_at
+
+def fix_missing_deleted_at(meta, table_names):
+    for t in table_names:
+        a_table_t = Table(t, meta, autoload=True)
+
+        log.info("- fixing columns with missing deleted_at times in the %s table", t)
+        a_table_set_deleted_at_q = a_table_t.update().where(
+            and_(a_table_t.c.deleted == True, a_atable_t.c.deleted_at == None)).values(
+            deleted_at=a_table_t.c.updated_at)
+        a_table_set_deleted_at_q.execute()
+
 def get_wrong_volume_attachments(meta):
 
     """Return a dict indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments"""
@@ -58,10 +80,9 @@ def fix_wrong_volume_attachments(meta, wrong_attachments):
     volume_attachment_t = Table('volume_attachment', meta, autoload=True)
 
     for volume_attachment_id in wrong_attachments:
-        print "- volume attachment id to be deleted: " + volume_attachment_id
+        log.info ("- volume attachment id to be deleted: %s", volume_attachment_id)
         delete_volume_attachment_q = volume_attachment_t.delete().where(volume_attachment_t.c.id == volume_attachment_id)
         delete_volume_attachment_q.execute()
-    return wrong_attachments
 
 def makeConnection(db_url):
 
@@ -86,7 +107,7 @@ def get_db_url(config_file):
         parser.read(config_file)
         db_url = parser.get('database', 'connection', raw=True)
     except:
-        print "ERROR: Check Cinder configuration file."
+        log.info("ERROR: Check Cinder configuration file.")
         sys.exit(2)
     return db_url
 
@@ -111,24 +132,34 @@ def main():
     db_url = get_db_url(args.config)
     cinder_session, cinder_metadata, cinder_Base = makeConnection(db_url)
 
+    # tables which sometimes have missing deleted_at values
+    # TODO: maybe this can be generated automatically as a list of tables with deleted_at column
+    table_names = [ 'snapshots', 'volume_attachment' ]
+
+    # fixing possible missing deleted_at timestamps in some tables
+    missing_deleted_at = get_missing_deleted_at(cinder_metadata, table_names)
+    if len(missing_deleted_at) != 0:
+        log.info("- missing deleted_at values found:")
+        # print out what we would delete
+        for missing_deleted_at_id in missing_deleted_at:
+            log.info("--- id %s of the %s table is missing deleted_at time", missing_deleted_at_id, missing_deleted_at[missing_deleted_at_id])
+        if not args.dry_run:
+            log.info("- setting missing deleted_at values")
+            fix_missing_deleted_at(cinder_metadata, table_names)
+    else:
+        log.info("- no missing deleted_at values")
+
     wrong_attachments = get_wrong_volume_attachments(cinder_metadata)
     if len(wrong_attachments) != 0:
-        print "- volume attachment inconsistencies found"
+        log.info("- volume attachment inconsistencies found")
         # print out what we would delete
-        ptable = PrettyTable(["volume_attachment_id", "deleted volume_id"])
         for volume_attachment_id in wrong_attachments:
-            ptable.add_row([volume_attachment_id,wrong_attachments[volume_attachment_id]])
-        print ptable
+            log.info("--- volume attachment id: %s - deleted volume id: %s", volume_attachment_id, wrong_attachments[volume_attachment_id])
         if not args.dry_run:
-            print "- deleting volume attachment inconsistencies found"
-            deleted_attachments = fix_wrong_volume_attachments(cinder_metadata, wrong_attachments)
-            # print out what we will delete
-            ptable = PrettyTable(["deleted attachment_id", "deleted volume_id"])
-            for deleted_attachment_id in deleted_attachments:
-                ptable.add_row([deleted_attachment_id, deleted_attachments[deleted_attachment_id]])
-            print ptable
+            log.info("- deleting volume attachment inconsistencies found")
+            fix_wrong_volume_attachments(cinder_metadata, wrong_attachments)
     else:
-        print "- volume attachments are consistent"
+        log.info("- volume attachments are consistent")
 
 if __name__ == "__main__":
     main()
