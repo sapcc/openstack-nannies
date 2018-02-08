@@ -1,0 +1,5 @@
+FROM __MANILA_NANNY_BASE_IMAGE__
+
+USER root
+
+ADD scripts scripts
