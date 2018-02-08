@@ -52,13 +52,8 @@ def reset_to_be_dict(to_be_dict, seen_dict):
             to_be_dict[i] = 0
 
 # here we decide to wait longer before doings the delete from the db or finally doing it
-def now_or_later(a_volume, a_server, to_be_dict, seen_dict, what_to_do, iterations, dry_run, conn):
+def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, conn):
     default = 0
-    # this should be unified!
-    if a_volume.id:
-        id = a_volume.id
-    elif a_server.id:
-        id = a_server.id
     seen_dict[id] = 1
     if to_be_dict.get(id, default) <= int(iterations):
         if to_be_dict.get(id, default) == int(iterations):
@@ -68,13 +63,13 @@ def now_or_later(a_volume, a_server, to_be_dict, seen_dict, what_to_do, iteratio
                 if what_to_do == "delete of server":
                     log.info("- action: %s %s", what_to_do, id)
                     try:
-                        conn.compute.delete_server(a_server.id)
+                        conn.compute.delete_server(id)
                     except exceptions.HttpException:
                         log.wanr("got an http exception - this will have to be handled later")
                 if what_to_do == "delete of volume":
                     log.info("- action: %s %s", what_to_do, id)
                     try:
-                        conn.block_store.delete_volume(a_volume.id)
+                        conn.block_store.delete_volume(id)
                     except exceptions.HttpException:
                         log.warn("got an http exception - this will have to be handled later")
                 else:
@@ -114,7 +109,7 @@ def os_cleanup_items(interval, iterations, nova, cinder, dry_run):
             # instance has no existing project id - we plan to delete it
             else:
                 log.debug("server %s has no valid project id!", str(a_server.id))
-                now_or_later(None, a_server, servers_to_be_deleted, servers_seen, "delete of server", iterations, dry_run, conn)
+                now_or_later(a_server.id, servers_to_be_deleted, servers_seen, "delete of server", iterations, dry_run, conn)
         # reset the dict of instances we plan to do delete from the db for all machines we did not see or which disappeared
         reset_to_be_dict(servers_to_be_deleted, servers_seen)
 
@@ -131,7 +126,7 @@ def os_cleanup_items(interval, iterations, nova, cinder, dry_run):
             # volume has no existing project id - we plan to delete it
             else:
                 log.debug("volume %s has no valid project id!", str(a_volume.id))
-                now_or_later(a_volume, None, volumes_to_be_deleted, volumes_seen, "delete of volume", iterations, dry_run, conn)
+                now_or_later(a_volume.id, volumes_to_be_deleted, volumes_seen, "delete of volume", iterations, dry_run, conn)
         # reset the dict of instances we plan to do delete from the db for all machines we did not see or which disappeared
         reset_to_be_dict(volumes_to_be_deleted, volumes_seen)
 
