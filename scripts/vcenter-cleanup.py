@@ -228,7 +228,7 @@ def collect_properties(service_instance, view_ref, obj_type, path_set=None,
     try:
         props = collector.RetrieveContents([filter_spec])
     except VmomiSupport.ManagedObjectNotFound:
-        print "ERROR: problems retrieving properties from vcenter"
+        log.warn("- PLEASE CHECK MANUALLY: problems retrieving properties from vcenter - retrying in next loop")
         return data
 
     for obj in props:
