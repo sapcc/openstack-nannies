@@ -24,7 +24,7 @@ import time
 
 from pyVim.connect import SmartConnect, Disconnect
 from pyVim.task import WaitForTask, WaitForTasks
-from pyVmomi import vim, vmodl
+from pyVmomi import vim, vmodl, VmomiSupport
 from openstack import connection
 
 uuid_re = re.compile('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.IGNORECASE)
@@ -222,10 +222,15 @@ def collect_properties(service_instance, view_ref, obj_type, path_set=None,
     filter_spec.objectSet = [obj_spec]
     filter_spec.propSet = [property_spec]
 
-    # Retrieve properties
-    props = collector.RetrieveContents([filter_spec])
-
+    # initialize data hete, so that we can check for an empty data later in case of an exception while getting the properties
     data = []
+    # Retrieve properties
+    try:
+        props = collector.RetrieveContents([filter_spec])
+    except VmomiSupport.ManagedObjectNotFound:
+        print "ERROR: problems retrieving properties from vcenter"
+        return data
+
     for obj in props:
         properties = {}
         for prop in obj.propSet:
@@ -274,6 +279,9 @@ def cleanup_items(host, username, password, interval, iterations, dry_run, power
     # collect the properties for all vms
     data = collect_properties(service_instance, view_ref, vim.VirtualMachine,
                               vm_properties, True)
+    # in case we have problems getting the properties from the vcenter, start over from the beginning
+    if data is None:
+        return
 
     # create a dict of volumes mounted to vms to compare the volumes we plan to delete against
     # to find possible ghost volumes
