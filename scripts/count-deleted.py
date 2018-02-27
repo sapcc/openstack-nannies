@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (c) 2017 CERN
+# Copyright (c) 2018 SAP SE
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -37,9 +37,8 @@ from sqlalchemy.ext.declarative import declarative_base
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
+# return the number of elements with the deleted flag set, i.e. not 0 ... -1 means no deleted flag
 def get_deleted(meta, table_name):
-
-    """Return the number of elements with the deleted flag set, i.e. not 0 ... -1 means no deleted flag"""
 
     deleted_t = Table(table_name, meta, autoload=True)
     try:
@@ -53,9 +52,8 @@ def get_deleted(meta, table_name):
 
     return deleted_count
 
+# Establish a database connection and return the handle
 def makeConnection(db_url):
-
-    """Establish a database connection and return the handle"""
 
     engine = create_engine(db_url)
     engine.connect()
@@ -64,14 +62,12 @@ def makeConnection(db_url):
     metadata = MetaData()
     metadata.bind = engine
     Base = declarative_base()
-    tpl = thisSession, metadata, Base
     # reflect db schema to MetaData
     metadata.reflect(bind=engine)
-    return tpl
+    return thisSession, metadata, Base
 
+# return the database connection string from the config file
 def get_db_url(config_file):
-
-    """Return the database connection string from the config file"""
 
     parser = ConfigParser.SafeConfigParser()
     try:
@@ -94,7 +90,7 @@ def main():
     try:
         args = parse_cmdline_args()
     except Exception as e:
-        sys.stdout.write("Check command line arguments (%s)" % e.strerror)
+        log.error("Check command line arguments (%s)", e.strerror)
 
     # connect to the DB
     db_url = get_db_url(args.config)

@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 #
+# Copyright (c) 2018 SAP SE
+# All Rights Reserved.
+#
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
 #    a copy of the License at
@@ -228,8 +231,8 @@ def collect_properties(service_instance, view_ref, obj_type, path_set=None,
     try:
         props = collector.RetrieveContents([filter_spec])
     # except VmomiSupport.ManagedObjectNotFound, err:
-    except vmodl.fault.ManagedObjectNotFound, err:
-        log.warn("- PLEASE CHECK MANUALLY: problems retrieving properties from vcenter: %s - retrying in next loop run", err)
+    except vmodl.fault.ManagedObjectNotFound as err:
+        log.warn("- PLEASE CHECK MANUALLY: problems retrieving properties from vcenter: %s - retrying in next loop run", str(err))
         # wait a moment before retrying
         time.sleep(600)
         return data
@@ -271,8 +274,8 @@ def cleanup_items(host, username, password, interval, iterations, dry_run, power
         service = "glance"
         for image in conn.image.images(details=False, all_tenants=1):
             known[image.id] = image
-    except exceptions.HttpException, err:
-        log.warn("- PLEASE CHECK MANUALLY: problems retrieving information from openstack %s: %s - retrying in next loop run", service, err)
+    except exceptions.HttpException as err:
+        log.warn("- PLEASE CHECK MANUALLY: problems retrieving information from openstack %s: %s - retrying in next loop run", service, str(err))
         # wait a moment before retrying
         time.sleep(600)
         return

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (c) 2017 CERN
+# Copyright (c) 2018 SAP SE
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -37,6 +37,7 @@ from sqlalchemy.ext.declarative import declarative_base
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
+# get all the rows, which have the deleted flag set, but not the delete_at column
 def get_missing_deleted_at(meta, table_names):
 
     missing_deleted_at = {}
@@ -49,6 +50,7 @@ def get_missing_deleted_at(meta, table_names):
             missing_deleted_at[row.id] = t
     return missing_deleted_at
 
+# set deleted_at to updated_at value if not set for marked as deleted rows
 def fix_missing_deleted_at(meta, table_names):
     for t in table_names:
         a_table_t = Table(t, meta, autoload=True)
@@ -59,9 +61,8 @@ def fix_missing_deleted_at(meta, table_names):
             deleted_at=a_table_t.c.updated_at)
         a_table_set_deleted_at_q.execute()
 
+# get all the rowns with a volume attachment still defined where corresponding the volume is already deleted
 def get_wrong_volume_attachments(meta):
-
-    """Return a dict indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments"""
 
     wrong_attachments = {}
     volume_attachment_t = Table('volume_attachment', meta, autoload=True)
@@ -69,13 +70,13 @@ def get_wrong_volume_attachments(meta):
     attachment_join = volume_attachment_t.join(volumes_t,volume_attachment_t.c.volume_id == volumes_t.c.id)
     wrong_volume_attachment_q = select(columns=[volumes_t.c.id,volumes_t.c.deleted,volume_attachment_t.c.id,volume_attachment_t.c.deleted]).select_from(attachment_join).where(and_(volumes_t.c.deleted == "true",volume_attachment_t.c.deleted == "false"))
 
+    # return a dict indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments
     for (volume_id, volume_deleted, volume_attachment_id, volume_attachment_deleted) in wrong_volume_attachment_q.execute():
         wrong_attachments[volume_attachment_id] = volume_id
     return wrong_attachments
 
+# delete volume attachment still defined where corresponding the volume is already deleted
 def fix_wrong_volume_attachments(meta, wrong_attachments):
-
-    """Return a dict indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments"""
 
     volume_attachment_t = Table('volume_attachment', meta, autoload=True)
 
@@ -84,9 +85,8 @@ def fix_wrong_volume_attachments(meta, wrong_attachments):
         delete_volume_attachment_q = volume_attachment_t.delete().where(volume_attachment_t.c.id == volume_attachment_id)
         delete_volume_attachment_q.execute()
 
+# establish a database connection and return the handle
 def makeConnection(db_url):
-
-    """Establish a database connection and return the handle"""
 
     engine = create_engine(db_url)
     engine.connect()
@@ -95,12 +95,10 @@ def makeConnection(db_url):
     metadata = MetaData()
     metadata.bind = engine
     Base = declarative_base()
-    tpl = thisSession, metadata, Base
-    return tpl
+    return thisSession, metadata, Base
 
+# return the database connection string from the config file
 def get_db_url(config_file):
-
-    """Return the database connection string from the config file"""
 
     parser = ConfigParser.SafeConfigParser()
     try:
@@ -126,7 +124,7 @@ def main():
     try:
         args = parse_cmdline_args()
     except Exception as e:
-        sys.stdout.write("Check command line arguments (%s)" % e.strerror)
+        log.error("Check command line arguments (%s)", e.strerror)
 
     # connect to the DB
     db_url = get_db_url(args.config)
