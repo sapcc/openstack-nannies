@@ -24,9 +24,7 @@ import time
 
 from pyVim.connect import SmartConnect, Disconnect
 from pyVim.task import WaitForTask, WaitForTasks
-# from pyVmomi import vim, vmodl, VmomiSupport
 from pyVmomi import vim, vmodl
-from vmodl import fault
 from openstack import connection, exceptions
 
 uuid_re = re.compile('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.IGNORECASE)
@@ -230,7 +228,7 @@ def collect_properties(service_instance, view_ref, obj_type, path_set=None,
     try:
         props = collector.RetrieveContents([filter_spec])
     # except VmomiSupport.ManagedObjectNotFound, err:
-    except fault.ManagedObjectNotFound, err:
+    except vmodl.fault.ManagedObjectNotFound, err:
         log.warn("- PLEASE CHECK MANUALLY: problems retrieving properties from vcenter: %s - retrying in next loop run", err)
         # wait a moment before retrying
         time.sleep(600)
