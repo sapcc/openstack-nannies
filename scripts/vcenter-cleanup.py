@@ -228,7 +228,7 @@ def collect_properties(service_instance, view_ref, obj_type, path_set=None,
     try:
         props = collector.RetrieveContents([filter_spec])
     except VmomiSupport.ManagedObjectNotFound:
-        log.warn("- PLEASE CHECK MANUALLY: problems retrieving properties from vcenter - retrying in next loop")
+        log.warn("- PLEASE CHECK MANUALLY: problems retrieving properties from vcenter - retrying in next loop run")
         # wait a moment before retrying
         time.sleep(600)
         return data
@@ -258,19 +258,20 @@ def cleanup_items(host, username, password, interval, iterations, dry_run, power
 
     # get all servers, volumes, snapshots and images from openstack to compare the resources we find on the vcenter against
     try:
+        service = "nova"
         for server in conn.compute.servers(details=False, all_tenants=1):
             known[server.id] = server
-
+        service = "cinder"
         for volume in conn.block_store.volumes(details=False, all_tenants=1):
             known[volume.id] = volume
-
+        service = "cinder"
         for snapshot in conn.block_store.snapshots(details=False, all_tenants=1):
             known[snapshot.id] = snapshot
-
+        service = "glance"
         for image in conn.image.images(details=False, all_tenants=1):
             known[image.id] = image
     except exceptions.HttpException:
-        log.warn("- PLEASE CHECK MANUALLY: problems retrieving information from openstack - retrying in next loop")
+        log.warn("- PLEASE CHECK MANUALLY: problems retrieving information from openstack %s - retrying in next loop run", service)
         # wait a moment before retrying
         time.sleep(600)
         return
