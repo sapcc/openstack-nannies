@@ -25,7 +25,7 @@ import time
 from pyVim.connect import SmartConnect, Disconnect
 from pyVim.task import WaitForTask, WaitForTasks
 from pyVmomi import vim, vmodl, VmomiSupport
-from openstack import connection exceptions
+from openstack import connection, exceptions
 
 uuid_re = re.compile('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.IGNORECASE)
 
