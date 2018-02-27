@@ -25,7 +25,7 @@ import time
 from pyVim.connect import SmartConnect, Disconnect
 from pyVim.task import WaitForTask, WaitForTasks
 from pyVmomi import vim, vmodl, VmomiSupport
-from openstack import connection
+from openstack import connection exceptions
 
 uuid_re = re.compile('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.IGNORECASE)
 
@@ -229,6 +229,8 @@ def collect_properties(service_instance, view_ref, obj_type, path_set=None,
         props = collector.RetrieveContents([filter_spec])
     except VmomiSupport.ManagedObjectNotFound:
         log.warn("- PLEASE CHECK MANUALLY: problems retrieving properties from vcenter - retrying in next loop")
+        # wait a moment before retrying
+        time.sleep(600)
         return data
 
     for obj in props:
@@ -255,17 +257,23 @@ def cleanup_items(host, username, password, interval, iterations, dry_run, power
     known = dict()
 
     # get all servers, volumes, snapshots and images from openstack to compare the resources we find on the vcenter against
-    for server in conn.compute.servers(details=False, all_tenants=1):
-        known[server.id] = server
+    try:
+        for server in conn.compute.servers(details=False, all_tenants=1):
+            known[server.id] = server
 
-    for volume in conn.block_store.volumes(details=False, all_tenants=1):
-        known[volume.id] = volume
+        for volume in conn.block_store.volumes(details=False, all_tenants=1):
+            known[volume.id] = volume
 
-    for snapshot in conn.block_store.snapshots(details=False, all_tenants=1):
-        known[snapshot.id] = snapshot
+        for snapshot in conn.block_store.snapshots(details=False, all_tenants=1):
+            known[snapshot.id] = snapshot
 
-    for image in conn.image.images(details=False, all_tenants=1):
-        known[image.id] = image
+        for image in conn.image.images(details=False, all_tenants=1):
+            known[image.id] = image
+    except exceptions.HttpException:
+        log.warn("- PLEASE CHECK MANUALLY: problems retrieving information from openstack - retrying in next loop")
+        # wait a moment before retrying
+        time.sleep(600)
+        return
 
     # the properties we want to collect - some of them are not yet used, but will at a later
     # development stage of this script to validate the volume attachments with cinder and nova
