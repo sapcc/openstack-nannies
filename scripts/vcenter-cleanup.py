@@ -24,6 +24,7 @@ import os
 import six
 import ssl
 import time
+import httplib
 
 from pyVim.connect import SmartConnect, Disconnect
 from pyVim.task import WaitForTask, WaitForTasks
@@ -92,36 +93,44 @@ def _uuids(task):
 # do not delete datastore files or folders
 @click.option('--delete', is_flag=True)
 def run_me(host, username, password, interval, iterations, dry_run, power_off, unregister, delete):
-
-    # vcenter connection
-    if hasattr(ssl, '_create_unverified_context'):
-        context = ssl._create_unverified_context()
-
-        service_instance = SmartConnect(host=host,
-                                        user=username,
-                                        pwd=password,
-                                        port=443,
-                                        sslContext=context)
-    else:
-        raise Exception("maybe too old python version with ssl problems?")
-
-    if service_instance:
-        atexit.register(Disconnect, service_instance)
-
-    content = service_instance.content
-    dc = content.rootFolder.childEntity[0]
-
-    # iterate through all vms and get the config.hardware.device properties (and some other)
-    # get vm containerview
-    # TODO: destroy the view again
-    view_ref = content.viewManager.CreateContainerView(
-        container=content.rootFolder,
-        type=[vim.VirtualMachine],
-        recursive=True
-    )
-
     while True:
-        cleanup_items(host, username, password, interval, iterations, dry_run, power_off, unregister, delete, service_instance, content, dc, view_ref)
+
+        # vcenter connection
+        if hasattr(ssl, '_create_unverified_context'):
+            context = ssl._create_unverified_context()
+
+            service_instance = SmartConnect(host=host,
+                                            user=username,
+                                            pwd=password,
+                                            port=443,
+                                            sslContext=context)
+        else:
+            raise Exception("maybe too old python version with ssl problems?")
+
+        if service_instance:
+            atexit.register(Disconnect, service_instance)
+
+        content = service_instance.content
+        dc = content.rootFolder.childEntity[0]
+
+        # iterate through all vms and get the config.hardware.device properties (and some other)
+        # get vm containerview
+        # TODO: destroy the view again
+        view_ref = content.viewManager.CreateContainerView(
+            container=content.rootFolder,
+            type=[vim.VirtualMachine],
+            recursive=True
+        )
+
+        # do the cleanup work
+        cleanup_items(host, username, password, iterations, dry_run, power_off, unregister, delete, service_instance,
+                      content, dc, view_ref)
+
+        # disconnect from vcenter
+        Disconnect(service_instance)
+
+        # wait the interval time
+        time.sleep(60 * int(interval))
 
 
 # init dict of all vms or files we have seen already
@@ -139,7 +148,8 @@ def reset_to_be_dict(to_be_dict, seen_dict):
 
 
 # here we decide to wait longer before doings something (delete etc.) or finally doing it
-def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, power_off, unregister, delete, vm, dc, content, detail):
+def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, power_off, unregister, delete, vm, dc,
+                 content, detail):
     default = 0
     seen_dict[id] = 1
     if to_be_dict.get(id, default) <= int(iterations):
@@ -163,7 +173,9 @@ def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, pow
                 elif what_to_do == "rename of ds path":
                     log.info("- action: %s %s [%s]", what_to_do, id, detail)
                     newname = id.rstrip('/') + ".renamed_by_vcenter_nanny"
-                    tasks.append(content.fileManager.MoveDatastoreFile_Task(sourceName=id, sourceDatacenter=dc, destinationName=newname, destinationDatacenter=dc))
+                    tasks.append(content.fileManager.MoveDatastoreFile_Task(sourceName=id, sourceDatacenter=dc,
+                                                                            destinationName=newname,
+                                                                            destinationDatacenter=dc))
                 elif what_to_do == "delete of ds path":
                     if delete:
                         log.info("- action: %s %s [%s]", what_to_do, id, detail)
@@ -174,6 +186,7 @@ def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, pow
             log.info("- plan: %s %s [%s] (%i/%i)", what_to_do, id, detail, to_be_dict.get(id, default) + 1,
                      int(iterations))
         to_be_dict[id] = to_be_dict.get(id, default) + 1
+
 
 # Shamelessly borrowed from:
 # https://github.com/dnaeon/py-vconnector/blob/master/src/vconnector/core.py
@@ -230,9 +243,9 @@ def collect_properties(service_instance, view_ref, obj_type, path_set=None,
     # Retrieve properties
     try:
         props = collector.RetrieveContents([filter_spec])
-    # except VmomiSupport.ManagedObjectNotFound, err:
-    except vmodl.fault.ManagedObjectNotFound as err:
-        log.warn("- PLEASE CHECK MANUALLY: problems retrieving properties from vcenter: %s - retrying in next loop run", str(err))
+    except vmodl.fault.ManagedObjectNotFound as e:
+        log.warn("- PLEASE CHECK MANUALLY: problems retrieving properties from vcenter: %s - retrying in next loop run",
+                 str(e))
         # wait a moment before retrying
         time.sleep(600)
         return data
@@ -248,8 +261,10 @@ def collect_properties(service_instance, view_ref, obj_type, path_set=None,
         data.append(properties)
     return data
 
+
 # main cleanup function
-def cleanup_items(host, username, password, interval, iterations, dry_run, power_off, unregister, delete, service_instance, content, dc, view_ref):
+def cleanup_items(host, username, password, iterations, dry_run, power_off, unregister, delete, service_instance,
+                  content, dc, view_ref):
     # openstack connection
     conn = connection.Connection(auth_url=os.getenv('OS_AUTH_URL'),
                                  project_name=os.getenv('OS_PROJECT_NAME'),
@@ -274,8 +289,10 @@ def cleanup_items(host, username, password, interval, iterations, dry_run, power
         service = "glance"
         for image in conn.image.images(details=False, all_tenants=1):
             known[image.id] = image
-    except exceptions.HttpException as err:
-        log.warn("- PLEASE CHECK MANUALLY: problems retrieving information from openstack %s: %s - retrying in next loop run", service, str(err))
+    except exceptions.HttpException as e:
+        log.warn(
+            "- PLEASE CHECK MANUALLY: problems retrieving information from openstack %s: %s - retrying in next loop run",
+            service, str(e))
         # wait a moment before retrying
         time.sleep(600)
         return
@@ -302,7 +319,7 @@ def cleanup_items(host, username, password, interval, iterations, dry_run, power
     # iterate over the list of vms
     for k in data:
         # get the config.hardware.device property out of the data dict and iterate over its elements
-        #for j in k['config.hardware.device']:
+        # for j in k['config.hardware.device']:
         # this check seems to be required as in one bb i got a key error otherwise - looks like a vm without that property
         if k.get('config.hardware.device'):
             for j in k.get('config.hardware.device'):
@@ -312,6 +329,7 @@ def cleanup_items(host, username, password, interval, iterations, dry_run, power
 
     # do the check from the other end: see for which vms or volumes in the vcenter we do not have any openstack info
     missing = dict()
+
     # iterate through all datastores in the vcenter
     for ds in dc.datastore:
         # only consider eph and vvol datastores
@@ -353,7 +371,8 @@ def cleanup_items(host, username, password, interval, iterations, dry_run, power
         # none of the uuids we do not know anything about on openstack side should be mounted anywhere in vcenter
         # so we should neither see it as vmx (shadow vm) or datastore file
         if vcenter_mounted.get(item):
-            log.warn("- PLEASE CHECK MANUALLY: possibly mounted ghost volume - %s mounted on %s", item, vcenter_mounted[item])
+            log.warn("- PLEASE CHECK MANUALLY: possibly mounted ghost volume - %s mounted on %s", item,
+                     vcenter_mounted[item])
         else:
             for location in locationlist:
                 # foldername on datastore
@@ -403,7 +422,8 @@ def cleanup_items(host, username, password, interval, iterations, dry_run, power
                             # if already powered off the planned action is to unregister the vm
                             else:
                                 vmxmarked[path] = True
-                                now_or_later(vm.config.instanceUuid, vms_to_be_unregistered, vms_seen, "unregister of vm",
+                                now_or_later(vm.config.instanceUuid, vms_to_be_unregistered, vms_seen,
+                                             "unregister of vm",
                                              iterations,
                                              dry_run, power_off, unregister, delete, vm, dc, content, filename)
                         # this should not happen
@@ -423,11 +443,13 @@ def cleanup_items(host, username, password, interval, iterations, dry_run, power
                             if path.endswith(".renamed_by_vcenter_nanny/"):
                                 # if already renamed finally delete
                                 now_or_later(str(path), files_to_be_deleted, files_seen, "delete of ds path",
-                                             iterations, dry_run, power_off, unregister, delete, vm, dc, content, filename)
+                                             iterations, dry_run, power_off, unregister, delete, vm, dc, content,
+                                             filename)
                             else:
                                 # first rename the file before deleting them later
                                 now_or_later(str(path), files_to_be_renamed, files_seen, "rename of ds path",
-                                             iterations, dry_run, power_off, unregister, delete, vm, dc, content, filename)
+                                             iterations, dry_run, power_off, unregister, delete, vm, dc, content,
+                                             filename)
                         else:
                             # vvol storage
                             # for vvols we have to mark based on the full path, as we work on them file by file
@@ -435,17 +457,20 @@ def cleanup_items(host, username, password, interval, iterations, dry_run, power
                             vvolmarked[fullpath] = True
                             if fullpath.endswith(".renamed_by_vcenter_nanny/"):
                                 now_or_later(str(fullpath), files_to_be_deleted, files_seen, "delete of ds path",
-                                             iterations, dry_run, power_off, unregister, delete, vm, dc, content, filename)
+                                             iterations, dry_run, power_off, unregister, delete, vm, dc, content,
+                                             filename)
                             else:
                                 now_or_later(str(fullpath), files_to_be_renamed, files_seen, "rename of ds path",
-                                             iterations, dry_run, power_off, unregister, delete, vm, dc, content, filename)
+                                             iterations, dry_run, power_off, unregister, delete, vm, dc, content,
+                                             filename)
 
                     if len(tasks) % 8 == 0:
                         WaitForTasks(tasks[-8:], si=service_instance)
 
                 # in case of a vmdk or vmx.renamed_by_vcenter_nanny
                 # eph storage case - we work on directories
-                elif path.lower().startswith("[eph") and not vmxmarked.get(path, False) and not vmdkmarked.get(path, False):
+                elif path.lower().startswith("[eph") and not vmxmarked.get(path, False) and not vmdkmarked.get(path,
+                                                                                                               False):
                     # mark to not redo it for other vmdks as we are working on the dir at once
                     vmdkmarked[path] = True
                     if path.endswith(".renamed_by_vcenter_nanny/"):
@@ -473,9 +498,6 @@ def cleanup_items(host, username, password, interval, iterations, dry_run, power
     reset_to_be_dict(vms_to_be_unregistered, vms_seen)
     reset_to_be_dict(files_to_be_deleted, files_seen)
     reset_to_be_dict(files_to_be_renamed, files_seen)
-
-    # wait the interval time
-    time.sleep(60 * int(interval))
 
 
 if __name__ == '__main__':
