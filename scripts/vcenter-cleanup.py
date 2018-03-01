@@ -95,6 +95,7 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
     while True:
 
         # vcenter connection
+        connection_problem = False
         if hasattr(ssl, '_create_unverified_context'):
             context = ssl._create_unverified_context()
 
@@ -107,11 +108,12 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
             except Exception as e:
                 log.warn("- PLEASE CHECK MANUALLY: problems connecting to vcenter: %s - retrying in next loop run",
                     str(e))
+                connection_problem = True
 
         else:
             raise Exception("maybe too old python version with ssl problems?")
 
-        if service_instance:
+        if connection_problem == False:
             atexit.register(Disconnect, service_instance)
 
             content = service_instance.content
