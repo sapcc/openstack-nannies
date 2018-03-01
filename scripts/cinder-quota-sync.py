@@ -42,12 +42,9 @@ def get_projects(meta):
 
     projects = []
     volumes_t = Table('volumes', meta, autoload=True)
-    volumes_q = select(columns=[volumes_t.c.project_id,
-                                func.count()],
-                       whereclause=and_(volumes_t.c.deleted == false()),
-                       group_by=volumes_t.c.project_id)
-    for (project, _) in volumes_q.execute():
-        projects.append(project)
+    volumes_q = select(columns=[volumes_t.c.project_id]). group_by(volumes_t.c.project_id)
+    for project in volumes_q.execute():
+        projects.append(project[0])
 
     return projects
 
