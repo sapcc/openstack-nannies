@@ -24,7 +24,6 @@ import os
 import six
 import ssl
 import time
-import httplib
 
 from pyVim.connect import SmartConnect, Disconnect
 from pyVim.task import WaitForTask, WaitForTasks
@@ -99,39 +98,43 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
         if hasattr(ssl, '_create_unverified_context'):
             context = ssl._create_unverified_context()
 
-            service_instance = SmartConnect(host=host,
+            try:
+                service_instance = SmartConnect(host=host,
                                             user=username,
                                             pwd=password,
                                             port=443,
                                             sslContext=context)
+            except Exception as e:
+                log.warn("- PLEASE CHECK MANUALLY: problems connecting to vcenter: %s - retrying in next loop run",
+                    str(e))
+
         else:
             raise Exception("maybe too old python version with ssl problems?")
 
         if service_instance:
             atexit.register(Disconnect, service_instance)
 
-        content = service_instance.content
-        dc = content.rootFolder.childEntity[0]
+            content = service_instance.content
+            dc = content.rootFolder.childEntity[0]
 
-        # iterate through all vms and get the config.hardware.device properties (and some other)
-        # get vm containerview
-        # TODO: destroy the view again
-        view_ref = content.viewManager.CreateContainerView(
-            container=content.rootFolder,
-            type=[vim.VirtualMachine],
-            recursive=True
-        )
+            # iterate through all vms and get the config.hardware.device properties (and some other)
+            # get vm containerview
+            # TODO: destroy the view again
+            view_ref = content.viewManager.CreateContainerView(
+                container=content.rootFolder,
+                type=[vim.VirtualMachine],
+                recursive=True
+            )
 
-        # do the cleanup work
-        cleanup_items(host, username, password, iterations, dry_run, power_off, unregister, delete, service_instance,
-                      content, dc, view_ref)
+            # do the cleanup work
+            cleanup_items(host, username, password, iterations, dry_run, power_off, unregister, delete, service_instance,
+                          content, dc, view_ref)
 
-        # disconnect from vcenter
-        Disconnect(service_instance)
+            # disconnect from vcenter
+            Disconnect(service_instance)
 
         # wait the interval time
         time.sleep(60 * int(interval))
-
 
 # init dict of all vms or files we have seen already
 def init_seen_dict(seen_dict):
