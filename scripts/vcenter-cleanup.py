@@ -95,7 +95,6 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
     while True:
 
         # vcenter connection
-        connection_problem = False
         if hasattr(ssl, '_create_unverified_context'):
             context = ssl._create_unverified_context()
 
@@ -108,32 +107,32 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
             except Exception as e:
                 log.warn("- PLEASE CHECK MANUALLY: problems connecting to vcenter: %s - retrying in next loop run",
                     str(e))
-                connection_problem = True
+
+            else:
+                atexit.register(Disconnect, service_instance)
+
+                content = service_instance.content
+                dc = content.rootFolder.childEntity[0]
+
+                # iterate through all vms and get the config.hardware.device properties (and some other)
+                # get vm containerview
+                # TODO: destroy the view again
+                view_ref = content.viewManager.CreateContainerView(
+                    container=content.rootFolder,
+                    type=[vim.VirtualMachine],
+                    recursive=True
+                )
+
+                # do the cleanup work
+                cleanup_items(host, username, password, iterations, dry_run, power_off, unregister, delete,
+                              service_instance,
+                              content, dc, view_ref)
+
+                # disconnect from vcenter
+                Disconnect(service_instance)
 
         else:
             raise Exception("maybe too old python version with ssl problems?")
-
-        if connection_problem == False:
-            atexit.register(Disconnect, service_instance)
-
-            content = service_instance.content
-            dc = content.rootFolder.childEntity[0]
-
-            # iterate through all vms and get the config.hardware.device properties (and some other)
-            # get vm containerview
-            # TODO: destroy the view again
-            view_ref = content.viewManager.CreateContainerView(
-                container=content.rootFolder,
-                type=[vim.VirtualMachine],
-                recursive=True
-            )
-
-            # do the cleanup work
-            cleanup_items(host, username, password, iterations, dry_run, power_off, unregister, delete, service_instance,
-                          content, dc, view_ref)
-
-            # disconnect from vcenter
-            Disconnect(service_instance)
 
         # wait the interval time
         time.sleep(60 * int(interval))
