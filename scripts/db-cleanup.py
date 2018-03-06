@@ -76,7 +76,7 @@ class Cleanup:
                                      user_domain_name=os.getenv('OS_USER_DOMAIN_NAME'),
                                      password=os.getenv('OS_PASSWORD'))
         except Exception as e:
-            log.warn("- PLEASE CHECK MANUALLY: problems connecting to openstack: %s - retrying in next loop run",
+            log.warn("- PLEASE CHECK MANUALLY - problems connecting to openstack: %s - retrying in next loop run",
                      str(e))
         else:
             # get all openstack projects
@@ -107,21 +107,39 @@ class Cleanup:
     # main cleanup function
     def os_cleanup_items(self):
 
-        # this should be unified maybe with the cinder stuff below
+        self.is_server = dict()
+        self.attached_to = dict()
+
+        self.servers = sorted(self.conn.compute.servers(details=True, all_tenants=1), key=lambda x: x.id)
+        self.volumes = sorted(self.conn.block_store.volumes(details=True, all_tenants=1), key=lambda x: x.id)
+
+        # build a dict to check later if a server exists quickly
+        for i in self.servers:
+            self.is_server[i.id] = i.id
+
+        # build a dict to check which server a volume is possibly attached to quickly
+        for i in self.volumes:
+            # only record attachments where we have any
+            try:
+                self.attached_to[i.attachments[0]["id"]] = i.attachments[0]["server_id"]
+            except IndexError:
+                pass
+
         # get all instances from nova
         if self.nova:
             # create a list of servers, sorted by their id
-            self.entity = sorted(self.conn.compute.servers(details=True, all_tenants=1), key=lambda x: x.id)
+            self.entity = self.servers
             self.check_for_project_id("server")
 
         # get all volumes from cinder
         if self.cinder:
             # create a list of volumes, sorted by their id
-            self.entity = sorted(self.conn.block_store.volumes(details=True, all_tenants=1), key=lambda x: x.id)
+            self.entity = self.volumes
             self.check_for_project_id("volume")
 
     def wait_a_moment(self):
         # wait the interval time
+        log.info("waiting %s minutes before starting the next loop run", str(self.interval))
         time.sleep(60 * int(self.interval))
 
     def check_for_project_id(self, type):
@@ -155,15 +173,28 @@ class Cleanup:
                         try:
                             self.conn.compute.delete_server(id)
                         except exceptions.HttpException:
-                            log.warn("got an http exception - this will have to be handled later")
+                            log.warn("PLEASE CHECK MANUALLY - got an http exception - this will have to be handled later")
                     if what_to_do == "delete of volume":
                         log.info("- action: %s %s", what_to_do, id)
                         try:
                             self.conn.block_store.delete_volume(id)
                         except exceptions.HttpException:
-                            log.warn("got an http exception - this will have to be handled later")
+                            log.warn("-- got an http exception - maybe this volume is still connected to an already deleted instance? - checking ...")
+                            if self.attached_to.get(id):
+                                log.info("--- volume is still attached to instance: %s", self.attached_to.get(id))
+                                if not self.is_server.get(self.attached_to.get(id)):
+                                    log.info("--- server %s does no longer exist - the volume can thus be deleted", self.attached_to.get(id))
+                                    # this does for some reason not seem to work - the status is not set properly
+                                    #log.info("--- setting the status of the volume %s to error in preparation to delete it", id)
+                                    #this_volume = self.conn.block_store.get_volume(id)
+                                    #this_volume.status = "error"
+                                    #this_volume.update(self.conn.session)
+                                    #log.info("--- deleting the volume %s", id)
+                                    # TODO
+                            else:
+                                log.info("--- volume is not attached to any instance - must be another problem ...")
                     else:
-                        log.warn("- PLEASE CHECK MANUALLY: unsupported action requested for id - %s", id)
+                        log.warn("- PLEASE CHECK MANUALLY - unsupported action requested for id: %s", id)
             # otherwise print out what we plan to do in the future
             else:
                 log.info("- plan: %s %s (%i/%i)", what_to_do, id, self.to_be_dict.get(id, default) + 1, int(self.iterations))
