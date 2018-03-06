@@ -74,13 +74,16 @@ class Cleanup:
                                      project_domain_name=os.getenv('OS_PROJECT_DOMAIN_NAME'),
                                      username=os.getenv('OS_USERNAME'),
                                      user_domain_name=os.getenv('OS_USER_DOMAIN_NAME'),
-                                     password=os.getenv('OS_PASSWORD'))
+                                     password=os.getenv('OS_PASSWORD'),
+                                     identity_api_version="3")
         except Exception as e:
             log.warn("- PLEASE CHECK MANUALLY - problems connecting to openstack: %s - retrying in next loop run",
                      str(e))
         else:
             # get all openstack projects
             for project in self.conn.identity.projects(details=False, all_tenants=1):
+            # this might be required for openstacksdk > 0.9.19
+            #for project in self.conn.identity.projects():
                 self.projects[project.id] = project.name
 
     def init_seen_dict(self):
@@ -184,6 +187,7 @@ class Cleanup:
                                 log.info("--- volume is still attached to instance: %s", self.attached_to.get(id))
                                 if not self.is_server.get(self.attached_to.get(id)):
                                     log.info("--- server %s does no longer exist - the volume can thus be deleted", self.attached_to.get(id))
+                                    log.info("PLEASE CHECK MANUALLY - see above")
                                     # this does for some reason not seem to work - the status is not set properly
                                     #log.info("--- setting the status of the volume %s to error in preparation to delete it", id)
                                     #this_volume = self.conn.block_store.get_volume(id)
