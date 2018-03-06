@@ -105,7 +105,7 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
                                             port=443,
                                             sslContext=context)
             except Exception as e:
-                log.warn("- PLEASE CHECK MANUALLY: problems connecting to vcenter: %s - retrying in next loop run",
+                log.warn("- PLEASE CHECK MANUALLY - problems connecting to vcenter: %s - retrying in next loop run",
                     str(e))
 
             else:
@@ -163,17 +163,15 @@ def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, pow
             else:
                 if what_to_do == "suspend of vm":
                     log.info("- action: %s %s [%s]", what_to_do, id, detail)
-                    # either WaitForTask or tasks.append
                     tasks.append(vm.SuspendVM_Task())
                 elif what_to_do == "power off of vm":
                     if power_off:
                         log.info("- action: %s %s [%s]", what_to_do, id, detail)
                         tasks.append(vm.PowerOffVM_Task())
-                        if what_to_do == "unregister of vm":
-                            if unregister:
-                                log.info("- action: %s %s [%s]", what_to_do, id, detail)
-                                # either unregisterVM_Task (safer) or destroy_Task
-                                tasks.append(vm.UnregisterVM_Task())
+                elif what_to_do == "unregister of vm":
+                    if unregister:
+                        log.info("- action: %s %s [%s]", what_to_do, id, detail)
+                        vm.UnregisterVM()
                 elif what_to_do == "rename of ds path":
                     log.info("- action: %s %s [%s]", what_to_do, id, detail)
                     newname = id.rstrip('/') + ".renamed_by_vcenter_nanny"
@@ -184,8 +182,8 @@ def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, pow
                     if delete:
                         log.info("- action: %s %s [%s]", what_to_do, id, detail)
                         tasks.append(content.fileManager.DeleteDatastoreFile_Task(name=id, datacenter=dc))
-                elif not what_to_do == "unregister of vm":
-                    log.warn("- PLEASE CHECK MANUALLY: unsupported action requested for id - %s", id)
+                else:
+                    log.warn("- PLEASE CHECK MANUALLY - unsupported action requested for id: %s", id)
         else:
             log.info("- plan: %s %s [%s] (%i/%i)", what_to_do, id, detail, to_be_dict.get(id, default) + 1,
                      int(iterations))
@@ -248,7 +246,7 @@ def collect_properties(service_instance, view_ref, obj_type, path_set=None,
     try:
         props = collector.RetrieveContents([filter_spec])
     except vmodl.fault.ManagedObjectNotFound as e:
-        log.warn("- PLEASE CHECK MANUALLY: problems retrieving properties from vcenter: %s - retrying in next loop run",
+        log.warn("- PLEASE CHECK MANUALLY - problems retrieving properties from vcenter: %s - retrying in next loop run",
                  str(e))
         # wait a moment before retrying
         time.sleep(600)
@@ -295,7 +293,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
             known[image.id] = image
     except exceptions.HttpException as e:
         log.warn(
-            "- PLEASE CHECK MANUALLY: problems retrieving information from openstack %s: %s - retrying in next loop run",
+            "- PLEASE CHECK MANUALLY - problems retrieving information from openstack %s: %s - retrying in next loop run",
             service, str(e))
         # wait a moment before retrying
         time.sleep(600)
@@ -375,7 +373,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         # none of the uuids we do not know anything about on openstack side should be mounted anywhere in vcenter
         # so we should neither see it as vmx (shadow vm) or datastore file
         if vcenter_mounted.get(item):
-            log.warn("- PLEASE CHECK MANUALLY: possibly mounted ghost volume - %s mounted on %s", item,
+            log.warn("- PLEASE CHECK MANUALLY - possibly mounted ghost volume: %s mounted on %s", item,
                      vcenter_mounted[item])
         else:
             for location in locationlist:
@@ -424,7 +422,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                              iterations,
                                              dry_run, power_off, unregister, delete, vm, dc, content, filename)
                             # if already powered off the planned action is to unregister the vm
-                            else:
+                            elif power_state == 'poweredOff':
                                 vmxmarked[path] = True
                                 now_or_later(vm.config.instanceUuid, vms_to_be_unregistered, vms_seen,
                                              "unregister of vm",
@@ -433,11 +431,11 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                         # this should not happen
                         elif (
                                 vm.config.hardware.memoryMB == 128 and vm.config.hardware.numCPU == 1 and power_state == 'poweredOff' and not is_vvol and has_no_nic):
-                            log.warn("- PLEASE CHECK MANUALLY: possible orphan shadow vm on eph storage - %s", path)
+                            log.warn("- PLEASE CHECK MANUALLY - possible orphan shadow vm on eph storage: %s", path)
                         # this neither
                         else:
                             log.warn(
-                                "- PLEASE CHECK MANUALLY: this vm seems to be neither a former openstack vm nor an orphan shadow vm - %s",
+                                "- PLEASE CHECK MANUALLY - this vm seems to be neither a former openstack vm nor an orphan shadow vm: %s",
                                 path)
 
                     # there is no vm anymore for the file path - planned action is to delete the file
