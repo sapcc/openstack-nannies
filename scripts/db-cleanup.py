@@ -110,23 +110,7 @@ class Cleanup:
     # main cleanup function
     def os_cleanup_items(self):
 
-        self.is_server = dict()
-        self.attached_to = dict()
-
         self.servers = sorted(self.conn.compute.servers(details=True, all_tenants=1), key=lambda x: x.id)
-        self.volumes = sorted(self.conn.block_store.volumes(details=True, all_tenants=1), key=lambda x: x.id)
-
-        # build a dict to check later if a server exists quickly
-        for i in self.servers:
-            self.is_server[i.id] = i.id
-
-        # build a dict to check which server a volume is possibly attached to quickly
-        for i in self.volumes:
-            # only record attachments where we have any
-            try:
-                self.attached_to[i.attachments[0]["id"]] = i.attachments[0]["server_id"]
-            except IndexError:
-                pass
 
         # get all instances from nova
         if self.nova:
@@ -136,6 +120,24 @@ class Cleanup:
 
         # get all volumes from cinder
         if self.cinder:
+
+            self.is_server = dict()
+            self.attached_to = dict()
+
+            self.volumes = sorted(self.conn.block_store.volumes(details=True, all_tenants=1), key=lambda x: x.id)
+
+            # build a dict to check later if a server exists quickly
+            for i in self.servers:
+                self.is_server[i.id] = i.id
+
+            # build a dict to check which server a volume is possibly attached to quickly
+            for i in self.volumes:
+                # only record attachments where we have any
+                try:
+                    self.attached_to[i.attachments[0]["id"]] = i.attachments[0]["server_id"]
+                except IndexError:
+                    pass
+
             # create a list of volumes, sorted by their id
             self.entity = self.volumes
             self.check_for_project_id("volume")
