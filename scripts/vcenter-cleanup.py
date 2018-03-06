@@ -359,6 +359,8 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                 log.warn("- something went wrong trying to access this datastore: %s", e.msg)
             except vim.fault.FileNotFound as e:
                 log.warn("- something went wrong trying to access this datastore: %s", e.msg)
+            except vim.fault.NoHost as e:
+                log.warn("- something went wrong trying to access this datastore: %s", e.msg)
 
     init_seen_dict(vms_seen)
     init_seen_dict(files_seen)
