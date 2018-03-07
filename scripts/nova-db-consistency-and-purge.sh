@@ -37,12 +37,12 @@ while true; do
     if [ "$NOVA_DB_PURGE_ENABLED" = "True" ] || [ "$NOVA_DB_PURGE_ENABLED" = "true" ]; then
         echo -n "INFO: purge old deleted instances from the nova db - "
         date
-        if [ "$NOVA_DB_PURGE_DRY_RUN" = "true" ]; then
-            echo -n "INFO: dry run mode only - "
-            DRY_RUN="--dry-run"
-        else
+        if [ "$NOVA_DB_PURGE_DRY_RUN" = "False" ] ||  [ "$NOVA_DB_PURGE_DRY_RUN" = "false" ]; then
             echo -n "INFO: "
             DRY_RUN=""
+        else
+            echo -n "INFO: dry run mode only - "
+            DRY_RUN="--dry-run"
         fi
         echo -n "purging at max $NOVA_DB_PURGE_MAX_NUMBER deleted instances older than $NOVA_DB_PURGE_OLDER_THAN days from the nova db - "
         echo -n `date`

@@ -18,17 +18,28 @@
 
 echo -n "INFO: cleaning up vcenter entities without valid openstack counterparts - "
 date
-if [ "$VCENTER_CLEANUP_DRY_RUN" = "True" ] || [ "$VCENTER_CLEANUP_DRY_RUN" = "true" ]; then
+if [ "$VCENTER_CLEANUP_DRY_RUN" = "False" ] || [ "$VCENTER_CLEANUP_DRY_RUN" = "false" ]; then
+    DRY_RUN=""
+else
     DRY_RUN="--dry-run"
 fi
+
 if [ "$VCENTER_CLEANUP_POWER_OFF" = "True" ] || [ "$VCENTER_CLEANUP_POWER_OFF" = "true" ]; then
     POWER_OFF="--power-off"
+else
+    POWER_OFF=""
 fi
+
 if [ "$VCENTER_CLEANUP_UNREGISTER" = "True" ] || [ "$VCENTER_CLEANUP_UNREGISTER" = "true" ]; then
     UNREGISTER="--unregister"
+else
+    UNREGISTER=""
 fi
+
 if [ "$VCENTER_CLEANUP_DELETE" = "True" ] || [ "$VCENTER_CLEANUP_DELETE" = "true" ]; then
     DELETE="--delete"
+else
+    DELETE=""
 fi
 
 export OS_USER_DOMAIN_NAME
