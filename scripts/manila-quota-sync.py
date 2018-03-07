@@ -80,18 +80,32 @@ def sync_quota_usages_project(meta, project_id, quota_usages_to_sync):
             updated_at=now, in_use=quota).execute()
 
 
-# def get_snapshot_usages_project(meta, project_id):
-#
-#     """Return the snapshot resource usages of a project"""
-#
-#     snapshots_t = Table('snapshots', meta, autoload=True)
-#     snapshots_q = select(columns=[snapshots_t.c.id,
-#                                   snapshots_t.c.share_size,
-#                                   snapshots_t.c.share_type_id],
-#                          whereclause=and_(
-#                          snapshots_t.c.deleted == false(),
-#                          snapshots_t.c.project_id == project_id))
-#     return snapshots_q.execute()
+def get_share_networks_usages_project(meta, project_id):
+
+    """Return the share_networks resource usages of a project"""
+
+    networks_t = Table('share_networks', meta, autoload=True)
+    networks_q = select(columns=[networks_t.c.id],
+#    networks_q=select(columns=[networks_t.c.id,
+#                               networks_t.c.share_type_id],
+                         whereclause=and_(
+                         networks_t.c.deleted == "False",
+                         networks_t.c.project_id == project_id))
+    return networks_q.execute()
+
+def get_snapshot_usages_project(meta, project_id):
+
+    """Return the snapshots resource usages of a project"""
+
+    snapshots_t = Table('share_snapshots', meta, autoload=True)
+    snapshots_q = select(columns=[snapshots_t.c.id,
+                                  snapshots_t.c.share_size],
+#                                  snapshots_t.c.share_size,
+#                                  snapshots_t.c.share_type_id],
+                         whereclause=and_(
+                         snapshots_t.c.deleted == "False",
+                         snapshots_t.c.project_id == project_id))
+    return snapshots_q.execute()
 
 
 def get_share_usages_project(meta, project_id):
@@ -101,7 +115,7 @@ def get_share_usages_project(meta, project_id):
     shares_t = Table('shares', meta, autoload=True)
     shares_q = select(columns=[shares_t.c.id,
                                 shares_t.c.size],
-#                               shares_t.c.size,
+#                                shares_t.c.size,
 #                                shares_t.c.share_type_id],
                        whereclause=and_(shares_t.c.deleted == "False",
                                         shares_t.c.project_id == project_id))
@@ -136,18 +150,18 @@ def get_resource_types(meta, project_id):
     return types
 
 
-def get_share_types(meta, project_id):
-
-    """Return a dict with share type id to name mapping"""
-
-    types = {}
-    share_types_t = Table('share_types', meta, autoload=True)
-    share_types_q = select(columns=[share_types_t.c.id,
-                                     share_types_t.c.name],
-                            whereclause=share_types_t.c.deleted == "False")
-    for (id, name) in share_types_q.execute():
-        types[id] = name
-    return types
+# def get_share_types(meta, project_id):
+#
+#     """Return a dict with share type id to name mapping"""
+#
+#     types = {}
+#     share_types_t = Table('share_types', meta, autoload=True)
+#     share_types_q = select(columns=[share_types_t.c.id,
+#                                      share_types_t.c.name],
+#                             whereclause=share_types_t.c.deleted == "False")
+#     for (id, name) in share_types_q.execute():
+#         types[id] = name
+#     return types
 
 
 def makeConnection(db_url):
@@ -211,10 +225,8 @@ def main():
     manila_session, manila_metadata, manila_Base = makeConnection(db_url)
 
     # get the share types
-    share_types = get_share_types(manila_metadata,
-                                    args.project_id)
-
-    print share_types
+#    share_types = get_share_types(manila_metadata,
+#                                    args.project_id)
 
     # get the resource types
     resource_types = get_resource_types(manila_metadata,
@@ -241,20 +253,28 @@ def main():
     real_usages = {}
     for resource in resource_types:
         real_usages[resource] = 0
-    #for (_, size, type_id) in get_share_usages_project(manila_metadata,
-    #                                                    args.project_id):
+#    for (_, size, type_id) in get_share_usages_project(manila_metadata,
+#                                                        args.project_id):
     for (_, size) in get_share_usages_project(manila_metadata,
                                                         args.project_id):
         real_usages["shares"] += 1
-        #real_usages["shares_" + share_types[type_id]] += 1
+#        real_usages["shares_" + share_types[type_id]] += 1
         real_usages["gigabytes"] += size
-        #real_usages["gigabytes_" + share_types[type_id]] += size
-    #for (_, size, type_id) in get_snapshot_usages_project(manila_metadata,
-    #                                                      args.project_id):
-    #    real_usages["snapshots"] += 1
-    #    real_usages["snapshots_" + share_types[type_id]] += 1
-    #    real_usages["gigabytes"] += size
-    #    real_usages["gigabytes_" + share_types[type_id]] += size
+#        real_usages["gigabytes_" + share_types[type_id]] += size
+#    for (_, size, type_id) in get_snapshot_usages_project(manila_metadata,
+#                                                        args.project_id):
+    for (_, size) in get_snapshot_usages_project(manila_metadata,
+                                                          args.project_id):
+        real_usages["snapshots"] += 1
+#        real_usages["snapshots_" + share_types[type_id]] += 1
+        real_usages["snapshot_gigabytes"] += size
+#        real_usages["gigabytes_" + share_types[type_id]] += size
+#    for (_, type_id) in get_share_networks_usages_project(manila_metadata,
+#                                                        args.project_id):
+    for (_) in get_share_networks_usages_project(manila_metadata,
+                                                        args.project_id):
+        real_usages["share_networks"] += 1
+#        real_usages["share_networks_" + share_types[type_id]] += 1
 
     # prepare the output
     ptable = PrettyTable(["Project ID", "Resource", "Quota -> Real",
