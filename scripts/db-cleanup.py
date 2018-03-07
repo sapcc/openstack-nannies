@@ -81,6 +81,8 @@ class Cleanup:
                      str(e))
         else:
             # get all openstack projects
+            # no exception handling is done here as it would complicate things and we just
+            # successfully created the connection, so that chance is low to fail
             for project in self.conn.identity.projects(details=False, all_tenants=1):
             # this might be required for openstacksdk > 0.9.19
             #for project in self.conn.identity.projects():
@@ -113,7 +115,7 @@ class Cleanup:
         try:
             self.servers = sorted(self.conn.compute.servers(details=True, all_tenants=1), key=lambda x: x.id)
         except exceptions.HttpException as e:
-            log.warn("PLEASE CHECK MANUALLY - got an http exception: %s", str(e))
+            log.warn("PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
             return
 
         # get all instances from nova
@@ -131,7 +133,7 @@ class Cleanup:
             try:
                 self.volumes = sorted(self.conn.block_store.volumes(details=True, all_tenants=1), key=lambda x: x.id)
             except exceptions.HttpException as e:
-                log.warn("PLEASE CHECK MANUALLY - got an http exception: %s", str(e))
+                log.warn("PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
                 return
 
             # build a dict to check later if a server exists quickly
@@ -186,7 +188,7 @@ class Cleanup:
                         try:
                             self.conn.compute.delete_server(id)
                         except exceptions.HttpException as e:
-                            log.warn("PLEASE CHECK MANUALLY - got an http exception: %s", str(e))
+                            log.warn("PLEASE CHECK MANUALLY - got an http exception: %s - this has to be handled manually", str(e))
                     if what_to_do == "delete of volume":
                         log.info("- action: %s %s", what_to_do, id)
                         try:
