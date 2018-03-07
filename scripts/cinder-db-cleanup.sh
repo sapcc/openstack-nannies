@@ -16,8 +16,7 @@
 #    under the License.
 #
 
-echo -n "INFO: cleaning up cinder entities without a valid project in the cinder db - "
-date
+echo "INFO: cleaning up cinder entities without a valid project in the cinder db"
 
 export OS_USER_DOMAIN_NAME
 export OS_PROJECT_NAME

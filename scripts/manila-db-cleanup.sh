@@ -16,8 +16,7 @@
 #    under the License.
 #
 
-echo -n "INFO: cleaning up manila entities without a valid project in the manila db - "
-date
+echo "INFO: cleaning up manila entities without a valid project in the manila db"
 
 export OS_USER_DOMAIN_NAME
 export OS_PROJECT_NAME

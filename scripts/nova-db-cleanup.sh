@@ -16,8 +16,7 @@
 #    under the License.
 #
 
-echo -n "INFO: cleaning up nova entities without a valid project in the nova db - "
-date
+echo "INFO: cleaning up nova entities without a valid project in the nova db"
 
 export OS_USER_DOMAIN_NAME
 export OS_PROJECT_NAME
