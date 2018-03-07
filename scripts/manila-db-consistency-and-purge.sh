@@ -24,13 +24,15 @@ echo "INFO: copying manila config files to /etc/manila"
 cp -v /manila-etc/* /etc/manila
 
 # we run an endless loop to run the script periodically
-echo "INFO: starting a loop to periodically run the nanny jobs for the manila db"
+echo "INFO: starting a loop to periodically run the nanny job for the manila db consistency check and purge"
 while true; do
-  if [ "$MANILA_DB_PURGE_ENABLED" = "True" ] || [ "$MANILA_DB_PURGE_ENABLED" = "true" ]; then
-    echo -n "INFO: purging deleted cinder entities older than $MANILA_DB_PURGE_OLDER_THAN days from the cinder db - "
-    date
-    /var/lib/kolla/venv/bin/manila-manage db purge $MANILA_DB_PURGE_OLDER_THAN
-  fi
-  echo "INFO: waiting $MANILA_NANNY_INTERVAL minutes before starting the next loop run"
-  sleep $(( 60 * $MANILA_NANNY_INTERVAL ))
+
+    # no consistency check and repair yet for manila
+
+    if [ "$MANILA_DB_PURGE_ENABLED" = "True" ] || [ "$MANILA_DB_PURGE_ENABLED" = "true" ]; then
+        echo "INFO: purging deleted cinder entities older than $MANILA_DB_PURGE_OLDER_THAN days from the cinder db"
+        /var/lib/kolla/venv/bin/manila-manage db purge $MANILA_DB_PURGE_OLDER_THAN
+    fi
+    echo "INFO: waiting $MANILA_NANNY_INTERVAL minutes before starting the next loop run"
+    sleep $(( 60 * $MANILA_NANNY_INTERVAL ))
 done

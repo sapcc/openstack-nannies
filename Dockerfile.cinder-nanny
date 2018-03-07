@@ -16,6 +16,8 @@ FROM __CINDER_NANNY_BASE_IMAGE__
 
 USER root
 
-ADD scripts scripts
+ADD scripts/cinder-* /scripts
+ADD scripts/db-cleanup.py /scripts
+ADD scripts/count-deleted.py /scripts
 
 RUN /var/lib/kolla/venv/bin/pip install click==6.7 python-openstackclient==3.12.0 openstacksdk==0.9.19

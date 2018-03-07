@@ -14,6 +14,8 @@
 
 FROM __NOVA_NANNY_BASE_IMAGE__
 
-ADD scripts scripts
+ADD scripts/nova-* /scripts
+ADD scripts/db-cleanup.py /scripts
+ADD scripts/count-deleted.py /scripts
 
 RUN /var/lib/kolla/venv/bin/pip install click==6.7
