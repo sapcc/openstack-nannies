@@ -110,7 +110,11 @@ class Cleanup:
     # main cleanup function
     def os_cleanup_items(self):
 
-        self.servers = sorted(self.conn.compute.servers(details=True, all_tenants=1), key=lambda x: x.id)
+        try:
+            self.servers = sorted(self.conn.compute.servers(details=True, all_tenants=1), key=lambda x: x.id)
+        except exceptions.HttpException as e:
+            log.warn("PLEASE CHECK MANUALLY - got an http exception: %s", str(e))
+            return
 
         # get all instances from nova
         if self.nova:
@@ -124,7 +128,11 @@ class Cleanup:
             self.is_server = dict()
             self.attached_to = dict()
 
-            self.volumes = sorted(self.conn.block_store.volumes(details=True, all_tenants=1), key=lambda x: x.id)
+            try:
+                self.volumes = sorted(self.conn.block_store.volumes(details=True, all_tenants=1), key=lambda x: x.id)
+            except exceptions.HttpException as e:
+                log.warn("PLEASE CHECK MANUALLY - got an http exception: %s", str(e))
+                return
 
             # build a dict to check later if a server exists quickly
             for i in self.servers:
@@ -177,28 +185,29 @@ class Cleanup:
                         log.info("- action: %s %s", what_to_do, id)
                         try:
                             self.conn.compute.delete_server(id)
-                        except exceptions.HttpException:
-                            log.warn("PLEASE CHECK MANUALLY - got an http exception - this will have to be handled later")
+                        except exceptions.HttpException as e:
+                            log.warn("PLEASE CHECK MANUALLY - got an http exception: %s", str(e))
                     if what_to_do == "delete of volume":
                         log.info("- action: %s %s", what_to_do, id)
                         try:
                             self.conn.block_store.delete_volume(id)
-                        except exceptions.HttpException:
-                            log.warn("-- got an http exception - maybe this volume is still connected to an already deleted instance? - checking ...")
+                        except exceptions.HttpException as e:
+                            log.warn("-- got an http exception: %s", str(e))
+                            log.warn("--- maybe this volume is still connected to an already deleted instance? - checking ...")
                             if self.attached_to.get(id):
-                                log.info("--- volume is still attached to instance: %s", self.attached_to.get(id))
+                                log.info("---- volume is still attached to instance: %s", self.attached_to.get(id))
                                 if not self.is_server.get(self.attached_to.get(id)):
-                                    log.info("--- server %s does no longer exist - the volume can thus be deleted", self.attached_to.get(id))
+                                    log.info("---- server %s does no longer exist - the volume can thus be deleted", self.attached_to.get(id))
                                     log.info("PLEASE CHECK MANUALLY - see above")
                                     # this does for some reason not seem to work - the status is not set properly
-                                    #log.info("--- setting the status of the volume %s to error in preparation to delete it", id)
+                                    #log.info("---- setting the status of the volume %s to error in preparation to delete it", id)
                                     #this_volume = self.conn.block_store.get_volume(id)
                                     #this_volume.status = "error"
                                     #this_volume.update(self.conn.session)
-                                    #log.info("--- deleting the volume %s", id)
+                                    #log.info("---- deleting the volume %s", id)
                                     # TODO
                             else:
-                                log.info("--- volume is not attached to any instance - must be another problem ...")
+                                log.info("---- volume is not attached to any instance - must be another problem ...")
                     else:
                         log.warn("- PLEASE CHECK MANUALLY - unsupported action requested for id: %s", id)
             # otherwise print out what we plan to do in the future
