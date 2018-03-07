@@ -45,14 +45,16 @@ volumes_seen = dict()
 # work on nova db (vms) or cinder db (volumes)?
 @click.option('--nova', is_flag=True)
 @click.option('--cinder', is_flag=True)
+@click.option('--cinder-snapshots', is_flag=True)
 # dry run mode - only say what we would do without actually doing it
 @click.option('--dry-run', is_flag=True)
 class Cleanup:
-    def __init__(self, interval, iterations, nova, cinder, dry_run):
+    def __init__(self, interval, iterations, nova, cinder, cinder_snapshots, dry_run):
         self.interval = interval
         self.iterations = iterations
         self.nova = nova
         self.cinder = cinder
+        self.cinder_snapshots = cinder_snapshots
         self.dry_run = dry_run
 
         # a dict of all projects we have in openstack
@@ -99,14 +101,14 @@ class Cleanup:
                 self.to_be_dict[i] = 0
 
     def run_me(self):
-        if self.nova or self.cinder:
+        if self.nova or self.cinder or self.cinder_snapshots:
             while True:
                 self.connection_buildup()
                 if len(self.projects) > 0:
                     self.os_cleanup_items()
                 self.wait_a_moment()
         else:
-            log.info("either the --nova or the --cinder flag should be given - giving up!")
+            log.info("either the --nova, --cinder or the --cinder_snapshots flag should be given - giving up!")
             sys.exit(0)
 
     # main cleanup function
@@ -151,6 +153,19 @@ class Cleanup:
             # create a list of volumes, sorted by their id
             self.entity = self.volumes
             self.check_for_project_id("volume")
+
+        # get all snapshots from cinder
+        if self.cinder_snapshots:
+
+            try:
+                self.snapshots = sorted(self.conn.block_store.snapshots(details=True, all_tenants=1), key=lambda x: x.id)
+            except exceptions.HttpException as e:
+                log.warn("PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
+                return
+
+            # create a list of servers, sorted by their id
+            self.entity = self.snapshots
+            self.check_for_project_id("snapshot")
 
     def wait_a_moment(self):
         # wait the interval time
@@ -210,6 +225,12 @@ class Cleanup:
                                     # TODO
                             else:
                                 log.info("---- volume is not attached to any instance - must be another problem ...")
+                    if what_to_do == "delete of snapshot":
+                        log.info("- action: %s %s", what_to_do, id)
+                        try:
+                            self.conn.block_storage.delete_snapshot(id)
+                        except exceptions.HttpException as e:
+                            log.warn("PLEASE CHECK MANUALLY - got an http exception: %s - this has to be handled manually", str(e))
                     else:
                         log.warn("- PLEASE CHECK MANUALLY - unsupported action requested for id: %s", id)
             # otherwise print out what we plan to do in the future
