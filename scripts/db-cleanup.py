@@ -23,16 +23,13 @@ import six
 import time
 import sys
 
-from openstack import connection, exceptions
+from openstack import connection, exceptions, utils
+from keystoneauth1 import loading
+from keystoneauth1 import session
+from cinderclient import client
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
-
-# list of servers or volumes we have seen or plan to delete
-servers_to_be_deleted = dict()
-servers_seen = dict()
-volumes_to_be_deleted = dict()
-volumes_seen = dict()
 
 # cmdline handling
 @click.command()
@@ -45,16 +42,14 @@ volumes_seen = dict()
 # work on nova db (vms) or cinder db (volumes)?
 @click.option('--nova', is_flag=True)
 @click.option('--cinder', is_flag=True)
-@click.option('--cinder-snapshots', is_flag=True)
 # dry run mode - only say what we would do without actually doing it
 @click.option('--dry-run', is_flag=True)
 class Cleanup:
-    def __init__(self, interval, iterations, nova, cinder, cinder_snapshots, dry_run):
+    def __init__(self, interval, iterations, nova, cinder, dry_run):
         self.interval = interval
         self.iterations = iterations
         self.nova = nova
         self.cinder = cinder
-        self.cinder_snapshots = cinder_snapshots
         self.dry_run = dry_run
 
         # a dict of all projects we have in openstack
@@ -63,6 +58,13 @@ class Cleanup:
         # dicts for the ids we have seen and the ones we want to do something with
         self.seen_dict = dict()
         self.to_be_dict = dict()
+        # list of servers, snapshots and volumes we have seen or plan to delete
+        self.servers_seen = dict()
+        self.servers_to_be_deleted = dict()
+        self.snapshots_seen = dict()
+        self.snapshots_to_be_deleted = dict()
+        self.volumes_seen = dict()
+        self.volumes_to_be_deleted = dict()
 
         self.run_me()
 
@@ -90,6 +92,12 @@ class Cleanup:
             #for project in self.conn.identity.projects():
                 self.projects[project.id] = project.name
 
+        # cinder client session reusing the auth from the openstacksdk connection session
+        # this is needed to set the state of volumes and snapshots, which is not yet implemented in the openstacksdk
+        auth = self.conn.session.auth
+        sess = session.Session(auth=auth)
+        self.cinder = client.Client("2.0", session=sess)
+
     def init_seen_dict(self):
         for i in self.seen_dict:
             self.seen_dict[i] = 0
@@ -101,37 +109,58 @@ class Cleanup:
                 self.to_be_dict[i] = 0
 
     def run_me(self):
-        if self.nova or self.cinder or self.cinder_snapshots:
+        if self.nova or self.cinder:
             while True:
                 self.connection_buildup()
                 if len(self.projects) > 0:
                     self.os_cleanup_items()
                 self.wait_a_moment()
         else:
-            log.info("either the --nova, --cinder or the --cinder_snapshots flag should be given - giving up!")
+            log.info("either the --nova or the --cinder flag should be given - giving up!")
             sys.exit(0)
 
     # main cleanup function
     def os_cleanup_items(self):
 
+        # get all instances from nova sorted by their id
         try:
             self.servers = sorted(self.conn.compute.servers(details=True, all_tenants=1), key=lambda x: x.id)
         except exceptions.HttpException as e:
             log.warn("PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
             return
 
-        # get all instances from nova
         if self.nova:
-            # create a list of servers, sorted by their id
+            self.seen_dict = self.servers_seen
+            self.to_be_dict = self.servers_to_be_deleted
             self.entity = self.servers
             self.check_for_project_id("server")
 
-        # get all volumes from cinder
         if self.cinder:
+
+            # get all snapshots from cinder sorted by their id - do the snapshots before the volumes,
+            # as they are created from them and thus should be deleted first
+            try:
+                self.snapshots = sorted(self.conn.block_store.snapshots(details=True, all_tenants=1), key=lambda x: x.id)
+            except exceptions.HttpException as e:
+                log.warn("PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
+                return
+
+            self.snapshot_from = dict()
+
+            # build a dict to check which volume a snapshot was created from quickly
+            for i in self.snapshots:
+                self.snapshot_from[i.id] = i.volume_id
+
+            self.seen_dict = self.snapshots_seen
+            self.to_be_dict = self.snapshots_to_be_deleted
+            self.entity = self.snapshots
+            self.check_for_project_id("snapshot")
 
             self.is_server = dict()
             self.attached_to = dict()
+            self.volume_project_id = dict()
 
+            # get all volumes from cinder sorted by their id
             try:
                 self.volumes = sorted(self.conn.block_store.volumes(details=True, all_tenants=1), key=lambda x: x.id)
             except exceptions.HttpException as e:
@@ -144,28 +173,18 @@ class Cleanup:
 
             # build a dict to check which server a volume is possibly attached to quickly
             for i in self.volumes:
+                self.volume_project_id[i.id] = i.project_id
                 # only record attachments where we have any
                 try:
                     self.attached_to[i.attachments[0]["id"]] = i.attachments[0]["server_id"]
                 except IndexError:
                     pass
 
-            # create a list of volumes, sorted by their id
+            self.seen_dict = self.volumes_seen
+            self.to_be_dict = self.volumes_to_be_deleted
             self.entity = self.volumes
             self.check_for_project_id("volume")
 
-        # get all snapshots from cinder
-        if self.cinder_snapshots:
-
-            try:
-                self.snapshots = sorted(self.conn.block_store.snapshots(details=True, all_tenants=1), key=lambda x: x.id)
-            except exceptions.HttpException as e:
-                log.warn("PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
-                return
-
-            # create a list of servers, sorted by their id
-            self.entity = self.snapshots
-            self.check_for_project_id("snapshot")
 
     def wait_a_moment(self):
         # wait the interval time
@@ -203,8 +222,22 @@ class Cleanup:
                         try:
                             self.conn.compute.delete_server(id)
                         except exceptions.HttpException as e:
-                            log.warn("PLEASE CHECK MANUALLY - got an http exception: %s - this has to be handled manually", str(e))
-                    if what_to_do == "delete of volume":
+                            log.warn("- PLEASE CHECK MANUALLY - got an http exception: %s - this has to be handled manually", str(e))
+                    elif what_to_do == "delete of snapshot":
+                        log.info("- action: %s %s created from volume %s", what_to_do, id,
+                                 self.snapshot_from[id])
+                        try:
+                            self.conn.block_store.delete_snapshot(id)
+                        except exceptions.HttpException as e:
+                            log.warn("-- got an http exception: %s", str(e))
+                            log.info("--- setting the status of the snapshot %s to error in preparation to delete it", id)
+                            self.cinder.volume_snapshots.reset_state(id, "error")
+                            log.info("--- deleting the snapshot %s", id)
+                            try:
+                                self.conn.block_store.delete_snapshot(id)
+                            except exceptions.HttpException as e:
+                                log.warn("PLEASE CHECK MANUALY - got an http exception: %s - this has to be handled manually", str(e))
+                    elif what_to_do == "delete of volume":
                         log.info("- action: %s %s", what_to_do, id)
                         try:
                             self.conn.block_store.delete_volume(id)
@@ -215,22 +248,18 @@ class Cleanup:
                                 log.info("---- volume is still attached to instance: %s", self.attached_to.get(id))
                                 if not self.is_server.get(self.attached_to.get(id)):
                                     log.info("---- server %s does no longer exist - the volume can thus be deleted", self.attached_to.get(id))
-                                    log.info("PLEASE CHECK MANUALLY - see above")
-                                    # this does for some reason not seem to work - the status is not set properly
-                                    #log.info("---- setting the status of the volume %s to error in preparation to delete it", id)
+                                    log.info("---- setting the status of the volume %s to error in preparation to delete it", id)
+                                    self.cinder.volumes.reset_state(id, "error")
+                                    # this was a try to refresh the state from cinder, but it does not seem to work or is not needed
                                     #this_volume = self.conn.block_store.get_volume(id)
-                                    #this_volume.status = "error"
                                     #this_volume.update(self.conn.session)
-                                    #log.info("---- deleting the volume %s", id)
-                                    # TODO
+                                    log.info("---- deleting the volume %s", id)
+                                    try:
+                                        self.conn.block_store.delete_volume(id)
+                                    except exceptions.HttpException as e:
+                                        log.warn("PLEASE CHECK MANUALLY - got an http exception: %s - this has to be handled manually", str(e))
                             else:
                                 log.info("---- volume is not attached to any instance - must be another problem ...")
-                    if what_to_do == "delete of snapshot":
-                        log.info("- action: %s %s", what_to_do, id)
-                        try:
-                            self.conn.block_storage.delete_snapshot(id)
-                        except exceptions.HttpException as e:
-                            log.warn("PLEASE CHECK MANUALLY - got an http exception: %s - this has to be handled manually", str(e))
                     else:
                         log.warn("- PLEASE CHECK MANUALLY - unsupported action requested for id: %s", id)
             # otherwise print out what we plan to do in the future
