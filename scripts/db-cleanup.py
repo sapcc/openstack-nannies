@@ -92,11 +92,12 @@ class Cleanup:
             #for project in self.conn.identity.projects():
                 self.projects[project.id] = project.name
 
-        # cinder client session reusing the auth from the openstacksdk connection session
-        # this is needed to set the state of volumes and snapshots, which is not yet implemented in the openstacksdk
-        auth = self.conn.session.auth
-        sess = session.Session(auth=auth)
-        self.cinder = client.Client("2.0", session=sess)
+        if self.cindercmdline:
+            # cinder client session reusing the auth from the openstacksdk connection session
+            # this is needed to set the state of volumes and snapshots, which is not yet implemented in the openstacksdk
+            auth = self.conn.session.auth
+            sess = session.Session(auth=auth)
+            self.cinder = client.Client("2.0", session=sess)
 
     def init_seen_dict(self):
         for i in self.seen_dict:
