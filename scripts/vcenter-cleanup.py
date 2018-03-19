@@ -298,6 +298,13 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         # wait a moment before retrying
         time.sleep(600)
         return
+    except exceptions.SDKException as e:
+        log.warn(
+            "- PLEASE CHECK MANUALLY - problems retrieving information from openstack %s: %s - retrying in next loop run",
+            service, str(e))
+        # wait a moment before retrying
+        time.sleep(600)
+        return
 
     # the properties we want to collect - some of them are not yet used, but will at a later
     # development stage of this script to validate the volume attachments with cinder and nova
@@ -469,7 +476,10 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                              filename)
 
                     if len(tasks) % 8 == 0:
-                        WaitForTasks(tasks[-8:], si=service_instance)
+                        try:
+                            WaitForTasks(tasks[-8:], si=service_instance)
+                        except vmodl.fault.ManagedObjectNotFound as e:
+                            log.warn("- PLEASE CHECK MANUALLY - problems running vcenter tasks: %s - they will run next time then", str(e))
 
                 # in case of a vmdk or vmx.renamed_by_vcenter_nanny
                 # eph storage case - we work on directories
@@ -494,7 +504,10 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                      iterations, dry_run, power_off, unregister, delete, None, dc, content, filename)
 
                 if len(tasks) % 8 == 0:
-                    WaitForTasks(tasks[-8:], si=service_instance)
+                    try:
+                        WaitForTasks(tasks[-8:], si=service_instance)
+                    except vmodl.fault.ManagedObjectNotFound as e:
+                        log.warn("- PLEASE CHECK MANUALLY - problems running vcenter tasks: %s - they will run next time then", str(e))
 
     # reset the dict of vms or files we plan to do something with for all machines we did not see or which disappeared
     reset_to_be_dict(vms_to_be_suspended, vms_seen)
