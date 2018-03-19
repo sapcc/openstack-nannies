@@ -48,8 +48,8 @@ class Cleanup:
     def __init__(self, interval, iterations, nova, cinder, dry_run):
         self.interval = interval
         self.iterations = iterations
-        self.nova = nova
-        self.cinder = cinder
+        self.novacmdline = nova
+        self.cindercmdline = cinder
         self.dry_run = dry_run
 
         # a dict of all projects we have in openstack
@@ -109,7 +109,7 @@ class Cleanup:
                 self.to_be_dict[i] = 0
 
     def run_me(self):
-        if self.nova or self.cinder:
+        if self.novacmdline or self.cindercmdline:
             while True:
                 self.connection_buildup()
                 if len(self.projects) > 0:
@@ -129,13 +129,13 @@ class Cleanup:
             log.warn("PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
             return
 
-        if self.nova:
+        if self.novacmdline:
             self.seen_dict = self.servers_seen
             self.to_be_dict = self.servers_to_be_deleted
             self.entity = self.servers
             self.check_for_project_id("server")
 
-        if self.cinder:
+        if self.cindercmdline:
 
             # get all snapshots from cinder sorted by their id - do the snapshots before the volumes,
             # as they are created from them and thus should be deleted first
@@ -248,11 +248,10 @@ class Cleanup:
                                 log.info("---- volume is still attached to instance: %s", self.attached_to.get(id))
                                 if not self.is_server.get(self.attached_to.get(id)):
                                     log.info("---- server %s does no longer exist - the volume can thus be deleted", self.attached_to.get(id))
+                                    log.info("---- detaching the volume %s in preparation to delete it", id)
+                                    self.cinder.volumes.detach(id)
                                     log.info("---- setting the status of the volume %s to error in preparation to delete it", id)
                                     self.cinder.volumes.reset_state(id, "error")
-                                    # this was a try to refresh the state from cinder, but it does not seem to work or is not needed
-                                    #this_volume = self.conn.block_store.get_volume(id)
-                                    #this_volume.update(self.conn.session)
                                     log.info("---- deleting the volume %s", id)
                                     try:
                                         self.conn.block_store.delete_volume(id)
