@@ -129,7 +129,9 @@ class Cleanup:
         except exceptions.HttpException as e:
             log.warn("PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
             return
-
+        except exceptions.SDKException as e:
+            log.warn("PLEASE CHECK MANUALLY - got an sdk exception: %s - retrying in next loop run", str(e))
+            return
         if self.novacmdline:
             self.seen_dict = self.servers_seen
             self.to_be_dict = self.servers_to_be_deleted
@@ -144,6 +146,9 @@ class Cleanup:
                 self.snapshots = sorted(self.conn.block_store.snapshots(details=True, all_tenants=1), key=lambda x: x.id)
             except exceptions.HttpException as e:
                 log.warn("PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
+                return
+            except exceptions.SDKException as e:
+                log.warn("PLEASE CHECK MANUALLY - got an sdk exception: %s - retrying in next loop run", str(e))
                 return
 
             self.snapshot_from = dict()
@@ -166,6 +171,9 @@ class Cleanup:
                 self.volumes = sorted(self.conn.block_store.volumes(details=True, all_tenants=1), key=lambda x: x.id)
             except exceptions.HttpException as e:
                 log.warn("PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
+                return
+            except exceptions.SDKException as e:
+                log.warn("PLEASE CHECK MANUALLY - got an sdk exception: %s - retrying in next loop run", str(e))
                 return
 
             # build a dict to check later if a server exists quickly
