@@ -38,6 +38,7 @@ while true; do
             SYNC_MODE="--auto_sync"
         else
             SYNC_MODE="--no_sync"
+            echo "INFO: running in dry-run mode only!"
         fi
         /var/lib/kolla/venv/bin/python /scripts/nova-quota-sync.py --all $SYNC_MODE
     fi

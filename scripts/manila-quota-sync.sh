@@ -33,6 +33,7 @@ while true; do
             SYNC_MODE="--sync"
         else
             SYNC_MODE="--nosync"
+            echo "INFO: running in dry-run mode only!"
         fi
         for i in `/var/lib/kolla/venv/bin/python /scripts/manila-quota-sync.py --config /etc/manila/manila.conf --list_projects`; do
             echo project: $i
