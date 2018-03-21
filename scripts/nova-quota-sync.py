@@ -336,12 +336,12 @@ def show_quota_resources(meta, all_resources=False, no_sync=False, auto_sync=Fal
 
 
 def get_db_url(config_file):
-    parser = ConfigParser.SafeConfigParser()
+    parser = ConfigParser.ConfigParser()
     try:
         parser.read(config_file)
         db_url = parser.get('database', 'connection')
-    except:
-        print "ERROR: Check nova configuration file."
+    except Exception as e:
+        print "ERROR: Check nova configuration file: " + str(e)
         sys.exit(2)
     return db_url
 
