@@ -152,6 +152,8 @@ def reset_to_be_dict(to_be_dict, seen_dict):
 
 
 # here we decide to wait longer before doings something (delete etc.) or finally doing it
+# id here is the corresponding old openstack uuid of vm (for vms) or the file-/dirname on the
+# datastore (for files and folders on the datastore)
 def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, power_off, unregister, delete, vm, dc,
                  content, detail):
     default = 0
@@ -160,33 +162,39 @@ def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, pow
         if to_be_dict.get(id, default) == int(iterations):
             if dry_run:
                 log.info("- dry-run: %s %s", what_to_do, id)
+                log.info("-         [ %s ]", detail)
             else:
-                if what_to_do == "suspend of vm":
-                    log.info("- action: %s %s [%s]", what_to_do, id, detail)
+                if what_to_do == "suspend of former os instance":
+                    log.info("- action: %s %s", what_to_do, id)
+                    log.info("-         [ %s ]", detail)
                     tasks.append(vm.SuspendVM_Task())
-                elif what_to_do == "power off of vm":
+                elif what_to_do == "power off of former os instance":
                     if power_off:
-                        log.info("- action: %s %s [%s]", what_to_do, id, detail)
+                        log.info("- action: %s %s", what_to_do, id)
+                        log.info("-         [ %s ]", detail)
                         tasks.append(vm.PowerOffVM_Task())
-                elif what_to_do == "unregister of vm":
+                elif what_to_do == "unregister of former os instance":
                     if unregister:
-                        log.info("- action: %s %s [%s]", what_to_do, id, detail)
+                        log.info("- action: %s %s", what_to_do, id)
+                        log.info("-         [ %s ]", detail)
                         vm.UnregisterVM()
                 elif what_to_do == "rename of ds path":
-                    log.info("- action: %s %s [%s]", what_to_do, id, detail)
+                    log.info("- action: %s %s", what_to_do, id)
+                    log.info("-         [ %s ]", detail)
                     newname = id.rstrip('/') + ".renamed_by_vcenter_nanny"
                     tasks.append(content.fileManager.MoveDatastoreFile_Task(sourceName=id, sourceDatacenter=dc,
                                                                             destinationName=newname,
                                                                             destinationDatacenter=dc))
                 elif what_to_do == "delete of ds path":
                     if delete:
-                        log.info("- action: %s %s [%s]", what_to_do, id, detail)
+                        log.info("- action: %s %s", what_to_do, id)
+                        log.info("-         [ %s ]", detail)
                         tasks.append(content.fileManager.DeleteDatastoreFile_Task(name=id, datacenter=dc))
                 else:
                     log.warn("- PLEASE CHECK MANUALLY - unsupported action requested for id: %s", id)
         else:
-            log.info("- plan: %s %s [%s] (%i/%i)", what_to_do, id, detail, to_be_dict.get(id, default) + 1,
-                     int(iterations))
+            log.info("- plan: %s %s", what_to_do, id)
+            log.info("-       [ %s ] (%i/%i)", detail, to_be_dict.get(id, default) + 1, int(iterations))
         to_be_dict[id] = to_be_dict.get(id, default) + 1
 
 
@@ -395,6 +403,8 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                 if location["filepath"].lower().endswith(".vmx"):
                     vmx_path = "{folderpath}{filepath}".format(**location)
                     vm = content.searchIndex.FindByDatastorePath(path=vmx_path, datacenter=dc)
+                    # maybe there is a better way to get the moid ...
+                    vm_moid = str(vm).strip('"\'').split(":")[1]
                     # there is a vm for that file path we check what to do with it
                     if vm:
                         power_state = vm.runtime.powerState
@@ -421,22 +431,22 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                 # mark that path as already dealt with, so that we ignore it when we see it again
                                 # with vmdks later maybe
                                 vmxmarked[path] = True
-                                now_or_later(vm.config.instanceUuid, vms_to_be_suspended, vms_seen, "suspend of vm",
+                                now_or_later(vm.config.instanceUuid, vms_to_be_suspended, vms_seen, "suspend of former os instance",
                                              iterations,
-                                             dry_run, power_off, unregister, delete, vm, dc, content, filename)
+                                             dry_run, power_off, unregister, delete, vm, dc, content, filename + " / " + vm_moid + " / " + vm.config.name)
                             # if already suspended the planned action is to power off the vm
                             elif power_state == 'suspended':
                                 vmxmarked[path] = True
-                                now_or_later(vm.config.instanceUuid, vms_to_be_poweredoff, vms_seen, "power off of vm",
+                                now_or_later(vm.config.instanceUuid, vms_to_be_poweredoff, vms_seen, "power off of former os instance",
                                              iterations,
-                                             dry_run, power_off, unregister, delete, vm, dc, content, filename)
+                                             dry_run, power_off, unregister, delete, vm, dc, content, filename + " / " + vm_moid + " / " + vm.config.name)
                             # if already powered off the planned action is to unregister the vm
                             elif power_state == 'poweredOff':
                                 vmxmarked[path] = True
                                 now_or_later(vm.config.instanceUuid, vms_to_be_unregistered, vms_seen,
-                                             "unregister of vm",
+                                             "unregister of former os instance",
                                              iterations,
-                                             dry_run, power_off, unregister, delete, vm, dc, content, filename)
+                                             dry_run, power_off, unregister, delete, vm, dc, content, filename + " / " + vm_moid + " / " + vm.config.name)
                         # this should not happen
                         elif (
                                 vm.config.hardware.memoryMB == 128 and vm.config.hardware.numCPU == 1 and power_state == 'poweredOff' and not is_vvol and has_no_nic):
