@@ -29,6 +29,8 @@ from pyVim.connect import SmartConnect, Disconnect
 from pyVim.task import WaitForTask, WaitForTasks
 from pyVmomi import vim, vmodl
 from openstack import connection, exceptions
+# prometheus export functionality
+from prometheus_client import start_http_server, Gauge
 
 uuid_re = re.compile('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.IGNORECASE)
 
@@ -45,6 +47,26 @@ files_seen = dict()
 
 tasks = []
 
+gauge_value_plan = dict()
+gauge_value_dry_run = dict()
+gauge_value_done = dict()
+gauge_plan_suspend_vm = Gauge('vcenter_nanny_plan_suspend_vm', 'planned vm suspends of the vcenter nanny')
+gauge_plan_power_off_vm = Gauge('vcenter_nanny_plan_power_off_vm', 'planned vm power offs of the vcenter nanny')
+gauge_plan_unregister_vm = Gauge('vcenter_nanny_plan_unregister_vm', 'planned vm unregisters of the vcenter nanny')
+gauge_plan_rename_ds_path = Gauge('vcenter_nanny_plan_rename_ds_path', 'planned ds path renames of the vcenter nanny')
+gauge_plan_delete_ds_path = Gauge('vcenter_nanny_plan_delete_ds_path', 'planned ds path deletes of the vcenter nanny')
+gauge_dry_run_suspend_vm = Gauge('vcenter_nanny_dry_run_suspend_vm', 'vm suspends of the vcenter nanny in dry run mode')
+gauge_dry_run_power_off_vm = Gauge('vcenter_nanny_dry_run_power_off_vm', 'vm power offs of the vcenter nanny in dry run mode')
+gauge_dry_run_unregister_vm = Gauge('vcenter_nanny_dry_run_unregister_vm', 'vm unregisters of the vcenter nanny in dry run mode')
+gauge_dry_run_rename_ds_path = Gauge('vcenter_nanny_dry_run_rename_ds_path', 'ds path renames of the vcenter nanny in dry run mode')
+gauge_dry_run_delete_ds_path = Gauge('vcenter_nanny_dry_run_delete_ds_path', 'ds path deletes of the vcenter nanny in dry run mode')
+gauge_done_suspend_vm = Gauge('vcenter_nanny_done_suspend_vm', 'done vm suspends of the vcenter nanny')
+gauge_done_power_off_vm = Gauge('vcenter_nanny_done_power_off_vm', 'done vm power offs of the vcenter nanny')
+gauge_done_unregister_vm = Gauge('vcenter_nanny_done_unregister_vm', 'done vm unregisters of the vcenter nanny')
+gauge_done_rename_ds_path = Gauge('vcenter_nanny_done_rename_ds_path', 'done ds path renames of the vcenter nanny')
+gauge_done_delete_ds_path = Gauge('vcenter_nanny_done_delete_ds_path', 'done ds path deletes of the vcenter nanny')
+gauge_ghost_volumes = Gauge('vcenter_nanny_ghost_volumes', 'numer of possible ghost volumes')
+gauge_eph_shadow_vms = Gauge('vcenter_nanny_eph_shadow_vms', 'numer of possible shadow vms on eph storage')
 
 # find vmx and vmdk files with a uuid name pattern
 def _uuids(task):
@@ -91,7 +113,20 @@ def _uuids(task):
 @click.option('--unregister', is_flag=True)
 # do not delete datastore files or folders
 @click.option('--delete', is_flag=True)
-def run_me(host, username, password, interval, iterations, dry_run, power_off, unregister, delete):
+# port to use for prometheus exporter, otherwise we use 9456 as default
+@click.option('--port')
+def run_me(host, username, password, interval, iterations, dry_run, power_off, unregister, delete, port):
+
+    # Start http server for exported data
+    if port:
+        prometheus_exporter_port = port
+    else:
+        prometheus_exporter_port = 9456
+    try:
+        start_http_server(prometheus_exporter_port)
+    except Exception as e:
+        logging.error("failed to start prometheus exporter http server: " + str(e))
+
     while True:
 
         # vcenter connection
@@ -163,21 +198,25 @@ def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, pow
             if dry_run:
                 log.info("- dry-run: %s %s", what_to_do, id)
                 log.info("-         [ %s ]", detail)
+                gauge_value_dry_run[what_to_do] += 1
             else:
-                if what_to_do == "suspend of former os instance":
+                if what_to_do == "suspend of former os server":
                     log.info("- action: %s %s", what_to_do, id)
                     log.info("-         [ %s ]", detail)
                     tasks.append(vm.SuspendVM_Task())
-                elif what_to_do == "power off of former os instance":
+                    gauge_value_done[what_to_do] += 1
+                elif what_to_do == "power off of former os server":
                     if power_off:
                         log.info("- action: %s %s", what_to_do, id)
                         log.info("-         [ %s ]", detail)
                         tasks.append(vm.PowerOffVM_Task())
-                elif what_to_do == "unregister of former os instance":
+                        gauge_value_done[what_to_do] += 1
+                elif what_to_do == "unregister of former os server":
                     if unregister:
                         log.info("- action: %s %s", what_to_do, id)
                         log.info("-         [ %s ]", detail)
                         vm.UnregisterVM()
+                        gauge_value_done[what_to_do] += 1
                 elif what_to_do == "rename of ds path":
                     log.info("- action: %s %s", what_to_do, id)
                     log.info("-         [ %s ]", detail)
@@ -185,16 +224,19 @@ def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, pow
                     tasks.append(content.fileManager.MoveDatastoreFile_Task(sourceName=id, sourceDatacenter=dc,
                                                                             destinationName=newname,
                                                                             destinationDatacenter=dc))
+                    gauge_value_done[what_to_do] += 1
                 elif what_to_do == "delete of ds path":
                     if delete:
                         log.info("- action: %s %s", what_to_do, id)
                         log.info("-         [ %s ]", detail)
                         tasks.append(content.fileManager.DeleteDatastoreFile_Task(name=id, datacenter=dc))
+                        gauge_value_done[what_to_do] += 1
                 else:
                     log.warn("- PLEASE CHECK MANUALLY - unsupported action requested for id: %s", id)
         else:
             log.info("- plan: %s %s", what_to_do, id)
             log.info("-       [ %s ] (%i/%i)", detail, to_be_dict.get(id, default) + 1, int(iterations))
+            gauge_value_plan[what_to_do] += 1
         to_be_dict[id] = to_be_dict.get(id, default) + 1
 
 
@@ -284,6 +326,14 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                  password=os.getenv('OS_PASSWORD'))
 
     known = dict()
+
+    # reset all gauge counters
+    for i in [ "suspend of former os server", "power off of former os server", "unregister of former os server", "rename of ds path", "delete of ds path" ]:
+        gauge_value_plan[i] = 0
+        gauge_value_dry_run[i] = 0
+        gauge_value_done[i] = 0
+    gauge_value_ghost_volumes = 0
+    gauge_value_eph_shadow_vms = 0
 
     # get all servers, volumes, snapshots and images from openstack to compare the resources we find on the vcenter against
     try:
@@ -392,6 +442,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         if vcenter_mounted.get(item):
             log.warn("- PLEASE CHECK MANUALLY - possibly mounted ghost volume: %s mounted on %s", item,
                      vcenter_mounted[item])
+            gauge_value_ghost_volumes += 1
         else:
             for location in locationlist:
                 # foldername on datastore
@@ -403,10 +454,10 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                 if location["filepath"].lower().endswith(".vmx"):
                     vmx_path = "{folderpath}{filepath}".format(**location)
                     vm = content.searchIndex.FindByDatastorePath(path=vmx_path, datacenter=dc)
-                    # maybe there is a better way to get the moid ...
-                    vm_moid = str(vm).strip('"\'').split(":")[1]
                     # there is a vm for that file path we check what to do with it
                     if vm:
+                        # maybe there is a better way to get the moid ...
+                        vm_moid = str(vm).strip('"\'').split(":")[1]
                         power_state = vm.runtime.powerState
                         # is the vm located on vvol storage - needed later to check if its a volume shadow vm
                         if vm.config.files.vmPathName.lower().startswith('[vvol'):
@@ -431,26 +482,27 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                 # mark that path as already dealt with, so that we ignore it when we see it again
                                 # with vmdks later maybe
                                 vmxmarked[path] = True
-                                now_or_later(vm.config.instanceUuid, vms_to_be_suspended, vms_seen, "suspend of former os instance",
+                                now_or_later(vm.config.instanceUuid, vms_to_be_suspended, vms_seen, "suspend of former os server",
                                              iterations,
                                              dry_run, power_off, unregister, delete, vm, dc, content, filename + " / " + vm_moid + " / " + vm.config.name)
                             # if already suspended the planned action is to power off the vm
                             elif power_state == 'suspended':
                                 vmxmarked[path] = True
-                                now_or_later(vm.config.instanceUuid, vms_to_be_poweredoff, vms_seen, "power off of former os instance",
+                                now_or_later(vm.config.instanceUuid, vms_to_be_poweredoff, vms_seen, "power off of former os server",
                                              iterations,
                                              dry_run, power_off, unregister, delete, vm, dc, content, filename + " / " + vm_moid + " / " + vm.config.name)
                             # if already powered off the planned action is to unregister the vm
                             elif power_state == 'poweredOff':
                                 vmxmarked[path] = True
                                 now_or_later(vm.config.instanceUuid, vms_to_be_unregistered, vms_seen,
-                                             "unregister of former os instance",
+                                             "unregister of former os server",
                                              iterations,
                                              dry_run, power_off, unregister, delete, vm, dc, content, filename + " / " + vm_moid + " / " + vm.config.name)
                         # this should not happen
                         elif (
                                 vm.config.hardware.memoryMB == 128 and vm.config.hardware.numCPU == 1 and power_state == 'poweredOff' and not is_vvol and has_no_nic):
                             log.warn("- PLEASE CHECK MANUALLY - possible orphan shadow vm on eph storage: %s", path)
+                            gauge_value_eph_shadow_vms += 1
                         # this neither
                         else:
                             log.warn(
@@ -518,6 +570,31 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                         WaitForTasks(tasks[-8:], si=service_instance)
                     except vmodl.fault.ManagedObjectNotFound as e:
                         log.warn("- PLEASE CHECK MANUALLY - problems running vcenter tasks: %s - they will run next time then", str(e))
+
+    # send the counters to the prometheus exporter - ugly for now, will change
+    for i in [ "suspend of former os server", "power off of former os server", "unregister of former os server", "rename of ds path", "delete of ds path" ]:
+        if i == "suspend of former os server":
+            gauge_plan_suspend_vm.set(float(gauge_value_plan[i]))
+            gauge_dry_run_suspend_vm.set(float(gauge_value_dry_run[i]))
+            gauge_done_suspend_vm.set(float(gauge_value_done[i]))
+        if i == "power off of former os server":
+            gauge_plan_power_off_vm.set(float(gauge_value_plan[i]))
+            gauge_dry_run_power_off_vm.set(float(gauge_value_dry_run[i]))
+            gauge_done_power_off_vm.set(float(gauge_value_done[i]))
+        if i == "unregister of former os server":
+            gauge_plan_unregister_vm.set(float(gauge_value_plan[i]))
+            gauge_dry_run_unregister_vm.set(float(gauge_value_dry_run[i]))
+            gauge_done_unregister_vm.set(float(gauge_value_done[i]))
+        if i == "rename of ds path":
+            gauge_plan_rename_ds_path.set(float(gauge_value_plan[i]))
+            gauge_dry_run_rename_ds_path.set(float(gauge_value_dry_run[i]))
+            gauge_done_rename_ds_path.set(float(gauge_value_done[i]))
+        if i == "delete of ds path":
+            gauge_plan_delete_ds_path.set(float(gauge_value_plan[i]))
+            gauge_dry_run_delete_ds_path.set(float(gauge_value_dry_run[i]))
+            gauge_done_delete_ds_path.set(float(gauge_value_done[i]))
+    gauge_ghost_volumes.set(float(gauge_value_ghost_volumes))
+    gauge_eph_shadow_vms.set(float(gauge_value_eph_shadow_vms))
 
     # reset the dict of vms or files we plan to do something with for all machines we did not see or which disappeared
     reset_to_be_dict(vms_to_be_suspended, vms_seen)
