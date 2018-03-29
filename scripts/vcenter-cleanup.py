@@ -197,29 +197,29 @@ def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, pow
         if to_be_dict.get(id, default) == int(iterations):
             if dry_run:
                 log.info("- dry-run: %s %s", what_to_do, id)
-                log.info("-         [ %s ]", detail)
+                log.info("           [ %s ]", detail)
                 gauge_value_dry_run[what_to_do] += 1
             else:
                 if what_to_do == "suspend of former os server":
                     log.info("- action: %s %s", what_to_do, id)
-                    log.info("-         [ %s ]", detail)
+                    log.info("          [ %s ]", detail)
                     tasks.append(vm.SuspendVM_Task())
                     gauge_value_done[what_to_do] += 1
                 elif what_to_do == "power off of former os server":
                     if power_off:
                         log.info("- action: %s %s", what_to_do, id)
-                        log.info("-         [ %s ]", detail)
+                        log.info("          [ %s ]", detail)
                         tasks.append(vm.PowerOffVM_Task())
                         gauge_value_done[what_to_do] += 1
                 elif what_to_do == "unregister of former os server":
                     if unregister:
                         log.info("- action: %s %s", what_to_do, id)
-                        log.info("-         [ %s ]", detail)
+                        log.info("          [ %s ]", detail)
                         vm.UnregisterVM()
                         gauge_value_done[what_to_do] += 1
                 elif what_to_do == "rename of ds path":
                     log.info("- action: %s %s", what_to_do, id)
-                    log.info("-         [ %s ]", detail)
+                    log.info("          [ %s ]", detail)
                     newname = id.rstrip('/') + ".renamed_by_vcenter_nanny"
                     tasks.append(content.fileManager.MoveDatastoreFile_Task(sourceName=id, sourceDatacenter=dc,
                                                                             destinationName=newname,
@@ -228,14 +228,14 @@ def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, pow
                 elif what_to_do == "delete of ds path":
                     if delete:
                         log.info("- action: %s %s", what_to_do, id)
-                        log.info("-         [ %s ]", detail)
+                        log.info("          [ %s ]", detail)
                         tasks.append(content.fileManager.DeleteDatastoreFile_Task(name=id, datacenter=dc))
                         gauge_value_done[what_to_do] += 1
                 else:
                     log.warn("- PLEASE CHECK MANUALLY - unsupported action requested for id: %s", id)
         else:
             log.info("- plan: %s %s", what_to_do, id)
-            log.info("-       [ %s ] (%i/%i)", detail, to_be_dict.get(id, default) + 1, int(iterations))
+            log.info("        [ %s ] (%i/%i)", detail, to_be_dict.get(id, default) + 1, int(iterations))
             gauge_value_plan[what_to_do] += 1
         to_be_dict[id] = to_be_dict.get(id, default) + 1
 
