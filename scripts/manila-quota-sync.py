@@ -73,10 +73,12 @@ def sync_quota_usages_project(meta, project_id, quota_usages_to_sync):
     print "Syncing %s" % (project_id)
     now = datetime.datetime.utcnow()
     quota_usages_t = Table('quota_usages', meta, autoload=True)
-    for resource, quota in quota_usages_to_sync.iteritems():
+    # a tuple is used here to have a dict value per project and user
+    for resource_tuple, quota in quota_usages_to_sync.iteritems():
         quota_usages_t.update().where(
             and_(quota_usages_t.c.project_id == project_id,
-                 quota_usages_t.c.resource == resource)).values(
+                 quota_usages_t.c.resource == resource_tuple[0],
+            quota_usages_t.c.user_id == resource_tuple[1])).values(
             updated_at=now, in_use=quota).execute()
 
 
@@ -85,9 +87,7 @@ def get_share_networks_usages_project(meta, project_id):
     """Return the share_networks resource usages of a project"""
 
     networks_t = Table('share_networks', meta, autoload=True)
-    networks_q = select(columns=[networks_t.c.id],
-#    networks_q=select(columns=[networks_t.c.id,
-#                               networks_t.c.share_type_id],
+    networks_q = select(columns=[networks_t.c.id, networks_t.c.user_id],
                          whereclause=and_(
                          networks_t.c.deleted == "False",
                          networks_t.c.project_id == project_id))
@@ -99,9 +99,8 @@ def get_snapshot_usages_project(meta, project_id):
 
     snapshots_t = Table('share_snapshots', meta, autoload=True)
     snapshots_q = select(columns=[snapshots_t.c.id,
+                                  snapshots_t.c.user_id,
                                   snapshots_t.c.share_size],
-#                                  snapshots_t.c.share_size,
-#                                  snapshots_t.c.share_type_id],
                          whereclause=and_(
                          snapshots_t.c.deleted == "False",
                          snapshots_t.c.project_id == project_id))
@@ -114,9 +113,8 @@ def get_share_usages_project(meta, project_id):
 
     shares_t = Table('shares', meta, autoload=True)
     shares_q = select(columns=[shares_t.c.id,
+                                shares_t.c.user_id,
                                 shares_t.c.size],
-#                                shares_t.c.size,
-#                                shares_t.c.share_type_id],
                        whereclause=and_(shares_t.c.deleted == "False",
                                         shares_t.c.project_id == project_id))
     return shares_q.execute()
@@ -128,10 +126,11 @@ def get_quota_usages_project(meta, project_id):
 
     quota_usages_t = Table('quota_usages', meta, autoload=True)
     quota_usages_q = select(columns=[quota_usages_t.c.resource,
+                                     quota_usages_t.c.user_id,
                                      quota_usages_t.c.in_use],
                             whereclause=and_(quota_usages_t.c.deleted == 0,
                                              quota_usages_t.c.project_id ==
-                                             project_id))
+                                             project_id, quota_usages_t.c.user_id != None))
     return quota_usages_q.execute()
 
 
@@ -148,20 +147,6 @@ def get_resource_types(meta, project_id):
     for (resource, _) in resource_types_q.execute():
         types.append(resource)
     return types
-
-
-# def get_share_types(meta, project_id):
-#
-#     """Return a dict with share type id to name mapping"""
-#
-#     types = {}
-#     share_types_t = Table('share_types', meta, autoload=True)
-#     share_types_q = select(columns=[share_types_t.c.id,
-#                                      share_types_t.c.name],
-#                             whereclause=share_types_t.c.deleted == "False")
-#     for (id, name) in share_types_q.execute():
-#         types[id] = name
-#     return types
 
 
 def makeConnection(db_url):
@@ -224,10 +209,6 @@ def main():
     db_url = get_db_url(args.config)
     manila_session, manila_metadata, manila_Base = makeConnection(db_url)
 
-    # get the share types
-#    share_types = get_share_types(manila_metadata,
-#                                    args.project_id)
-
     # get the resource types
     resource_types = get_resource_types(manila_metadata,
                                         args.project_id)
@@ -241,62 +222,56 @@ def main():
 
     # check a single project
     #
-    print "Checking " + args.project_id + " ..."
+    print "checking project " + args.project_id + ":"
 
     # get the quota usage of a project
     quota_usages = {}
-    for (resource, count) in get_quota_usages_project(manila_metadata,
-                                                      args.project_id):
-        quota_usages[resource] = count
+    for (resource, user, count) in get_quota_usages_project(manila_metadata,
+                                                        args.project_id):
+        quota_usages[(resource, user)] = quota_usages.get((resource, user), 0) + count
 
     # get the real usage of a project
     real_usages = {}
-    for resource in resource_types:
-        real_usages[resource] = 0
-#    for (_, size, type_id) in get_share_usages_project(manila_metadata,
-#                                                        args.project_id):
-    for (_, size) in get_share_usages_project(manila_metadata,
+    for (_, user, size) in get_share_usages_project(manila_metadata,
                                                         args.project_id):
-        real_usages["shares"] += 1
-#        real_usages["shares_" + share_types[type_id]] += 1
-        real_usages["gigabytes"] += size
-#        real_usages["gigabytes_" + share_types[type_id]] += size
-#    for (_, size, type_id) in get_snapshot_usages_project(manila_metadata,
-#                                                        args.project_id):
-    for (_, size) in get_snapshot_usages_project(manila_metadata,
+        real_usages[("shares", user)] = real_usages.get(("shares", user), 0) + 1
+        real_usages[("gigabytes", user)] = real_usages.get(("gigabytes", user), 0) + size
+
+    for (_, user, size) in get_snapshot_usages_project(manila_metadata,
                                                           args.project_id):
-        real_usages["snapshots"] += 1
-#        real_usages["snapshots_" + share_types[type_id]] += 1
-        real_usages["snapshot_gigabytes"] += size
-#        real_usages["gigabytes_" + share_types[type_id]] += size
-#    for (_, type_id) in get_share_networks_usages_project(manila_metadata,
-#                                                        args.project_id):
-    for (_) in get_share_networks_usages_project(manila_metadata,
+        real_usages[("snapshots",user)] = real_usages.get(("snapshots",user), 0) + 1
+        real_usages[("snapshot_gigabytes", user)] = real_usages.get(("snapshot_gigabytes", user), 0) + size
+
+    for (_, user) in get_share_networks_usages_project(manila_metadata,
                                                         args.project_id):
-        real_usages["share_networks"] += 1
-#        real_usages["share_networks_" + share_types[type_id]] += 1
+        real_usages[("share_networks", user)] = real_usages.get(("share_networks", user), 0) + 1
 
     # prepare the output
-    ptable = PrettyTable(["Project ID", "Resource", "Quota -> Real",
+    ptable = PrettyTable(["Project ID", "User ID", "Resource", "Quota -> Real",
                          "Sync Status"])
 
     # find discrepancies between quota usage and real usage
     quota_usages_to_sync = {}
     for resource in resource_types:
-        try:
-            if real_usages[resource] != quota_usages[resource]:
-                quota_usages_to_sync[resource] = real_usages[resource]
-                ptable.add_row([args.project_id, resource,
-                               str(quota_usages[resource]) + ' -> ' +
-                               str(real_usages[resource]),
-                               '\033[1m\033[91mMISMATCH\033[0m'])
-            else:
-                ptable.add_row([args.project_id, resource,
-                               str(quota_usages[resource]) + ' -> ' +
-                               str(real_usages[resource]),
-                               '\033[1m\033[92mOK\033[0m'])
-        except KeyError:
-            pass
+        userlist = []
+        for resource_tuple in quota_usages:
+            userlist.append(resource_tuple[1])
+        sorteduserlist = sorted(set(userlist))
+        for user in sorteduserlist:
+            try:
+                if real_usages[(resource, user)] != quota_usages[(resource, user)]:
+                    quota_usages_to_sync[(resource, user)] = real_usages[(resource, user)]
+                    ptable.add_row([args.project_id, user, resource,
+                                   str(quota_usages[(resource, user)]) + ' -> ' +
+                                   str(real_usages[(resource, user)]),
+                                   '\033[1m\033[91mMISMATCH\033[0m'])
+                else:
+                    ptable.add_row([args.project_id, user, resource,
+                                   str(quota_usages[(resource, user)]) + ' -> ' +
+                                   str(real_usages[(resource, user)]),
+                                   '\033[1m\033[92mOK\033[0m'])
+            except KeyError:
+                pass
 
     if len(quota_usages):
         print ptable
