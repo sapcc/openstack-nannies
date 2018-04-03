@@ -47,24 +47,14 @@ files_seen = dict()
 
 tasks = []
 
-gauge_value_plan = dict()
-gauge_value_dry_run = dict()
-gauge_value_done = dict()
-gauge_plan_suspend_vm = Gauge('vcenter_nanny_plan_suspend_vm', 'planned vm suspends of the vcenter nanny')
-gauge_plan_power_off_vm = Gauge('vcenter_nanny_plan_power_off_vm', 'planned vm power offs of the vcenter nanny')
-gauge_plan_unregister_vm = Gauge('vcenter_nanny_plan_unregister_vm', 'planned vm unregisters of the vcenter nanny')
-gauge_plan_rename_ds_path = Gauge('vcenter_nanny_plan_rename_ds_path', 'planned ds path renames of the vcenter nanny')
-gauge_plan_delete_ds_path = Gauge('vcenter_nanny_plan_delete_ds_path', 'planned ds path deletes of the vcenter nanny')
-gauge_dry_run_suspend_vm = Gauge('vcenter_nanny_dry_run_suspend_vm', 'vm suspends of the vcenter nanny in dry run mode')
-gauge_dry_run_power_off_vm = Gauge('vcenter_nanny_dry_run_power_off_vm', 'vm power offs of the vcenter nanny in dry run mode')
-gauge_dry_run_unregister_vm = Gauge('vcenter_nanny_dry_run_unregister_vm', 'vm unregisters of the vcenter nanny in dry run mode')
-gauge_dry_run_rename_ds_path = Gauge('vcenter_nanny_dry_run_rename_ds_path', 'ds path renames of the vcenter nanny in dry run mode')
-gauge_dry_run_delete_ds_path = Gauge('vcenter_nanny_dry_run_delete_ds_path', 'ds path deletes of the vcenter nanny in dry run mode')
-gauge_done_suspend_vm = Gauge('vcenter_nanny_done_suspend_vm', 'done vm suspends of the vcenter nanny')
-gauge_done_power_off_vm = Gauge('vcenter_nanny_done_power_off_vm', 'done vm power offs of the vcenter nanny')
-gauge_done_unregister_vm = Gauge('vcenter_nanny_done_unregister_vm', 'done vm unregisters of the vcenter nanny')
-gauge_done_rename_ds_path = Gauge('vcenter_nanny_done_rename_ds_path', 'done ds path renames of the vcenter nanny')
-gauge_done_delete_ds_path = Gauge('vcenter_nanny_done_delete_ds_path', 'done ds path deletes of the vcenter nanny')
+state_to_name_map = dict()
+
+gauge_value = dict()
+gauge_suspend_vm = Gauge('vcenter_nanny_plan_suspend_vm', 'vm suspends of the vcenter nanny', ['kind'])
+gauge_power_off_vm = Gauge('vcenter_nanny_plan_power_off_vm', 'vm power offs of the vcenter nanny', ['kind'])
+gauge_unregister_vm = Gauge('vcenter_nanny_plan_unregister_vm', 'vm unregisters of the vcenter nanny', ['kind'])
+gauge_rename_ds_path = Gauge('vcenter_nanny_plan_rename_ds_path', 'ds path renames of the vcenter nanny', ['kind'])
+gauge_delete_ds_path = Gauge('vcenter_nanny_plan_delete_ds_path', 'ds path deletes of the vcenter nanny', ['kind'])
 gauge_ghost_volumes = Gauge('vcenter_nanny_ghost_volumes', 'numer of possible ghost volumes')
 gauge_eph_shadow_vms = Gauge('vcenter_nanny_eph_shadow_vms', 'numer of possible shadow vms on eph storage')
 
@@ -158,6 +148,13 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
                     recursive=True
                 )
 
+                # define the state to verbal name mapping
+                state_to_name_map["suspend_vm"] = "suspend of former os server"
+                state_to_name_map["power_off_vm"] = "power off of former os server"
+                state_to_name_map["unregister_vm"] = "unregister of former os server"
+                state_to_name_map["rename_ds_path"] = "rename of ds path"
+                state_to_name_map["delete_ds_path"] = "delete of ds path"
+
                 # do the cleanup work
                 cleanup_items(host, username, password, iterations, dry_run, power_off, unregister, delete,
                               service_instance,
@@ -198,45 +195,45 @@ def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, pow
             if dry_run:
                 log.info("- dry-run: %s %s", what_to_do, id)
                 log.info("           [ %s ]", detail)
-                gauge_value_dry_run[what_to_do] += 1
+                gauge_value[('dry_run', what_to_do)] += 1
             else:
-                if what_to_do == "suspend of former os server":
-                    log.info("- action: %s %s", what_to_do, id)
+                if what_to_do == "suspend_vm":
+                    log.info("- action: %s %s", state_to_name_map[what_to_do], id)
                     log.info("          [ %s ]", detail)
                     tasks.append(vm.SuspendVM_Task())
-                    gauge_value_done[what_to_do] += 1
-                elif what_to_do == "power off of former os server":
+                    gauge_value[('done', what_to_do)] += 1
+                elif what_to_do == "power_off_vm":
                     if power_off:
-                        log.info("- action: %s %s", what_to_do, id)
+                        log.info("- action: %s %s", state_to_name_map[what_to_do], id)
                         log.info("          [ %s ]", detail)
                         tasks.append(vm.PowerOffVM_Task())
-                        gauge_value_done[what_to_do] += 1
-                elif what_to_do == "unregister of former os server":
+                        gauge_value[('done', what_to_do)] += 1
+                elif what_to_do == "unregister_vm":
                     if unregister:
-                        log.info("- action: %s %s", what_to_do, id)
+                        log.info("- action: %s %s", state_to_name_map[what_to_do], id)
                         log.info("          [ %s ]", detail)
                         vm.UnregisterVM()
-                        gauge_value_done[what_to_do] += 1
-                elif what_to_do == "rename of ds path":
-                    log.info("- action: %s %s", what_to_do, id)
+                        gauge_value[('done', what_to_do)] += 1
+                elif what_to_do == "rename_ds_path":
+                    log.info("- action: %s %s", state_to_name_map[what_to_do], id)
                     log.info("          [ %s ]", detail)
                     newname = id.rstrip('/') + ".renamed_by_vcenter_nanny"
                     tasks.append(content.fileManager.MoveDatastoreFile_Task(sourceName=id, sourceDatacenter=dc,
                                                                             destinationName=newname,
                                                                             destinationDatacenter=dc))
-                    gauge_value_done[what_to_do] += 1
-                elif what_to_do == "delete of ds path":
+                    gauge_value[('done', what_to_do)] += 1
+                elif what_to_do == "delete_ds_path":
                     if delete:
-                        log.info("- action: %s %s", what_to_do, id)
+                        log.info("- action: %s %s", state_to_name_map[what_to_do], id)
                         log.info("          [ %s ]", detail)
                         tasks.append(content.fileManager.DeleteDatastoreFile_Task(name=id, datacenter=dc))
-                        gauge_value_done[what_to_do] += 1
+                        gauge_value[('done', what_to_do)] += 1
                 else:
                     log.warn("- PLEASE CHECK MANUALLY - unsupported action requested for id: %s", id)
         else:
-            log.info("- plan: %s %s", what_to_do, id)
+            log.info("- plan: %s %s", state_to_name_map[what_to_do], id)
             log.info("        [ %s ] (%i/%i)", detail, to_be_dict.get(id, default) + 1, int(iterations))
-            gauge_value_plan[what_to_do] += 1
+            gauge_value[('plan', what_to_do)] += 1
         to_be_dict[id] = to_be_dict.get(id, default) + 1
 
 
@@ -328,10 +325,9 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     known = dict()
 
     # reset all gauge counters
-    for i in [ "suspend of former os server", "power off of former os server", "unregister of former os server", "rename of ds path", "delete of ds path" ]:
-        gauge_value_plan[i] = 0
-        gauge_value_dry_run[i] = 0
-        gauge_value_done[i] = 0
+    for kind in [ "plan", "dry_run", "done"]:
+        for what in state_to_name_map:
+            gauge_value[(kind, what)] = 0
     gauge_value_ghost_volumes = 0
     gauge_value_eph_shadow_vms = 0
 
@@ -482,20 +478,20 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                 # mark that path as already dealt with, so that we ignore it when we see it again
                                 # with vmdks later maybe
                                 vmxmarked[path] = True
-                                now_or_later(vm.config.instanceUuid, vms_to_be_suspended, vms_seen, "suspend of former os server",
+                                now_or_later(vm.config.instanceUuid, vms_to_be_suspended, vms_seen, "suspend_vm",
                                              iterations,
                                              dry_run, power_off, unregister, delete, vm, dc, content, filename + " / " + vm_moid + " / " + vm.config.name)
                             # if already suspended the planned action is to power off the vm
                             elif power_state == 'suspended':
                                 vmxmarked[path] = True
-                                now_or_later(vm.config.instanceUuid, vms_to_be_poweredoff, vms_seen, "power off of former os server",
+                                now_or_later(vm.config.instanceUuid, vms_to_be_poweredoff, vms_seen, "power_off_vm",
                                              iterations,
                                              dry_run, power_off, unregister, delete, vm, dc, content, filename + " / " + vm_moid + " / " + vm.config.name)
                             # if already powered off the planned action is to unregister the vm
                             elif power_state == 'poweredOff':
                                 vmxmarked[path] = True
                                 now_or_later(vm.config.instanceUuid, vms_to_be_unregistered, vms_seen,
-                                             "unregister of former os server",
+                                             "unregister_vm",
                                              iterations,
                                              dry_run, power_off, unregister, delete, vm, dc, content, filename + " / " + vm_moid + " / " + vm.config.name)
                         # this should not happen
@@ -515,12 +511,12 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                         if path.lower().startswith("[eph"):
                             if path.endswith(".renamed_by_vcenter_nanny/"):
                                 # if already renamed finally delete
-                                now_or_later(str(path), files_to_be_deleted, files_seen, "delete of ds path",
+                                now_or_later(str(path), files_to_be_deleted, files_seen, "delete_ds_path",
                                              iterations, dry_run, power_off, unregister, delete, vm, dc, content,
                                              filename)
                             else:
                                 # first rename the file before deleting them later
-                                now_or_later(str(path), files_to_be_renamed, files_seen, "rename of ds path",
+                                now_or_later(str(path), files_to_be_renamed, files_seen, "rename_ds_path",
                                              iterations, dry_run, power_off, unregister, delete, vm, dc, content,
                                              filename)
                         else:
@@ -529,11 +525,11 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                             # and not on a directory base
                             vvolmarked[fullpath] = True
                             if fullpath.endswith(".renamed_by_vcenter_nanny/"):
-                                now_or_later(str(fullpath), files_to_be_deleted, files_seen, "delete of ds path",
+                                now_or_later(str(fullpath), files_to_be_deleted, files_seen, "delete_ds_path",
                                              iterations, dry_run, power_off, unregister, delete, vm, dc, content,
                                              filename)
                             else:
-                                now_or_later(str(fullpath), files_to_be_renamed, files_seen, "rename of ds path",
+                                now_or_later(str(fullpath), files_to_be_renamed, files_seen, "rename_ds_path",
                                              iterations, dry_run, power_off, unregister, delete, vm, dc, content,
                                              filename)
 
@@ -550,19 +546,19 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                     # mark to not redo it for other vmdks as we are working on the dir at once
                     vmdkmarked[path] = True
                     if path.endswith(".renamed_by_vcenter_nanny/"):
-                        now_or_later(str(path), files_to_be_deleted, files_seen, "delete of ds path",
+                        now_or_later(str(path), files_to_be_deleted, files_seen, "delete_ds_path",
                                      iterations, dry_run, power_off, unregister, delete, None, dc, content, filename)
                     else:
-                        now_or_later(str(path), files_to_be_renamed, files_seen, "rename of ds path",
+                        now_or_later(str(path), files_to_be_renamed, files_seen, "rename_ds_path",
                                      iterations, dry_run, power_off, unregister, delete, None, dc, content, filename)
                 # vvol storage case - we work file by file as we can't rename or delete the vvol folders
                 elif path.lower().startswith("[vvol") and not vvolmarked.get(fullpath, False):
                     # vvol storage
                     if fullpath.endswith(".renamed_by_vcenter_nanny"):
-                        now_or_later(str(fullpath), files_to_be_deleted, files_seen, "delete of ds path",
+                        now_or_later(str(fullpath), files_to_be_deleted, files_seen, "delete_ds_path",
                                      iterations, dry_run, power_off, unregister, delete, None, dc, content, filename)
                     else:
-                        now_or_later(str(fullpath), files_to_be_renamed, files_seen, "rename of ds path",
+                        now_or_later(str(fullpath), files_to_be_renamed, files_seen, "rename_ds_path",
                                      iterations, dry_run, power_off, unregister, delete, None, dc, content, filename)
 
                 if len(tasks) % 8 == 0:
@@ -572,27 +568,14 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                         log.warn("- PLEASE CHECK MANUALLY - problems running vcenter tasks: %s - they will run next time then", str(e))
 
     # send the counters to the prometheus exporter - ugly for now, will change
-    for i in [ "suspend of former os server", "power off of former os server", "unregister of former os server", "rename of ds path", "delete of ds path" ]:
-        if i == "suspend of former os server":
-            gauge_plan_suspend_vm.set(float(gauge_value_plan[i]))
-            gauge_dry_run_suspend_vm.set(float(gauge_value_dry_run[i]))
-            gauge_done_suspend_vm.set(float(gauge_value_done[i]))
-        if i == "power off of former os server":
-            gauge_plan_power_off_vm.set(float(gauge_value_plan[i]))
-            gauge_dry_run_power_off_vm.set(float(gauge_value_dry_run[i]))
-            gauge_done_power_off_vm.set(float(gauge_value_done[i]))
-        if i == "unregister of former os server":
-            gauge_plan_unregister_vm.set(float(gauge_value_plan[i]))
-            gauge_dry_run_unregister_vm.set(float(gauge_value_dry_run[i]))
-            gauge_done_unregister_vm.set(float(gauge_value_done[i]))
-        if i == "rename of ds path":
-            gauge_plan_rename_ds_path.set(float(gauge_value_plan[i]))
-            gauge_dry_run_rename_ds_path.set(float(gauge_value_dry_run[i]))
-            gauge_done_rename_ds_path.set(float(gauge_value_done[i]))
-        if i == "delete of ds path":
-            gauge_plan_delete_ds_path.set(float(gauge_value_plan[i]))
-            gauge_dry_run_delete_ds_path.set(float(gauge_value_dry_run[i]))
-            gauge_done_delete_ds_path.set(float(gauge_value_done[i]))
+    for kind in [ "plan", "dry_run", "done"]:
+        for what in state_to_name_map:
+            print what
+            gauge_suspend_vm.labels(kind).set(float(gauge_value[(kind, what)]))
+            gauge_power_off_vm.labels(kind).set(float(gauge_value[(kind, what)]))
+            gauge_unregister_vm.labels(kind).set(float(gauge_value[(kind, what)]))
+            gauge_rename_ds_path.labels(kind).set(float(gauge_value[(kind, what)]))
+            gauge_delete_ds_path.labels(kind).set(float(gauge_value[(kind, what)]))
     gauge_ghost_volumes.set(float(gauge_value_ghost_volumes))
     gauge_eph_shadow_vms.set(float(gauge_value_eph_shadow_vms))
 

@@ -71,33 +71,25 @@ class Cleanup:
         self.volumes_seen = dict()
         self.volumes_to_be_deleted = dict()
 
-        self.gauge_value_plan = dict()
-        self.gauge_value_dry_run = dict()
-        self.gauge_value_done = dict()
+        # define the state to verbal name mapping
+        self.state_to_name_map = dict()
+        self.state_to_name_map["delete_server"] = "delete of server"
+        self.state_to_name_map["delete_volume"] = "delete of volume"
+        self.state_to_name_map["delete_snapshot"] = "delete of snapshot"
+
+        self.gauge_value = dict()
 
         if self.novacmdline:
             which_service = "nova"
-            self.gauge_plan_delete_server = Gauge(which_service + '_nanny_plan_delete_server',
-                                                  'planned server deletes of the ' + which_service + ' nanny')
-            self.gauge_dry_run_delete_server = Gauge(which_service + '_nanny_dry_run_delete_server',
-                                                     'server deletes of the ' + which_service + ' nanny in dry run mode')
-            self.gauge_done_delete_server = Gauge(which_service + '_nanny_done_delete_server',
-                                                  'done server deletes of the ' + which_service + ' nanny')
+            self.gauge_delete_server = Gauge(which_service + '_nanny_delete_server',
+                                                  'server deletes of the ' + which_service + ' nanny', ['kind'])
 
         if self.cindercmdline:
             which_service = "cinder"
-            self.gauge_plan_delete_volume = Gauge(which_service + '_nanny_plan_delete_volume',
-                                                  'planned volume deletes of the ' + which_service + ' nanny')
-            self.gauge_plan_delete_snapshot = Gauge(which_service + '_nanny_plan_delete_snapshot',
-                                                    'planned snapshot deletes of the ' + which_service + ' nanny')
-            self.gauge_dry_run_delete_volume = Gauge(which_service + '_nanny_dry_run_delete_volume',
-                                                     'volume deletes of the ' + which_service + ' nanny in dry run mode')
-            self.gauge_dry_run_delete_snapshot = Gauge(which_service + '_nanny_dry_run_delete_snapshot',
-                                                       'snapshot deletes of the ' + which_service + ' nanny in dry run mode')
-            self.gauge_done_delete_volume = Gauge(which_service + '_nanny_done_delete_volume',
-                                                  'done volume deletes of the ' + which_service + ' nanny')
-            self.gauge_done_delete_snapshot = Gauge(which_service + '_nanny_done_delete_snapshot',
-                                                    'done snapshot deletes of the ' + which_service + ' nanny')
+            self.gauge_delete_volume = Gauge(which_service + '_nanny_delete_volume',
+                                                  'volume deletes of the ' + which_service + ' nanny', ['kind'])
+            self.gauge_delete_snapshot = Gauge(which_service + '_nanny_delete_snapshot',
+                                                    'snapshot deletes of the ' + which_service + ' nanny', ['kind'])
 
         # Start http server for exported data
         if port:
@@ -169,20 +161,12 @@ class Cleanup:
     def os_cleanup_items(self):
 
         # reset all gauge counters
-        if self.novacmdline:
-            i = "delete of server"
-            self.gauge_value_plan[i] = 0
-            self.gauge_value_dry_run[i] = 0
-            self.gauge_value_done[i] = 0
-        if self.cindercmdline:
-            i = "delete of volume"
-            self.gauge_value_plan[i] = 0
-            self.gauge_value_dry_run[i] = 0
-            self.gauge_value_done[i] = 0
-            i = "delete of snapshot"
-            self.gauge_value_plan[i] = 0
-            self.gauge_value_dry_run[i] = 0
-            self.gauge_value_done[i] = 0
+        for kind in ["plan", "dry_run", "done"]:
+            if self.novacmdline:
+                self.gauge_value[(kind, "delete_server")] = 0
+            if self.cindercmdline:
+                self.gauge_value[(kind, "delete_volume")] = 0
+                self.gauge_value[(kind, "delete_snapshot")] = 0
 
         # get all instances from nova sorted by their id
         try:
@@ -271,7 +255,7 @@ class Cleanup:
             # element has no existing project id - we plan to delete it
             else:
                 log.debug("%s %s has no valid project id!", type, str(element.id))
-                self.now_or_later(element.id, "delete of " + type)
+                self.now_or_later(element.id, "delete_" + type)
         # reset the dict of instances we plan to do delete from the db for all machines we did not see or which disappeared
         self.reset_to_be_dict()
 
@@ -285,22 +269,22 @@ class Cleanup:
             if self.to_be_dict.get(id, default) == int(self.iterations):
                 # ... or print if we are only in dry-run mode
                 if self.dry_run:
-                    log.info("- dry-run: %s %s", what_to_do, id)
-                    self.gauge_value_dry_run[what_to_do] += 1
+                    log.info("- dry-run: %s %s", self.state_to_name_map[what_to_do], id)
+                    self.gauge_value[('dry_run', what_to_do)] += 1
                 else:
-                    if what_to_do == "delete of server":
-                        log.info("- action: %s %s", what_to_do, id)
+                    if what_to_do == "delete_server":
+                        log.info("- action: %s %s", self.state_to_name_map[what_to_do], id)
                         try:
                             self.conn.compute.delete_server(id)
-                            self.gauge_value_done[what_to_do] += 1
+                            self.gauge_value[('done', what_to_do)] += 1
                         except exceptions.HttpException as e:
                             log.warn("- PLEASE CHECK MANUALLY - got an http exception: %s - this has to be handled manually", str(e))
-                    elif what_to_do == "delete of snapshot":
-                        log.info("- action: %s %s created from volume %s", what_to_do, id,
+                    elif what_to_do == "delete_snapshot":
+                        log.info("- action: %s %s created from volume %s", self.state_to_name_map[what_to_do], id,
                                  self.snapshot_from[id])
                         try:
                             self.conn.block_store.delete_snapshot(id)
-                            self.gauge_value_done[what_to_do] += 1
+                            self.gauge_value[('done', what_to_do)] += 1
                         except exceptions.HttpException as e:
                             log.warn("-- got an http exception: %s", str(e))
                             log.info("--- setting the status of the snapshot %s to error in preparation to delete it", id)
@@ -308,14 +292,14 @@ class Cleanup:
                             log.info("--- deleting the snapshot %s", id)
                             try:
                                 self.conn.block_store.delete_snapshot(id)
-                                self.gauge_value_done[what_to_do] += 1
+                                self.gauge_value[('done', what_to_do)] += 1
                             except exceptions.HttpException as e:
                                 log.warn("PLEASE CHECK MANUALY - got an http exception: %s - this has to be handled manually", str(e))
-                    elif what_to_do == "delete of volume":
-                        log.info("- action: %s %s", what_to_do, id)
+                    elif what_to_do == "delete_volume":
+                        log.info("- action: %s %s", self.state_to_name_map[what_to_do], id)
                         try:
                             self.conn.block_store.delete_volume(id)
-                            self.gauge_value_done[what_to_do] += 1
+                            self.gauge_value[('done', what_to_do)] += 1
                         except exceptions.HttpException as e:
                             log.warn("-- got an http exception: %s", str(e))
                             log.warn("--- maybe this volume is still connected to an already deleted instance? - checking ...")
@@ -330,7 +314,7 @@ class Cleanup:
                                     log.info("---- deleting the volume %s", id)
                                     try:
                                         self.conn.block_store.delete_volume(id)
-                                        self.gauge_value_done[what_to_do] += 1
+                                        self.gauge_value[('done', what_to_do)] += 1
                                     except exceptions.HttpException as e:
                                         log.warn("PLEASE CHECK MANUALLY - got an http exception: %s - this has to be handled manually", str(e))
                             else:
@@ -339,26 +323,18 @@ class Cleanup:
                         log.warn("- PLEASE CHECK MANUALLY - unsupported action requested for id: %s", id)
             # otherwise print out what we plan to do in the future
             else:
-                log.info("- plan: %s %s (%i/%i)", what_to_do, id, self.to_be_dict.get(id, default) + 1, int(self.iterations))
-                self.gauge_value_plan[what_to_do] += 1
+                log.info("- plan: %s %s (%i/%i)", self.state_to_name_map[what_to_do], id, self.to_be_dict.get(id, default) + 1, int(self.iterations))
+                self.gauge_value[('plan', what_to_do)] += 1
             self.to_be_dict[id] = self.to_be_dict.get(id, default) + 1
 
 
     def send_to_prometheus_exporter(self):
-        if self.novacmdline:
-            i = "delete of server"
-            self.gauge_plan_delete_server.set(float(self.gauge_value_plan[i]))
-            self.gauge_dry_run_delete_server.set(float(self.gauge_value_dry_run[i]))
-            self.gauge_done_delete_server.set(float(self.gauge_value_done[i]))
-        if self.cindercmdline:
-            i = "delete of volume"
-            self.gauge_plan_delete_volume.set(float(self.gauge_value_plan[i]))
-            self.gauge_dry_run_delete_volume.set(float(self.gauge_value_dry_run[i]))
-            self.gauge_done_delete_volume.set(float(self.gauge_value_done[i]))
-            i = "delete of snapshot"
-            self.gauge_plan_delete_snapshot.set(float(self.gauge_value_plan[i]))
-            self.gauge_dry_run_delete_snapshot.set(float(self.gauge_value_dry_run[i]))
-            self.gauge_done_delete_snapshot.set(float(self.gauge_value_done[i]))
+        for kind in ["plan", "dry_run", "done"]:
+            if self.novacmdline:
+                self.gauge_delete_server.labels(kind).set(float(self.gauge_value[(kind, "delete_server")]))
+            if self.cindercmdline:
+                self.gauge_delete_volume.labels(kind).set(float(self.gauge_value[(kind, "delete_volume")]))
+                self.gauge_delete_snapshot.labels(kind).set(float(self.gauge_value[(kind, "delete_snapshot")]))
 
 if __name__ == '__main__':
     c = Cleanup()

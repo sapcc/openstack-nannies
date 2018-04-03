@@ -30,9 +30,11 @@ while true; do
     # no consistency check and repair yet for manila
 
     if [ "$MANILA_DB_PURGE_ENABLED" = "True" ] || [ "$MANILA_DB_PURGE_ENABLED" = "true" ]; then
-        echo "INFO: purging deleted manila entities older than $MANILA_DB_PURGE_OLDER_THAN days from the manila db"
+        echo -n "INFO: purging deleted manila entities older than $MANILA_DB_PURGE_OLDER_THAN days from the manila db"
+        date
         /var/lib/kolla/venv/bin/manila-manage db purge $MANILA_DB_PURGE_OLDER_THAN
     fi
-    echo "INFO: waiting $MANILA_NANNY_INTERVAL minutes before starting the next loop run"
+    echo -n "INFO: waiting $MANILA_NANNY_INTERVAL minutes before starting the next loop run"
+    date
     sleep $(( 60 * $MANILA_NANNY_INTERVAL ))
 done

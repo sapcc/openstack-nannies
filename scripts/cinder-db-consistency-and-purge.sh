@@ -28,17 +28,21 @@ echo "INFO: starting a loop to periodically run the nanny job for the cinder db 
 while true; do
     if [ "$CINDER_CONSISTENCY_ENABLED" = "True" ] || [ "$CINDER_CONSISTENCY_ENABLED" = "true" ]; then
         if [ "$CINDER_CONSISTENCY_DRY_RUN" = "False" ] || [ "$CINDER_CONSISTENCY_DRY_RUN" = "false" ]; then
-            echo "INFO: checking and fixing cinder db consistency"
+            echo -n "INFO: checking and fixing cinder db consistency"
+            date
             /var/lib/kolla/venv/bin/python /scripts/cinder-consistency.py --config /etc/cinder/cinder.conf
         else
-            echo "INFO: checking cinder db consistency"
+            echo -n "INFO: checking cinder db consistency"
+            date
             /var/lib/kolla/venv/bin/python /scripts/cinder-consistency.py --config /etc/cinder/cinder.conf --dry-run
         fi
     fi
     if [ "$CINDER_DB_PURGE_ENABLED" = "True" ] || [ "$CINDER_DB_PURGE_ENABLED" = "true" ]; then
-        echo "INFO: purging deleted cinder entities older than $CINDER_DB_PURGE_OLDER_THAN days from the cinder db"
+        echo -n "INFO: purging deleted cinder entities older than $CINDER_DB_PURGE_OLDER_THAN days from the cinder db"
+        date
         /var/lib/kolla/venv/bin/cinder-manage db purge $CINDER_DB_PURGE_OLDER_THAN
     fi
-    echo "INFO: waiting $CINDER_NANNY_INTERVAL minutes before starting the next loop run"
+    echo -n "INFO: waiting $CINDER_NANNY_INTERVAL minutes before starting the next loop run"
+    date
     sleep $(( 60 * $CINDER_NANNY_INTERVAL ))
 done
