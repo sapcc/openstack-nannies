@@ -27,6 +27,8 @@ from openstack import connection, exceptions, utils
 from keystoneauth1 import loading
 from keystoneauth1 import session
 from cinderclient import client
+# prometheus export functionality
+from prometheus_client import start_http_server, Gauge
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
@@ -44,13 +46,16 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 @click.option('--cinder', is_flag=True)
 # dry run mode - only say what we would do without actually doing it
 @click.option('--dry-run', is_flag=True)
+# port to use for prometheus exporter, otherwise we use 9456 as default
+@click.option('--port')
 class Cleanup:
-    def __init__(self, interval, iterations, nova, cinder, dry_run):
+    def __init__(self, interval, iterations, nova, cinder, dry_run, port):
         self.interval = interval
         self.iterations = iterations
         self.novacmdline = nova
         self.cindercmdline = cinder
         self.dry_run = dry_run
+        self.port = port
 
         # a dict of all projects we have in openstack
         self.projects = dict()
@@ -65,6 +70,45 @@ class Cleanup:
         self.snapshots_to_be_deleted = dict()
         self.volumes_seen = dict()
         self.volumes_to_be_deleted = dict()
+
+        self.gauge_value_plan = dict()
+        self.gauge_value_dry_run = dict()
+        self.gauge_value_done = dict()
+
+        if self.novacmdline:
+            which_service = "nova"
+            self.gauge_plan_delete_server = Gauge(which_service + '_nanny_plan_delete_server',
+                                                  'planned server deletes of the ' + which_service + ' nanny')
+            self.gauge_dry_run_delete_server = Gauge(which_service + '_nanny_dry_run_delete_server',
+                                                     'server deletes of the ' + which_service + ' nanny in dry run mode')
+            self.gauge_done_delete_server = Gauge(which_service + '_nanny_done_delete_server',
+                                                  'done server deletes of the ' + which_service + ' nanny')
+
+        if self.cindercmdline:
+            which_service = "cinder"
+            self.gauge_plan_delete_volume = Gauge(which_service + '_nanny_plan_delete_volume',
+                                                  'planned volume deletes of the ' + which_service + ' nanny')
+            self.gauge_plan_delete_snapshot = Gauge(which_service + '_nanny_plan_delete_snapshot',
+                                                    'planned snapshot deletes of the ' + which_service + ' nanny')
+            self.gauge_dry_run_delete_volume = Gauge(which_service + '_nanny_dry_run_delete_volume',
+                                                     'volume deletes of the ' + which_service + ' nanny in dry run mode')
+            self.gauge_dry_run_delete_snapshot = Gauge(which_service + '_nanny_dry_run_delete_snapshot',
+                                                       'snapshot deletes of the ' + which_service + ' nanny in dry run mode')
+            self.gauge_done_delete_volume = Gauge(which_service + '_nanny_done_delete_volume',
+                                                  'done volume deletes of the ' + which_service + ' nanny')
+            self.gauge_done_delete_snapshot = Gauge(which_service + '_nanny_done_delete_snapshot',
+                                                    'done snapshot deletes of the ' + which_service + ' nanny')
+
+        # Start http server for exported data
+        if port:
+            prometheus_exporter_port = self.port
+        else:
+            prometheus_exporter_port = 9456
+
+        try:
+            start_http_server(prometheus_exporter_port)
+        except Exception as e:
+            logging.error("failed to start prometheus exporter http server: " + str(e))
 
         self.run_me()
 
@@ -115,6 +159,7 @@ class Cleanup:
                 self.connection_buildup()
                 if len(self.projects) > 0:
                     self.os_cleanup_items()
+                    self.send_to_prometheus_exporter()
                 self.wait_a_moment()
         else:
             log.info("either the --nova or the --cinder flag should be given - giving up!")
@@ -122,6 +167,22 @@ class Cleanup:
 
     # main cleanup function
     def os_cleanup_items(self):
+
+        # reset all gauge counters
+        if self.novacmdline:
+            i = "delete of server"
+            self.gauge_value_plan[i] = 0
+            self.gauge_value_dry_run[i] = 0
+            self.gauge_value_done[i] = 0
+        if self.cindercmdline:
+            i = "delete of volume"
+            self.gauge_value_plan[i] = 0
+            self.gauge_value_dry_run[i] = 0
+            self.gauge_value_done[i] = 0
+            i = "delete of snapshot"
+            self.gauge_value_plan[i] = 0
+            self.gauge_value_dry_run[i] = 0
+            self.gauge_value_done[i] = 0
 
         # get all instances from nova sorted by their id
         try:
@@ -225,11 +286,13 @@ class Cleanup:
                 # ... or print if we are only in dry-run mode
                 if self.dry_run:
                     log.info("- dry-run: %s %s", what_to_do, id)
+                    self.gauge_value_dry_run[what_to_do] += 1
                 else:
                     if what_to_do == "delete of server":
                         log.info("- action: %s %s", what_to_do, id)
                         try:
                             self.conn.compute.delete_server(id)
+                            self.gauge_value_done[what_to_do] += 1
                         except exceptions.HttpException as e:
                             log.warn("- PLEASE CHECK MANUALLY - got an http exception: %s - this has to be handled manually", str(e))
                     elif what_to_do == "delete of snapshot":
@@ -237,6 +300,7 @@ class Cleanup:
                                  self.snapshot_from[id])
                         try:
                             self.conn.block_store.delete_snapshot(id)
+                            self.gauge_value_done[what_to_do] += 1
                         except exceptions.HttpException as e:
                             log.warn("-- got an http exception: %s", str(e))
                             log.info("--- setting the status of the snapshot %s to error in preparation to delete it", id)
@@ -244,12 +308,14 @@ class Cleanup:
                             log.info("--- deleting the snapshot %s", id)
                             try:
                                 self.conn.block_store.delete_snapshot(id)
+                                self.gauge_value_done[what_to_do] += 1
                             except exceptions.HttpException as e:
                                 log.warn("PLEASE CHECK MANUALY - got an http exception: %s - this has to be handled manually", str(e))
                     elif what_to_do == "delete of volume":
                         log.info("- action: %s %s", what_to_do, id)
                         try:
                             self.conn.block_store.delete_volume(id)
+                            self.gauge_value_done[what_to_do] += 1
                         except exceptions.HttpException as e:
                             log.warn("-- got an http exception: %s", str(e))
                             log.warn("--- maybe this volume is still connected to an already deleted instance? - checking ...")
@@ -264,6 +330,7 @@ class Cleanup:
                                     log.info("---- deleting the volume %s", id)
                                     try:
                                         self.conn.block_store.delete_volume(id)
+                                        self.gauge_value_done[what_to_do] += 1
                                     except exceptions.HttpException as e:
                                         log.warn("PLEASE CHECK MANUALLY - got an http exception: %s - this has to be handled manually", str(e))
                             else:
@@ -273,7 +340,25 @@ class Cleanup:
             # otherwise print out what we plan to do in the future
             else:
                 log.info("- plan: %s %s (%i/%i)", what_to_do, id, self.to_be_dict.get(id, default) + 1, int(self.iterations))
+                self.gauge_value_plan[what_to_do] += 1
             self.to_be_dict[id] = self.to_be_dict.get(id, default) + 1
+
+
+    def send_to_prometheus_exporter(self):
+        if self.novacmdline:
+            i = "delete of server"
+            self.gauge_plan_delete_server.set(float(self.gauge_value_plan[i]))
+            self.gauge_dry_run_delete_server.set(float(self.gauge_value_dry_run[i]))
+            self.gauge_done_delete_server.set(float(self.gauge_value_done[i]))
+        if self.cindercmdline:
+            i = "delete of volume"
+            self.gauge_plan_delete_volume.set(float(self.gauge_value_plan[i]))
+            self.gauge_dry_run_delete_volume.set(float(self.gauge_value_dry_run[i]))
+            self.gauge_done_delete_volume.set(float(self.gauge_value_done[i]))
+            i = "delete of snapshot"
+            self.gauge_plan_delete_snapshot.set(float(self.gauge_value_plan[i]))
+            self.gauge_dry_run_delete_snapshot.set(float(self.gauge_value_dry_run[i]))
+            self.gauge_done_delete_snapshot.set(float(self.gauge_value_done[i]))
 
 if __name__ == '__main__':
     c = Cleanup()
