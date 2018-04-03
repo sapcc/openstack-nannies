@@ -50,11 +50,11 @@ tasks = []
 state_to_name_map = dict()
 
 gauge_value = dict()
-gauge_suspend_vm = Gauge('vcenter_nanny_plan_suspend_vm', 'vm suspends of the vcenter nanny', ['kind'])
-gauge_power_off_vm = Gauge('vcenter_nanny_plan_power_off_vm', 'vm power offs of the vcenter nanny', ['kind'])
-gauge_unregister_vm = Gauge('vcenter_nanny_plan_unregister_vm', 'vm unregisters of the vcenter nanny', ['kind'])
-gauge_rename_ds_path = Gauge('vcenter_nanny_plan_rename_ds_path', 'ds path renames of the vcenter nanny', ['kind'])
-gauge_delete_ds_path = Gauge('vcenter_nanny_plan_delete_ds_path', 'ds path deletes of the vcenter nanny', ['kind'])
+gauge_suspend_vm = Gauge('vcenter_nanny_suspend_vm', 'vm suspends of the vcenter nanny', ['kind'])
+gauge_power_off_vm = Gauge('vcenter_nanny_power_off_vm', 'vm power offs of the vcenter nanny', ['kind'])
+gauge_unregister_vm = Gauge('vcenter_nanny_unregister_vm', 'vm unregisters of the vcenter nanny', ['kind'])
+gauge_rename_ds_path = Gauge('vcenter_nanny_rename_ds_path', 'ds path renames of the vcenter nanny', ['kind'])
+gauge_delete_ds_path = Gauge('vcenter_nanny_delete_ds_path', 'ds path deletes of the vcenter nanny', ['kind'])
 gauge_ghost_volumes = Gauge('vcenter_nanny_ghost_volumes', 'numer of possible ghost volumes')
 gauge_eph_shadow_vms = Gauge('vcenter_nanny_eph_shadow_vms', 'numer of possible shadow vms on eph storage')
 
