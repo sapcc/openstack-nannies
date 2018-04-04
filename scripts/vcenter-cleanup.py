@@ -569,13 +569,11 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
 
     # send the counters to the prometheus exporter - ugly for now, will change
     for kind in [ "plan", "dry_run", "done"]:
-        for what in state_to_name_map:
-            print what
-            gauge_suspend_vm.labels(kind).set(float(gauge_value[(kind, what)]))
-            gauge_power_off_vm.labels(kind).set(float(gauge_value[(kind, what)]))
-            gauge_unregister_vm.labels(kind).set(float(gauge_value[(kind, what)]))
-            gauge_rename_ds_path.labels(kind).set(float(gauge_value[(kind, what)]))
-            gauge_delete_ds_path.labels(kind).set(float(gauge_value[(kind, what)]))
+        gauge_suspend_vm.labels(kind).set(float(gauge_value[(kind, "suspend_vm")]))
+        gauge_power_off_vm.labels(kind).set(float(gauge_value[(kind, "power_off_vm")]))
+        gauge_unregister_vm.labels(kind).set(float(gauge_value[(kind, "unregister_vm")]))
+        gauge_rename_ds_path.labels(kind).set(float(gauge_value[(kind, "rename_ds_path")]))
+        gauge_delete_ds_path.labels(kind).set(float(gauge_value[(kind, "delete_ds_path")]))
     gauge_ghost_volumes.set(float(gauge_value_ghost_volumes))
     gauge_eph_shadow_vms.set(float(gauge_value_eph_shadow_vms))
 
