@@ -31,9 +31,17 @@ export NOVA_DB_PURGE_OLDER_THAN
 # we run an endless loop to run the script periodically
 echo "INFO: starting a loop to periodically run the nanny job for the nova db concistency check and purge"
 while true; do
-
-    # no consistency check and repair yet for nova
-
+    if [ "$NOVA_CONSISTENCY_ENABLED" = "True" ] || [ "$NOVA_CONSISTENCY_ENABLED" = "true" ]; then
+        if [ "$NOVA_CONSISTENCY_DRY_RUN" = "False" ] || [ "$NOVA_CONSISTENCY_DRY_RUN" = "false" ]; then
+            echo -n "INFO: checking and fixing nova db consistency"
+            date
+            /var/lib/kolla/venv/bin/python /scripts/nova-consistency.py --config /etc/nova/nova.conf
+        else
+            echo -n "INFO: checking nova db consistency"
+            date
+            /var/lib/kolla/venv/bin/python /scripts/nova-consistency.py --config /etc/nova/nova.conf --dry-run
+        fi
+    fi
     if [ "$NOVA_DB_PURGE_ENABLED" = "True" ] || [ "$NOVA_DB_PURGE_ENABLED" = "true" ]; then
         echo -n "INFO: purge old deleted instances from the nova db - "
         date

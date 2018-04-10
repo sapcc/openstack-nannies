@@ -81,7 +81,7 @@ def fix_wrong_volume_attachments(meta, wrong_attachments):
     volume_attachment_t = Table('volume_attachment', meta, autoload=True)
 
     for volume_attachment_id in wrong_attachments:
-        log.info ("- volume attachment id to be deleted: %s", volume_attachment_id)
+        log.info ("-- deleting volume attachment id: %s", volume_attachment_id)
         delete_volume_attachment_q = volume_attachment_t.delete().where(volume_attachment_t.c.id == volume_attachment_id)
         delete_volume_attachment_q.execute()
 
@@ -152,7 +152,7 @@ def main():
         log.info("- volume attachment inconsistencies found")
         # print out what we would delete
         for volume_attachment_id in wrong_attachments:
-            log.info("--- volume attachment id: %s - deleted volume id: %s", volume_attachment_id, wrong_attachments[volume_attachment_id])
+            log.info("-- volume attachment id: %s - deleted volume id: %s", volume_attachment_id, wrong_attachments[volume_attachment_id])
         if not args.dry_run:
             log.info("- deleting volume attachment inconsistencies found")
             fix_wrong_volume_attachments(cinder_metadata, wrong_attachments)
