@@ -34,7 +34,7 @@ while true; do
         date
         /var/lib/kolla/venv/bin/manila-manage db purge $MANILA_DB_PURGE_OLDER_THAN
     fi
-    echo -n "INFO: waiting $MANILA_NANNY_INTERVAL minutes before starting the next loop run"
+    echo -n "INFO: waiting $MANILA_NANNY_INTERVAL minutes before starting the next loop run - "
     date
     sleep $(( 60 * $MANILA_NANNY_INTERVAL ))
 done
