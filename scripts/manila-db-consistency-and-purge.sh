@@ -26,9 +26,17 @@ cp -v /manila-etc/* /etc/manila
 # we run an endless loop to run the script periodically
 echo "INFO: starting a loop to periodically run the nanny job for the manila db consistency check and purge"
 while true; do
-
-    # no consistency check and repair yet for manila
-
+    if [ "$MANILA_CONSISTENCY_ENABLED" = "True" ] || [ "$MANILA_CONSISTENCY_ENABLED" = "true" ]; then
+        if [ "$MANILA_CONSISTENCY_DRY_RUN" = "False" ] || [ "$MANILA_CONSISTENCY_DRY_RUN" = "false" ]; then
+            echo -n "INFO: checking and fixing manila db consistency - "
+            date
+            /var/lib/kolla/venv/bin/python /scripts/manila-consistency.py --config /etc/manila/manila.conf
+        else
+            echo -n "INFO: checking manila db consistency - "
+            date
+            /var/lib/kolla/venv/bin/python /scripts/manila-consistency.py --config /etc/manila/manila.conf --dry-run
+        fi
+    fi
     if [ "$MANILA_DB_PURGE_ENABLED" = "True" ] || [ "$MANILA_DB_PURGE_ENABLED" = "true" ]; then
         echo -n "INFO: purging deleted manila entities older than $MANILA_DB_PURGE_OLDER_THAN days from the manila db - "
         date
