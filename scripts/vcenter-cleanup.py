@@ -65,6 +65,7 @@ gauge_datastore_no_access = Gauge('vcenter_nanny_datastore_no_access', 'number o
 gauge_empty_vvol_folders = Gauge('vcenter_nanny_empty_vvol_folders', 'number of empty vvols')
 gauge_vcenter_connection_problems = Gauge('vcenter_nanny_vcenter_connection_problems', 'number of connection problems to the vcenter')
 gauge_vcenter_get_properties_problems = Gauge('vcenter_nanny_get_properties_problems', 'number of get properties problems from the vcenter')
+gauge_vcenter_task_problems = Gauge('vcenter_nanny_vcenter_task_problems', 'number of task problems from the vcenter')
 gauge_openstack_connection_problems = Gauge('vcenter_nanny_openstack_connection_problems', 'number of connection problems to openstack')
 gauge_unknown_vcenter_templates = Gauge('vcenter_nanny_unknown_vcenter_templates', 'number of templates unknown to openstack')
 gauge_complete_orphans = Gauge('vcenter_nanny_complete_orphans', 'number of possibly completely orphan vms')
@@ -360,6 +361,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     gauge_value_datastore_no_access = 0
     gauge_value_empty_vvol_folders = 0
     gauge_value_vcenter_get_properties_problems = 0
+    gauge_value_vcenter_task_problems = 0
     gauge_value_openstack_connection_problems = 0
     gauge_value_unknown_vcenter_templates = 0
     gauge_value_complete_orphans = 0
@@ -475,7 +477,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                 gauge_value_datastore_no_access += 1
             except task.info.error as e:
                 log.warn("- PLEASE CHECK MANUALLY - something went wrong trying to access this datastore: %s", e.msg)
-                gauge_value_datastore_no_access += 1
+                gauge_value_vcenter_task_problems += 1
 
     init_seen_dict(vms_seen)
     init_seen_dict(files_seen)
@@ -642,6 +644,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     gauge_empty_vvol_folders.set(float(gauge_value_empty_vvol_folders))
     gauge_vcenter_connection_problems.set(float(gauge_value_vcenter_connection_problems))
     gauge_vcenter_get_properties_problems.set(float(gauge_value_vcenter_get_properties_problems))
+    gauge_vcenter_task_problems.set(float(gauge_value_vcenter_task_problems))
     gauge_openstack_connection_problems.set(float(gauge_value_openstack_connection_problems))
     gauge_unknown_vcenter_templates.set(float(gauge_value_unknown_vcenter_templates))
     gauge_complete_orphans.set(float(gauge_value_complete_orphans))
