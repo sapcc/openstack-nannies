@@ -134,6 +134,8 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
 
     while True:
 
+        gauge_value_vcenter_connection_problems = 0
+
         # vcenter connection
         if hasattr(ssl, '_create_unverified_context'):
             context = ssl._create_unverified_context()
@@ -357,7 +359,6 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     gauge_value_eph_shadow_vms = 0
     gauge_value_datastore_no_access = 0
     gauge_value_empty_vvol_folders = 0
-    gauge_value_vcenter_connection_problems = 0
     gauge_value_vcenter_get_properties_problems = 0
     gauge_value_openstack_connection_problems = 0
     gauge_value_unknown_vcenter_templates = 0
