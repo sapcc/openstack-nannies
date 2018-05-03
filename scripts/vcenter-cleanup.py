@@ -49,7 +49,7 @@ tasks = []
 
 state_to_name_map = dict()
 
-gauge_value_empty_vvol_folder = 0
+gauge_value_empty_vvol_folders = 0
 gauge_value_vcenter_connection_problems = 0
 gauge_value_vcenter_get_properties_problems = 0
 
@@ -62,22 +62,22 @@ gauge_delete_ds_path = Gauge('vcenter_nanny_delete_ds_path', 'ds path deletes of
 gauge_ghost_volumes = Gauge('vcenter_nanny_ghost_volumes', 'number of possible ghost volumes')
 gauge_eph_shadow_vms = Gauge('vcenter_nanny_eph_shadow_vms', 'number of possible shadow vms on eph storage')
 gauge_datastore_no_access = Gauge('vcenter_nanny_datastore_no_access', 'number of non accessible datastores')
-gauge_empty_vvol_folder = Gauge('vcenter_nanny_empty_vvol_folder', 'number of empty vvols')
+gauge_empty_vvol_folders = Gauge('vcenter_nanny_empty_vvol_folders', 'number of empty vvols')
 gauge_vcenter_connection_problems = Gauge('vcenter_nanny_vcenter_connection_problems', 'number of connection problems to the vcenter')
 gauge_vcenter_get_properties_problems = Gauge('vcenter_nanny_get_properties_problems', 'number of get properties problems from the vcenter')
 gauge_openstack_connection_problems = Gauge('vcenter_nanny_openstack_connection_problems', 'number of connection problems to openstack')
-gauge_unknown_vcenter_template = Gauge('vcenter_nanny_unknown_vcenter_template', 'number of templates unknown to openstack')
-gauge_complete_orphan = Gauge('vcenter_nanny_complete_orphan', 'number of possibly completely orphan vms')
+gauge_unknown_vcenter_templates = Gauge('vcenter_nanny_unknown_vcenter_templates', 'number of templates unknown to openstack')
+gauge_complete_orphans = Gauge('vcenter_nanny_complete_orphans', 'number of possibly completely orphan vms')
 
 # find vmx and vmdk files with a uuid name pattern
 def _uuids(task):
-    global gauge_value_empty_vvol_folder
+    global gauge_value_empty_vvol_folders
     for searchresult in task.info.result:
         folder_path = searchresult.folderPath
         # no files in the folder
         if not searchresult.file:
             log.warn("- PLEASE CHECK MANUALLY - empty folder: %s", folder_path)
-            gauge_value_empty_vvol_folder += 1
+            gauge_value_empty_vvol_folders += 1
         else:
             # its ugly to do it in two loops, but an easy way to make sure to have the vms before the vmdks in the list
             for f in searchresult.file:
@@ -345,7 +345,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     known = dict()
     template = dict()
 
-    global gauge_value_empty_vvol_folder
+    global gauge_value_empty_vvol_folders
     global gauge_value_vcenter_connection_problems
     global gauge_value_vcenter_get_properties_problems
 
@@ -356,12 +356,12 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     gauge_value_ghost_volumes = 0
     gauge_value_eph_shadow_vms = 0
     gauge_value_datastore_no_access = 0
-    gauge_value_empty_vvol_folder = 0
+    gauge_value_empty_vvol_folders = 0
     gauge_value_vcenter_connection_problems = 0
     gauge_value_vcenter_get_properties_problems = 0
     gauge_value_openstack_connection_problems = 0
-    gauge_value_unknown_vcenter_template = 0
-    gauge_value_complete_orphan = 0
+    gauge_value_unknown_vcenter_templates = 0
+    gauge_value_complete_orphans = 0
 
 
     # get all servers, volumes, snapshots and images from openstack to compare the resources we find on the vcenter against
@@ -456,7 +456,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                         if template.get(uuid) is True:
                             log.warn("- PLEASE CHECK MANUALLY - uuid %s is a vcenter template and unknown to openstack",
                                      uuid)
-                            gauge_value_unknown_vcenter_template += 1
+                            gauge_value_unknown_vcenter_templates += 1
                         else:
                             # multiple locations are possible for one uuid, thus we need to put the locations into a list
                             if uuid in missing:
@@ -562,7 +562,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                             log.warn(
                                 "- PLEASE CHECK MANUALLY - this vm seems to be neither a former openstack vm nor an orphan shadow vm: %s",
                                 path)
-                            gauge_value_complete_orphan += 1
+                            gauge_value_complete_orphans += 1
 
                     # there is no vm anymore for the file path - planned action is to delete the file
                     elif not vmxmarked.get(path, False):
@@ -638,12 +638,12 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     gauge_ghost_volumes.set(float(gauge_value_ghost_volumes))
     gauge_eph_shadow_vms.set(float(gauge_value_eph_shadow_vms))
     gauge_datastore_no_access.set(float(gauge_value_datastore_no_access))
-    gauge_empty_vvol_folder.set(float(gauge_value_empty_vvol_folder))
+    gauge_empty_vvol_folders.set(float(gauge_value_empty_vvol_folders))
     gauge_vcenter_connection_problems.set(float(gauge_value_vcenter_connection_problems))
     gauge_vcenter_get_properties_problems.set(float(gauge_value_vcenter_get_properties_problems))
     gauge_openstack_connection_problems.set(float(gauge_value_openstack_connection_problems))
-    gauge_unknown_vcenter_template.set(float(gauge_value_unknown_vcenter_template))
-    gauge_complete_orphan.set(float(gauge_value_complete_orphan))
+    gauge_unknown_vcenter_templates.set(float(gauge_value_unknown_vcenter_templates))
+    gauge_complete_orphans.set(float(gauge_value_complete_orphans))
 
     # reset the dict of vms or files we plan to do something with for all machines we did not see or which disappeared
     reset_to_be_dict(vms_to_be_suspended, vms_seen)
