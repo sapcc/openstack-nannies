@@ -49,22 +49,35 @@ tasks = []
 
 state_to_name_map = dict()
 
+gauge_value_empty_vvol_folder = 0
+gauge_value_vcenter_connection_problems = 0
+gauge_value_vcenter_get_properties_problems = 0
+
 gauge_value = dict()
 gauge_suspend_vm = Gauge('vcenter_nanny_suspend_vm', 'vm suspends of the vcenter nanny', ['kind'])
 gauge_power_off_vm = Gauge('vcenter_nanny_power_off_vm', 'vm power offs of the vcenter nanny', ['kind'])
 gauge_unregister_vm = Gauge('vcenter_nanny_unregister_vm', 'vm unregisters of the vcenter nanny', ['kind'])
 gauge_rename_ds_path = Gauge('vcenter_nanny_rename_ds_path', 'ds path renames of the vcenter nanny', ['kind'])
 gauge_delete_ds_path = Gauge('vcenter_nanny_delete_ds_path', 'ds path deletes of the vcenter nanny', ['kind'])
-gauge_ghost_volumes = Gauge('vcenter_nanny_ghost_volumes', 'numer of possible ghost volumes')
-gauge_eph_shadow_vms = Gauge('vcenter_nanny_eph_shadow_vms', 'numer of possible shadow vms on eph storage')
+gauge_ghost_volumes = Gauge('vcenter_nanny_ghost_volumes', 'number of possible ghost volumes')
+gauge_eph_shadow_vms = Gauge('vcenter_nanny_eph_shadow_vms', 'number of possible shadow vms on eph storage')
+gauge_datastore_no_access = Gauge('vcenter_nanny_datastore_no_access', 'number of non accessible datastores')
+gauge_empty_vvol_folder = Gauge('vcenter_nanny_empty_vvol_folder', 'number of empty vvols')
+gauge_vcenter_connection_problems = Gauge('vcenter_nanny_vcenter_connection_problems', 'number of connection problems to the vcenter')
+gauge_vcenter_get_properties_problems = Gauge('vcenter_nanny_get_properties_problems', 'number of get properties problems from the vcenter')
+gauge_openstack_connection_problems = Gauge('vcenter_nanny_openstack_connection_problems', 'number of connection problems to openstack')
+gauge_unknown_vcenter_template = Gauge('vcenter_nanny_unknown_vcenter_template', 'number of templates unknown to openstack')
+gauge_complete_orphan = Gauge('vcenter_nanny_complete_orphan', 'number of possibly completely orphan vms')
 
 # find vmx and vmdk files with a uuid name pattern
 def _uuids(task):
+    global gauge_value_empty_vvol_folder
     for searchresult in task.info.result:
         folder_path = searchresult.folderPath
         # no files in the folder
         if not searchresult.file:
             log.warn("- PLEASE CHECK MANUALLY - empty folder: %s", folder_path)
+            gauge_value_empty_vvol_folder += 1
         else:
             # its ugly to do it in two loops, but an easy way to make sure to have the vms before the vmdks in the list
             for f in searchresult.file:
@@ -107,6 +120,8 @@ def _uuids(task):
 @click.option('--port')
 def run_me(host, username, password, interval, iterations, dry_run, power_off, unregister, delete, port):
 
+    global gauge_value_vcenter_connection_problems
+
     # Start http server for exported data
     if port:
         prometheus_exporter_port = port
@@ -132,6 +147,7 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
             except Exception as e:
                 log.warn("- PLEASE CHECK MANUALLY - problems connecting to vcenter: %s - retrying in next loop run",
                     str(e))
+                gauge_value_vcenter_connection_problems += 1
 
             else:
                 atexit.register(Disconnect, service_instance)
@@ -256,6 +272,9 @@ def collect_properties(service_instance, view_ref, obj_type, path_set=None,
     Returns:
         A list of properties for the managed objects
     """
+
+    global gauge_value_vcenter_get_properties_problems
+
     collector = service_instance.content.propertyCollector
 
     # Create object specification to define the starting point of
@@ -295,6 +314,7 @@ def collect_properties(service_instance, view_ref, obj_type, path_set=None,
     except vmodl.fault.ManagedObjectNotFound as e:
         log.warn("- PLEASE CHECK MANUALLY - problems retrieving properties from vcenter: %s - retrying in next loop run",
                  str(e))
+        gauge_value_vcenter_get_properties_problems += 1
         # wait a moment before retrying
         time.sleep(600)
         return data
@@ -323,6 +343,11 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                  password=os.getenv('OS_PASSWORD'))
 
     known = dict()
+    template = dict()
+
+    global gauge_value_empty_vvol_folder
+    global gauge_value_vcenter_connection_problems
+    global gauge_value_vcenter_get_properties_problems
 
     # reset all gauge counters
     for kind in [ "plan", "dry_run", "done"]:
@@ -330,6 +355,14 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
             gauge_value[(kind, what)] = 0
     gauge_value_ghost_volumes = 0
     gauge_value_eph_shadow_vms = 0
+    gauge_value_datastore_no_access = 0
+    gauge_value_empty_vvol_folder = 0
+    gauge_value_vcenter_connection_problems = 0
+    gauge_value_vcenter_get_properties_problems = 0
+    gauge_value_openstack_connection_problems = 0
+    gauge_value_unknown_vcenter_template = 0
+    gauge_value_complete_orphan = 0
+
 
     # get all servers, volumes, snapshots and images from openstack to compare the resources we find on the vcenter against
     try:
@@ -349,6 +382,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         log.warn(
             "- PLEASE CHECK MANUALLY - problems retrieving information from openstack %s: %s - retrying in next loop run",
             service, str(e))
+        gauge_value_openstack_connection_problems += 1
         # wait a moment before retrying
         time.sleep(600)
         return
@@ -356,6 +390,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         log.warn(
             "- PLEASE CHECK MANUALLY - problems retrieving information from openstack %s: %s - retrying in next loop run",
             service, str(e))
+        gauge_value_openstack_connection_problems += 1
         # wait a moment before retrying
         time.sleep(600)
         return
@@ -366,7 +401,8 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         "config.hardware.device",
         "config.name",
         "config.uuid",
-        "config.instanceUuid"
+        "config.instanceUuid",
+        "config.template"
     ]
 
     # collect the properties for all vms
@@ -381,6 +417,10 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     vcenter_mounted = dict()
     # iterate over the list of vms
     for k in data:
+        if k.get('config.instanceUuid'):
+            if k.get('config.template'):
+                template[k['config.instanceUuid']] = k['config.template']
+            log.debug("uuid: %s - template: %s", str(k['config.instanceUuid']), str(k['config.template']))
         # get the config.hardware.device property out of the data dict and iterate over its elements
         # for j in k['config.hardware.device']:
         # this check seems to be required as in one bb i got a key error otherwise - looks like a vm without that property
@@ -389,6 +429,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                 # we are only interested in disks - TODO: maybe the range needs to be adjusted
                 if 2001 <= j.key <= 2010:
                     vcenter_mounted[j.backing.uuid] = k['config.instanceUuid']
+                    log.debug("==> mount - instance: %s - volume: %s", str(k['config.instanceUuid']), str(j.backing.uuid))
 
     # do the check from the other end: see for which vms or volumes in the vcenter we do not have any openstack info
     missing = dict()
@@ -411,19 +452,29 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                 WaitForTask(task, si=service_instance)
                 for uuid, location in _uuids(task):
                     if uuid not in known:
-                        # multiple locations are possible for one uuid, thus we need to put the locations into a list
-                        if uuid in missing:
-                            missing[uuid].append(location)
+                        # only handle uuids which are not templates in the vcenter - otherwise theny might confuse the nanny
+                        if template.get(uuid) is True:
+                            log.warn("- PLEASE CHECK MANUALLY - uuid %s is a vcenter template and unknown to openstack",
+                                     uuid)
+                            gauge_value_unknown_vcenter_template += 1
                         else:
-                            missing[uuid] = [location]
+                            # multiple locations are possible for one uuid, thus we need to put the locations into a list
+                            if uuid in missing:
+                                missing[uuid].append(location)
+                            else:
+                                missing[uuid] = [location]
             except vim.fault.InaccessibleDatastore as e:
                 log.warn("- PLEASE CHECK MANUALLY - something went wrong trying to access this datastore: %s", e.msg)
+                gauge_value_datastore_no_access += 1
             except vim.fault.FileNotFound as e:
                 log.warn("- PLEASE CHECK MANUALLY - something went wrong trying to access this datastore: %s", e.msg)
+                gauge_value_datastore_no_access += 1
             except vim.fault.NoHost as e:
                 log.warn("- PLEASE CHECK MANUALLY - something went wrong trying to access this datastore: %s", e.msg)
+                gauge_value_datastore_no_access += 1
             except task.info.error as e:
                 log.warn("- PLEASE CHECK MANUALLY - something went wrong trying to access this datastore: %s", e.msg)
+                gauge_value_datastore_no_access += 1
 
     init_seen_dict(vms_seen)
     init_seen_dict(files_seen)
@@ -438,9 +489,14 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         # none of the uuids we do not know anything about on openstack side should be mounted anywhere in vcenter
         # so we should neither see it as vmx (shadow vm) or datastore file
         if vcenter_mounted.get(item):
-            log.warn("- PLEASE CHECK MANUALLY - possibly mounted ghost volume: %s mounted on %s", item,
-                     vcenter_mounted[item])
-            gauge_value_ghost_volumes += 1
+            if template.get(vcenter_mounted[item]) is True:
+                log.warn("- PLEASE CHECK MANUALLY - volume %s is mounted on vcenter template %s", item,
+                         vcenter_mounted[item])
+                gauge_value_template_mount += 1
+            else:
+                log.warn("- PLEASE CHECK MANUALLY - possibly mounted ghost volume: %s mounted on %s", item,
+                         vcenter_mounted[item])
+                gauge_value_ghost_volumes += 1
         else:
             for location in locationlist:
                 # foldername on datastore
@@ -506,6 +562,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                             log.warn(
                                 "- PLEASE CHECK MANUALLY - this vm seems to be neither a former openstack vm nor an orphan shadow vm: %s",
                                 path)
+                            gauge_value_complete_orphan += 1
 
                     # there is no vm anymore for the file path - planned action is to delete the file
                     elif not vmxmarked.get(path, False):
@@ -540,6 +597,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                             WaitForTasks(tasks[-8:], si=service_instance)
                         except vmodl.fault.ManagedObjectNotFound as e:
                             log.warn("- PLEASE CHECK MANUALLY - problems running vcenter tasks: %s - they will run next time then", str(e))
+                            gauge_value_vcenter_task_problems += 1
 
                 # in case of a vmdk or vmx.renamed_by_vcenter_nanny
                 # eph storage case - we work on directories
@@ -568,6 +626,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                         WaitForTasks(tasks[-8:], si=service_instance)
                     except vmodl.fault.ManagedObjectNotFound as e:
                         log.warn("- PLEASE CHECK MANUALLY - problems running vcenter tasks: %s - they will run next time then", str(e))
+                        gauge_value_vcenter_task_problems += 1
 
     # send the counters to the prometheus exporter - ugly for now, will change
     for kind in [ "plan", "dry_run", "done"]:
@@ -578,6 +637,13 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         gauge_delete_ds_path.labels(kind).set(float(gauge_value[(kind, "delete_ds_path")]))
     gauge_ghost_volumes.set(float(gauge_value_ghost_volumes))
     gauge_eph_shadow_vms.set(float(gauge_value_eph_shadow_vms))
+    gauge_datastore_no_access.set(float(gauge_value_datastore_no_access))
+    gauge_empty_vvol_folder.set(float(gauge_value_empty_vvol_folder))
+    gauge_vcenter_connection_problems.set(float(gauge_value_vcenter_connection_problems))
+    gauge_vcenter_get_properties_problems.set(float(gauge_value_vcenter_get_properties_problems))
+    gauge_openstack_connection_problems.set(float(gauge_value_openstack_connection_problems))
+    gauge_unknown_vcenter_template.set(float(gauge_value_unknown_vcenter_template))
+    gauge_complete_orphan.set(float(gauge_value_complete_orphan))
 
     # reset the dict of vms or files we plan to do something with for all machines we did not see or which disappeared
     reset_to_be_dict(vms_to_be_suspended, vms_seen)
