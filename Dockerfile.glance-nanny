@@ -14,4 +14,6 @@
 
 FROM __GLANCE_NANNY_BASE_IMAGE__
 
+USER root
+
 ADD scripts/glance-* /scripts/
