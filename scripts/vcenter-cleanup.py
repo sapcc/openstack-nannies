@@ -476,7 +476,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                 log.warn("- PLEASE CHECK MANUALLY - something went wrong trying to access this datastore: %s", e.msg)
                 gauge_value_datastore_no_access += 1
             except task.info.error as e:
-                log.warn("- PLEASE CHECK MANUALLY - something went wrong trying to access this datastore: %s", e.msg)
+                log.warn("- PLEASE CHECK MANUALLY - problems running vcenter tasks: %s - they will run next time then", e.msg)
                 gauge_value_vcenter_task_problems += 1
 
     init_seen_dict(vms_seen)
