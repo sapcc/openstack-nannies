@@ -467,13 +467,19 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                             else:
                                 missing[uuid] = [location]
             except vim.fault.InaccessibleDatastore as e:
-                log.warn("- PLEASE CHECK MANUALLY - something went wrong trying to access this datastore: %s", e.msg)
+                log.warn("- PLEASE CHECK MANUALLY - something went wrong trying to access this datastore (vim.fault.InaccessibleDatastore): %s", e.msg)
                 gauge_value_datastore_no_access += 1
             except vim.fault.FileNotFound as e:
-                log.warn("- PLEASE CHECK MANUALLY - something went wrong trying to access this datastore: %s", e.msg)
+                log.warn("- PLEASE CHECK MANUALLY - something went wrong trying to access this datastore (vim.fault.FileNotFound): %s", e.msg)
                 gauge_value_datastore_no_access += 1
             except vim.fault.NoHost as e:
-                log.warn("- PLEASE CHECK MANUALLY - something went wrong trying to access this datastore: %s", e.msg)
+                log.warn("- PLEASE CHECK MANUALLY - something went wrong trying to access this datastore (vim.fault.NoHost): %s", e.msg)
+                gauge_value_datastore_no_access += 1
+            except vmodl.fault.SystemError as e:
+                log.warn("- PLEASE CHECK MANUALLY - something went wrong trying to access this datastore (vmodl.fault.SystemError): %s", e.msg)
+                gauge_value_datastore_no_access += 1
+            except pyVmomi.VmomiSupport.SystemError as e:
+                log.warn("- PLEASE CHECK MANUALLY - something went wrong trying to access this datastore (pyVmomi.VmomiSupport.SystemError): %s", e.msg)
                 gauge_value_datastore_no_access += 1
             except task.info.error as e:
                 log.warn("- PLEASE CHECK MANUALLY - problems running vcenter tasks: %s - they will run next time then", e.msg)
