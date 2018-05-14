@@ -318,9 +318,9 @@ def collect_properties(service_instance, view_ref, obj_type, path_set=None,
         log.warn("- PLEASE CHECK MANUALLY - problems retrieving properties from vcenter: %s - retrying in next loop run",
                  str(e))
         gauge_value_vcenter_get_properties_problems += 1
-        # wait a moment before retrying
-        time.sleep(600)
-        return data
+        ## wait a moment before retrying
+        #time.sleep(600)
+        #return data
 
     for obj in props:
         properties = {}
@@ -386,17 +386,17 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
             "- PLEASE CHECK MANUALLY - problems retrieving information from openstack %s: %s - retrying in next loop run",
             service, str(e))
         gauge_value_openstack_connection_problems += 1
-        # wait a moment before retrying
-        time.sleep(600)
-        return
+        ## wait a moment before retrying
+        #time.sleep(600)
+        #return
     except exceptions.SDKException as e:
         log.warn(
             "- PLEASE CHECK MANUALLY - problems retrieving information from openstack %s: %s - retrying in next loop run",
             service, str(e))
         gauge_value_openstack_connection_problems += 1
-        # wait a moment before retrying
-        time.sleep(600)
-        return
+        ## wait a moment before retrying
+        #time.sleep(600)
+        #return
 
     # the properties we want to collect - some of them are not yet used, but will at a later
     # development stage of this script to validate the volume attachments with cinder and nova
