@@ -478,6 +478,9 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
             except vmodl.fault.SystemError as e:
                 log.warn("- PLEASE CHECK MANUALLY - something went wrong trying to access this datastore (vmodl.fault.SystemError): %s", e.msg)
                 gauge_value_datastore_no_access += 1
+            except vmodl.fault.HostCommunication as e:
+                log.warn("- PLEASE CHECK MANUALLY - something went wrong trying to access this datastore (vmodl.fault.HostCommunication): %s", e.msg)
+                gauge_value_datastore_no_access += 1
             except task.info.error as e:
                 log.warn("- PLEASE CHECK MANUALLY - problems running vcenter tasks: %s - they will run next time then", e.msg)
                 gauge_value_vcenter_task_problems += 1
