@@ -21,6 +21,7 @@ import argparse
 import sys
 import ConfigParser
 import logging
+import datetime
 
 from prettytable import PrettyTable
 from sqlalchemy import and_
@@ -52,13 +53,14 @@ def get_missing_deleted_at(meta, table_names):
 
 # set deleted_at to updated_at value if not set for marked as deleted rows
 def fix_missing_deleted_at(meta, table_names):
+    now = datetime.datetime.utcnow()
     for t in table_names:
         a_table_t = Table(t, meta, autoload=True)
 
         log.info("- fixing columns with missing deleted_at times in the %s table", t)
         a_table_set_deleted_at_q = a_table_t.update().where(
             and_(a_table_t.c.deleted == True, a_atable_t.c.deleted_at == None)).values(
-            deleted_at=a_table_t.c.updated_at)
+            deleted_at=now)
         a_table_set_deleted_at_q.execute()
 
 # get all the rowns with a volume attachment still defined where corresponding the volume is already deleted
