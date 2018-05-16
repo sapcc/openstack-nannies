@@ -503,7 +503,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
             if template.get(vcenter_mounted[item]) is True:
                 log.warn("- PLEASE CHECK MANUALLY - volume %s is mounted on vcenter template %s", item,
                          vcenter_mounted[item])
-                gauge_value_template_mount += 1
+                gauge_value_template_mounts += 1
             else:
                 log.warn("- PLEASE CHECK MANUALLY - possibly mounted ghost volume: %s mounted on %s", item,
                          vcenter_mounted[item])
