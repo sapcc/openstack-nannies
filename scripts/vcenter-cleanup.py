@@ -60,6 +60,7 @@ gauge_unregister_vm = Gauge('vcenter_nanny_unregister_vm', 'vm unregisters of th
 gauge_rename_ds_path = Gauge('vcenter_nanny_rename_ds_path', 'ds path renames of the vcenter nanny', ['kind'])
 gauge_delete_ds_path = Gauge('vcenter_nanny_delete_ds_path', 'ds path deletes of the vcenter nanny', ['kind'])
 gauge_ghost_volumes = Gauge('vcenter_nanny_ghost_volumes', 'number of possible ghost volumes')
+gauge_template_mounts = Gauge('vcenter_nanny_template_mounts', 'number of possible volumes mounted to templates')
 gauge_eph_shadow_vms = Gauge('vcenter_nanny_eph_shadow_vms', 'number of possible shadow vms on eph storage')
 gauge_datastore_no_access = Gauge('vcenter_nanny_datastore_no_access', 'number of non accessible datastores')
 gauge_empty_vvol_folders = Gauge('vcenter_nanny_empty_vvol_folders', 'number of empty vvols')
@@ -357,6 +358,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         for what in state_to_name_map:
             gauge_value[(kind, what)] = 0
     gauge_value_ghost_volumes = 0
+    gauge_value_template_mounts = 0
     gauge_value_eph_shadow_vms = 0
     gauge_value_datastore_no_access = 0
     gauge_value_empty_vvol_folders = 0
@@ -645,6 +647,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         gauge_rename_ds_path.labels(kind).set(float(gauge_value[(kind, "rename_ds_path")]))
         gauge_delete_ds_path.labels(kind).set(float(gauge_value[(kind, "delete_ds_path")]))
     gauge_ghost_volumes.set(float(gauge_value_ghost_volumes))
+    gauge_template_mounts.set(float(gauge_value_template_mounts))
     gauge_eph_shadow_vms.set(float(gauge_value_eph_shadow_vms))
     gauge_datastore_no_access.set(float(gauge_value_datastore_no_access))
     gauge_empty_vvol_folders.set(float(gauge_value_empty_vvol_folders))
