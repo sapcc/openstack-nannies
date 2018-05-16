@@ -49,10 +49,6 @@ tasks = []
 
 state_to_name_map = dict()
 
-gauge_value_empty_vvol_folders = 0
-gauge_value_vcenter_connection_problems = 0
-gauge_value_vcenter_get_properties_problems = 0
-
 gauge_value = dict()
 gauge_suspend_vm = Gauge('vcenter_nanny_suspend_vm', 'vm suspends of the vcenter nanny', ['kind'])
 gauge_power_off_vm = Gauge('vcenter_nanny_power_off_vm', 'vm power offs of the vcenter nanny', ['kind'])
@@ -122,8 +118,6 @@ def _uuids(task):
 @click.option('--port')
 def run_me(host, username, password, interval, iterations, dry_run, power_off, unregister, delete, port):
 
-    global gauge_value_vcenter_connection_problems
-
     # Start http server for exported data
     if port:
         prometheus_exporter_port = port
@@ -152,6 +146,7 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
                 log.warn("- PLEASE CHECK MANUALLY - problems connecting to vcenter: %s - retrying in next loop run",
                     str(e))
                 gauge_value_vcenter_connection_problems += 1
+                gauge_vcenter_connection_problems.set(float(gauge_value_vcenter_connection_problems))
 
             else:
                 atexit.register(Disconnect, service_instance)
@@ -277,7 +272,7 @@ def collect_properties(service_instance, view_ref, obj_type, path_set=None,
         A list of properties for the managed objects
     """
 
-    global gauge_value_vcenter_get_properties_problems
+    gauge_value_vcenter_get_properties_problems = 0
 
     collector = service_instance.content.propertyCollector
 
@@ -319,9 +314,8 @@ def collect_properties(service_instance, view_ref, obj_type, path_set=None,
         log.warn("- PLEASE CHECK MANUALLY - problems retrieving properties from vcenter: %s - retrying in next loop run",
                  str(e))
         gauge_value_vcenter_get_properties_problems += 1
-        ## wait a moment before retrying
-        #time.sleep(600)
-        #return data
+        gauge_vcenter_get_properties_problems.set(float(gauge_value_vcenter_get_properties_problems))
+        return data
 
     for obj in props:
         properties = {}
@@ -350,8 +344,6 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     template = dict()
 
     global gauge_value_empty_vvol_folders
-    global gauge_value_vcenter_connection_problems
-    global gauge_value_vcenter_get_properties_problems
 
     # reset all gauge counters
     for kind in [ "plan", "dry_run", "done"]:
@@ -362,7 +354,6 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     gauge_value_eph_shadow_vms = 0
     gauge_value_datastore_no_access = 0
     gauge_value_empty_vvol_folders = 0
-    gauge_value_vcenter_get_properties_problems = 0
     gauge_value_vcenter_task_problems = 0
     gauge_value_openstack_connection_problems = 0
     gauge_value_unknown_vcenter_templates = 0
@@ -388,17 +379,15 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
             "- PLEASE CHECK MANUALLY - problems retrieving information from openstack %s: %s - retrying in next loop run",
             service, str(e))
         gauge_value_openstack_connection_problems += 1
-        ## wait a moment before retrying
-        #time.sleep(600)
-        #return
+        gauge_openstack_connection_problems.set(float(gauge_value_openstack_connection_problems))
+        return
     except exceptions.SDKException as e:
         log.warn(
             "- PLEASE CHECK MANUALLY - problems retrieving information from openstack %s: %s - retrying in next loop run",
             service, str(e))
         gauge_value_openstack_connection_problems += 1
-        ## wait a moment before retrying
-        #time.sleep(600)
-        #return
+        gauge_openstack_connection_problems.set(float(gauge_value_openstack_connection_problems))
+        return
 
     # the properties we want to collect - some of them are not yet used, but will at a later
     # development stage of this script to validate the volume attachments with cinder and nova
@@ -651,10 +640,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     gauge_eph_shadow_vms.set(float(gauge_value_eph_shadow_vms))
     gauge_datastore_no_access.set(float(gauge_value_datastore_no_access))
     gauge_empty_vvol_folders.set(float(gauge_value_empty_vvol_folders))
-    gauge_vcenter_connection_problems.set(float(gauge_value_vcenter_connection_problems))
-    gauge_vcenter_get_properties_problems.set(float(gauge_value_vcenter_get_properties_problems))
     gauge_vcenter_task_problems.set(float(gauge_value_vcenter_task_problems))
-    gauge_openstack_connection_problems.set(float(gauge_value_openstack_connection_problems))
     gauge_unknown_vcenter_templates.set(float(gauge_value_unknown_vcenter_templates))
     gauge_complete_orphans.set(float(gauge_value_complete_orphans))
 
