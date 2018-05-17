@@ -130,6 +130,8 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
 
     while True:
 
+        log.info("INFO: starting new loop run")
+
         gauge_value_vcenter_connection_problems = 0
 
         # vcenter connection
@@ -182,6 +184,7 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
             raise Exception("maybe too old python version with ssl problems?")
 
         # wait the interval time
+        log.info("INFO: waiting %s minutes before starting the next loop run", str(interval))
         time.sleep(60 * int(interval))
 
 # init dict of all vms or files we have seen already
