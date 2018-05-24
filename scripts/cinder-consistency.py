@@ -39,137 +39,53 @@ log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
 
-# get all the volumes in state "error_deleting"
-def get_error_deleting_volumes(meta):
+# get all the what=volumes, snapshots, ... in state "error_deleting"
+def get_error_deleting(meta, what):
 
-    error_deleting_volumes = []
+    error_deleting = []
 
-    volumes_t = Table('volumes', meta, autoload=True)
-    error_deleting_volumes_q = select(columns=[volumes_t.c.id]).where(volumes_t.c.status == "error_deleting")
-
-    # convert the query result into a list
-    for i in error_deleting_volumes_q.execute():
-        error_deleting_volumes.append(i[0])
-
-    return error_deleting_volumes
-
-# delete all the volumes in state "error_deleting"
-def fix_error_deleting_volumes(meta, error_deleting_volumes):
-
-    volumes_t = Table('volumes', meta, autoload=True)
-    volume_attachment_t = Table('volume_attachment', meta, autoload=True)
-    volume_metadata_t = Table('volume_metadata', meta, autoload=True)
-    volume_admin_metadata_t = Table('volume_admin_metadata', meta, autoload=True)
-
-    for error_deleting_volumes_id in error_deleting_volumes:
-        log.info ("-- deleting possible volume admin metadata for volume id: %s", error_deleting_volumes_id)
-        delete_volume_admin_metadata_q = volume_admin_metadata_t.delete().where(volume_admin_metadata_t.c.volume_id == error_deleting_volumes_id)
-        delete_volume_admin_metadata_q.execute()
-        log.info ("-- deleting possible volume metadata for volume id: %s", error_deleting_volumes_id)
-        delete_volume_metadata_q = volume_metadata_t.delete().where(volume_metadata_t.c.volume_id == error_deleting_volumes_id)
-        delete_volume_metadata_q.execute()
-        log.info("-- deleting possible volume attachments for volume id: %s", error_deleting_volumes_id)
-        delete_volume_attachment_q = volume_attachment_t.delete().where(volume_attachment_t.c.volume_id == error_deleting_volumes_id)
-        delete_volume_attachment_q.execute()
-        log.info ("-- deleting volume id: %s", error_deleting_volumes_id)
-        delete_volume_q = volumes_t.delete().where(volumes_t.c.id == error_deleting_volumes_id)
-        delete_volume_q.execute()
-
-# get all the snapshots in state "error_deleting"
-def get_error_deleting_snapshots(meta):
-
-    error_deleting_snapshots = []
-
-    snapshots_t = Table('snapshots', meta, autoload=True)
-    error_deleting_snapshots_q = select(columns=[snapshots_t.c.id]).where(snapshots_t.c.status == "error_deleting")
+    what_table_t = Table(what, meta, autoload=True)
+    error_deleting_q = select(columns=[what_table_t.c.id]).where(what_table_t.c.status == "error_deleting")
 
     # convert the query result into a list
-    for i in error_deleting_snapshots_q.execute():
-        error_deleting_snapshots.append(i[0])
+    for i in error_deleting_q.execute():
+        error_deleting.append(i[0])
 
-    return error_deleting_snapshots
+    return error_deleting
 
-# delete all the snapshots in state "error_deleting"
-def fix_error_deleting_snapshots(meta, error_deleting_snapshots):
+# delete all the what=volumes, snapshots, ... in state "error_deleting"
+def fix_error_deleting(meta, what, error_deleting):
 
-    snapshots_t = Table('snapshots', meta, autoload=True)
+    what_table_t = Table(what, meta, autoload=True)
 
-    for error_deleting_snapshots_id in error_deleting_snapshots:
-        log.info ("-- deleting snapshot id: %s", error_deleting_snapshots_id)
-        delete_snapshot_q = snapshots_t.delete().where(snapshots_t.c.id == error_deleting_snapshots_id)
-        delete_snapshot_q.execute()
+    for error_deleting_id in error_deleting:
+        log.info ("-- deleting %s id: %s", what, error_deleting_id)
+        delete_q = what_table_t.delete().where(what_table_t.c.id == error_deleting_id)
+        delete_q.execute()
 
 # get all the rows with a volume_admin_metadata still defined where corresponding the volume is already deleted
-def get_wrong_volume_admin_metadata(meta):
+def get_wrong_entries(meta, table_name):
 
-    wrong_admin_metadata = {}
-    volume_admin_metadata_t = Table('volume_admin_metadata', meta, autoload=True)
+    wrong_entries = {}
+    other_t = Table(table_name, meta, autoload=True)
     volumes_t = Table('volumes', meta, autoload=True)
-    admin_metadata_join = volume_admin_metadata_t.join(volumes_t,volume_admin_metadata_t.c.volume_id == volumes_t.c.id)
-    wrong_volume_admin_metadata_q = select(columns=[volumes_t.c.id,volumes_t.c.deleted,volume_admin_metadata_t.c.id,volume_admin_metadata_t.c.deleted]).select_from(admin_metadata_join).where(and_(volumes_t.c.deleted == "true",volume_admin_metadata_t.c.deleted == "false"))
+    table_join = other_t.join(volumes_t,other_t.c.volume_id == volumes_t.c.id)
+    wrong_entries_q = select(columns=[volumes_t.c.id,volumes_t.c.deleted,other_t.c.id,other_t.c.deleted]).select_from(table_join).where(and_(volumes_t.c.deleted == "true",other_t.c.deleted == "false"))
 
     # return a dict indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments
-    for (volume_id, volume_deleted, volume_admin_metadata_id, volume_admin_metadata_deleted) in wrong_volume_admin_metadata_q.execute():
-        wrong_admin_metadata[volume_admin_metadata_id] = volume_id
-    return wrong_admin_metadata
+    for (volume_id, volume_deleted, other_id, other_deleted) in wrong_entries_q.execute():
+        wrong_entries[other_id] = volume_id
+    return wrong_entries
 
-# delete volume_admin_metadata still defined where corresponding the volume is already deleted
-def fix_wrong_volume_admin_metadata(meta, wrong_admin_metadata):
+# delete table_name still defined where the corresponding volume is already deleted
+def fix_wrong_entries(meta, table_name, wrong_entries):
 
-    volume_admin_metadata_t = Table('volume_admin_metadata', meta, autoload=True)
+    other_t = Table(table_name, meta, autoload=True)
 
-    for volume_admin_metadata_id in wrong_admin_metadata:
-        log.info ("-- deleting volume_admin_metadata id: %s", volume_admin_metadata_id)
-        delete_volume_admin_metadata_q = volume_admin_metadata_t.delete().where(volume_admin_metadata_t.c.id == volume_admin_metadata_id)
-        delete_volume_admin_metadata_q.execute()
-
-# get all the rows with a volume_metadata still defined where corresponding the volume is already deleted
-def get_wrong_volume_metadata(meta):
-
-    wrong_metadata = {}
-    volume_metadata_t = Table('volume_metadata', meta, autoload=True)
-    volumes_t = Table('volumes', meta, autoload=True)
-    metadata_join = volume_metadata_t.join(volumes_t,volume_metadata_t.c.volume_id == volumes_t.c.id)
-    wrong_volume_metadata_q = select(columns=[volumes_t.c.id,volumes_t.c.deleted,volume_metadata_t.c.id,volume_metadata_t.c.deleted]).select_from(metadata_join).where(and_(volumes_t.c.deleted == "true",volume_metadata_t.c.deleted == "false"))
-
-    # return a dict indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments
-    for (volume_id, volume_deleted, volume_metadata_id, volume_metadata_deleted) in wrong_volume_metadata_q.execute():
-        wrong_metadata[volume_metadata_id] = volume_id
-    return wrong_metadata
-
-# delete volume_metadata still defined where corresponding the volume is already deleted
-def fix_wrong_volume_metadata(meta, wrong_metadata):
-
-    volume_metadata_t = Table('volume_metadata', meta, autoload=True)
-
-    for volume_metadata_id in wrong_metadata:
-        log.info ("-- deleting volume_metadata id: %s", volume_metadata_id)
-        delete_volume_metadata_q = volume_metadata_t.delete().where(volume_metadata_t.c.id == volume_metadata_id)
-        delete_volume_metadata_q.execute()
-
-# get all the rows with a volume attachment still defined where corresponding the volume is already deleted
-def get_wrong_volume_attachments(meta):
-
-    wrong_attachments = {}
-    volume_attachment_t = Table('volume_attachment', meta, autoload=True)
-    volumes_t = Table('volumes', meta, autoload=True)
-    attachment_join = volume_attachment_t.join(volumes_t,volume_attachment_t.c.volume_id == volumes_t.c.id)
-    wrong_volume_attachment_q = select(columns=[volumes_t.c.id,volumes_t.c.deleted,volume_attachment_t.c.id,volume_attachment_t.c.deleted]).select_from(attachment_join).where(and_(volumes_t.c.deleted == "true",volume_attachment_t.c.deleted == "false"))
-
-    # return a dict indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments
-    for (volume_id, volume_deleted, volume_attachment_id, volume_attachment_deleted) in wrong_volume_attachment_q.execute():
-        wrong_attachments[volume_attachment_id] = volume_id
-    return wrong_attachments
-
-# delete volume attachment still defined where corresponding the volume is already deleted
-def fix_wrong_volume_attachments(meta, wrong_attachments):
-
-    volume_attachment_t = Table('volume_attachment', meta, autoload=True)
-
-    for volume_attachment_id in wrong_attachments:
-        log.info ("-- deleting volume attachment id: %s", volume_attachment_id)
-        delete_volume_attachment_q = volume_attachment_t.delete().where(volume_attachment_t.c.id == volume_attachment_id)
-        delete_volume_attachment_q.execute()
+    for other_id in wrong_entries:
+        log.info ("-- deleting %s id: %s", table_name, other_id)
+        delete_other_q = other_t.delete().where(other_t.c.id == other_id)
+        delete_other_q.execute()
 
 # get all the rows, which have the deleted flag set, but not the delete_at column
 def get_missing_deleted_at(meta, table_names):
@@ -241,74 +157,36 @@ def main():
     db_url = get_db_url(args.config)
     cinder_session, cinder_metadata, cinder_Base = makeConnection(db_url)
 
-    # fixing possible volumes in state "error-deleting"
-    error_deleting_volumes = get_error_deleting_volumes(cinder_metadata)
-    if len(error_deleting_volumes) != 0:
-        log.info("- volumes in state error_deleting found")
-        # print out what we would delete
-        for error_deleting_volumes_id in error_deleting_volumes:
-            log.info("-- volume id: %s", error_deleting_volumes_id)
-        if not args.dry_run:
-            log.info("- deleting volumes in state error_deleting")
-            fix_error_deleting_volumes(cinder_metadata, error_deleting_volumes)
-    else:
-        log.info("- no volumes in state error_deleting found")
+    # fixing possible volumes and snapshots in state "error-deleting"
+    for what in 'volumes', 'snapshots':
+        error_deleting = get_error_deleting(cinder_metadata, what)
+        if len(error_deleting) != 0:
+            log.info("- %s in state error_deleting found", what)
+            # print out what we would delete
+            for error_deleting_id in error_deleting:
+                log.info("-- %s id: %s", what, error_deleting_id)
+            if not args.dry_run:
+                log.info("- deleting %s in state error_deleting", what)
+                fix_error_deleting(cinder_metadata, what, error_deleting)
+        else:
+            log.info("- no %s in state error_deleting found", what)
 
-    # fixing possible snapshots in state "error-deleting"
-    error_deleting_snapshots = get_error_deleting_snapshots(cinder_metadata)
-    if len(error_deleting_snapshots) != 0:
-        log.info("- snapshots in state error_deleting found")
-        # print out what we would delete
-        for error_deleting_snapshots_id in error_deleting_snapshots:
-            log.info("-- snapshot id: %s", error_deleting_snapshots_id)
-        if not args.dry_run:
-            log.info("- deleting snapshots in state error_deleting")
-            fix_error_deleting_snapshots(cinder_metadata, error_deleting_snapshots)
-    else:
-        log.info("- no snapshots in state error_deleting found")
-
-    # fixing possible wrong admin_metadata entries
-    wrong_admin_metadata = get_wrong_volume_admin_metadata(cinder_metadata)
-    if len(wrong_admin_metadata) != 0:
-        log.info("- volume_admin_metadata inconsistencies found")
-        # print out what we would delete
-        for volume_admin_metadata_id in wrong_admin_metadata:
-            log.info("-- volume_admin_metadata id: %s - deleted volume id: %s", volume_admin_metadata_id, wrong_admin_metadata[volume_admin_metadata_id])
-        if not args.dry_run:
-            log.info("- removing volume_admin_metadata inconsistencies found")
-            fix_wrong_volume_admin_metadata(cinder_metadata, wrong_admin_metadata)
-    else:
-        log.info("- volume_admin_metadata entries are consistent")
-
-    # fixing possible wrong metadata entries
-    wrong_metadata = get_wrong_volume_metadata(cinder_metadata)
-    if len(wrong_metadata) != 0:
-        log.info("- volume_metadata inconsistencies found")
-        # print out what we would delete
-        for volume_metadata_id in wrong_metadata:
-            log.info("-- volume_metadata id: %s - deleted volume id: %s", volume_metadata_id, wrong_metadata[volume_metadata_id])
-        if not args.dry_run:
-            log.info("- removing volume_metadata inconsistencies found")
-            fix_wrong_volume_metadata(cinder_metadata, wrong_metadata)
-    else:
-        log.info("- volume_metadata entries are consistent")
-
-    # fixing possible wrong attachment entries
-    wrong_attachments = get_wrong_volume_attachments(cinder_metadata)
-    if len(wrong_attachments) != 0:
-        log.info("- volume attachment inconsistencies found")
-        # print out what we would delete
-        for volume_attachment_id in wrong_attachments:
-            log.info("-- volume attachment id: %s - deleted volume id: %s", volume_attachment_id, wrong_attachments[volume_attachment_id])
-        if not args.dry_run:
-            log.info("- removing volume attachment inconsistencies found")
-            fix_wrong_volume_attachments(cinder_metadata, wrong_attachments)
-    else:
-        log.info("- volume attachments are consistent")
+    for table_name in 'volume_admin_metadata', 'volume_metadata', 'volume_attachment':
+        # fixing possible wrong table_name entries
+        wrong_entries = get_wrong_entries(cinder_metadata, table_name)
+        if len(wrong_entries) != 0:
+            log.info("- %s inconsistencies found", table_name)
+            # print out what we would delete
+            for other_id in wrong_entries:
+                log.info("-- %s id: %s - deleted volume id: %s", table_name, other_id, wrong_entries[other_id])
+            if not args.dry_run:
+                log.info("- removing %s inconsistencies found", table_name)
+                fix_wrong_entries(cinder_metadata, table_name, wrong_entries)
+        else:
+            log.info("- %s entries are consistent", table_name)
 
     # fixing possible missing deleted_at timestamps in some tables
     # tables which sometimes have missing deleted_at values
-    # TODO: maybe this can be generated automatically as a list of tables with deleted_at column
     table_names = [ 'snapshots', 'volume_attachment' ]
 
     missing_deleted_at = get_missing_deleted_at(cinder_metadata, table_names)
