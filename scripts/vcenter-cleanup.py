@@ -151,6 +151,10 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
                 gauge_vcenter_connection_problems.set(float(gauge_value_vcenter_connection_problems))
 
             else:
+                # reset the prometheus value to 0 whenever we have a working vcenter connection again
+                gauge_value_vcenter_connection_problems = 0
+                gauge_vcenter_connection_problems.set(float(gauge_value_vcenter_connection_problems))
+
                 atexit.register(Disconnect, service_instance)
 
                 content = service_instance.content
@@ -391,6 +395,10 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         gauge_value_openstack_connection_problems += 1
         gauge_openstack_connection_problems.set(float(gauge_value_openstack_connection_problems))
         return
+    else:
+        # reset the prometheus value to 0 whenever we have a working openstack connection again
+        gauge_value_openstack_connection_problems = 0
+        gauge_openstack_connection_problems.set(float(gauge_value_openstack_connection_problems))
 
     # the properties we want to collect - some of them are not yet used, but will at a later
     # development stage of this script to validate the volume attachments with cinder and nova
