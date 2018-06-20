@@ -20,9 +20,6 @@ set -e
 
 unset http_proxy https_proxy all_proxy no_proxy
 
-echo "INFO: copying manila config files to /etc/manila"
-cp -v /manila-etc/* /etc/manila
-
 # we run an endless loop to run the script periodically
 echo "INFO: starting a loop to periodically run the nanny job for the manila netapp re-export"
 while true; do
