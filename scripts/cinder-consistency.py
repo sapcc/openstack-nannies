@@ -23,7 +23,6 @@ import ConfigParser
 import logging
 import datetime
 
-from prettytable import PrettyTable
 from sqlalchemy import and_
 from sqlalchemy import func
 from sqlalchemy import MetaData

@@ -25,7 +25,6 @@ import os
 import datetime
 
 from openstack import connection, exceptions, utils
-from prettytable import PrettyTable
 from sqlalchemy import and_
 from sqlalchemy import func
 from sqlalchemy import MetaData

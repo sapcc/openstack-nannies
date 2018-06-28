@@ -22,7 +22,6 @@ import sys
 import ConfigParser
 import logging
 
-from prettytable import PrettyTable
 from sqlalchemy import and_
 from sqlalchemy import func
 from sqlalchemy import MetaData
