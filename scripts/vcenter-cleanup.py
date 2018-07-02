@@ -422,19 +422,21 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     vcenter_mounted = dict()
     # iterate over the list of vms
     for k in data:
+        # only work with results, which have an instance uuid defined
         if k.get('config.instanceUuid'):
+            # check if this instance is a vcenter template
             if k.get('config.template'):
                 template[k['config.instanceUuid']] = k['config.template']
             log.debug("uuid: %s - template: %s", str(k['config.instanceUuid']), str(k['config.template']))
-        # get the config.hardware.device property out of the data dict and iterate over its elements
-        # for j in k['config.hardware.device']:
-        # this check seems to be required as in one bb i got a key error otherwise - looks like a vm without that property
-        if k.get('config.hardware.device'):
-            for j in k.get('config.hardware.device'):
-                # we are only interested in disks - TODO: maybe the range needs to be adjusted
-                if 2001 <= j.key <= 2010:
-                    vcenter_mounted[j.backing.uuid] = k['config.instanceUuid']
-                    log.debug("==> mount - instance: %s - volume: %s", str(k['config.instanceUuid']), str(j.backing.uuid))
+            # get the config.hardware.device property out of the data dict and iterate over its elements
+            # for j in k['config.hardware.device']:
+            # this check seems to be required as in one bb i got a key error otherwise - looks like a vm without that property
+            if k.get('config.hardware.device'):
+                for j in k.get('config.hardware.device'):
+                    # we are only interested in disks - TODO: maybe the range needs to be adjusted
+                    if 2001 <= j.key <= 2010:
+                        vcenter_mounted[j.backing.uuid] = k['config.instanceUuid']
+                        log.debug("==> mount - instance: %s - volume: %s", str(k['config.instanceUuid']), str(j.backing.uuid))
 
     # do the check from the other end: see for which vms or volumes in the vcenter we do not have any openstack info
     missing = dict()
