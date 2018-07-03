@@ -55,7 +55,8 @@ gauge_power_off_vm = Gauge('vcenter_nanny_power_off_vm', 'vm power offs of the v
 gauge_unregister_vm = Gauge('vcenter_nanny_unregister_vm', 'vm unregisters of the vcenter nanny', ['kind'])
 gauge_rename_ds_path = Gauge('vcenter_nanny_rename_ds_path', 'ds path renames of the vcenter nanny', ['kind'])
 gauge_delete_ds_path = Gauge('vcenter_nanny_delete_ds_path', 'ds path deletes of the vcenter nanny', ['kind'])
-gauge_ghost_volumes = Gauge('vcenter_nanny_ghost_volumes', 'number of possible ghost volumes')
+gauge_ghost_volumes = Gauge('vcenter_nanny_ghost_volumes', 'number of possible ghost volumes mounted on vcenter')
+gauge_ghost_ports = Gauge('vcenter_nanny_ghost_ports', 'number of possible ghost ports on vcenter')
 gauge_template_mounts = Gauge('vcenter_nanny_template_mounts', 'number of possible volumes mounted to templates')
 gauge_eph_shadow_vms = Gauge('vcenter_nanny_eph_shadow_vms', 'number of possible shadow vms on eph storage')
 gauge_datastore_no_access = Gauge('vcenter_nanny_datastore_no_access', 'number of non accessible datastores')
@@ -347,6 +348,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                  user_domain_name=os.getenv('OS_USER_DOMAIN_NAME'),
                                  password=os.getenv('OS_PASSWORD'))
 
+    mac_to_server = dict()
     known = dict()
     template = dict()
 
@@ -357,6 +359,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         for what in state_to_name_map:
             gauge_value[(kind, what)] = 0
     gauge_value_ghost_volumes = 0
+    gauge_value_ghost_ports = 0
     gauge_value_template_mounts = 0
     gauge_value_eph_shadow_vms = 0
     gauge_value_datastore_no_access = 0
@@ -365,7 +368,6 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     gauge_value_openstack_connection_problems = 0
     gauge_value_unknown_vcenter_templates = 0
     gauge_value_complete_orphans = 0
-
 
     # get all servers, volumes, snapshots and images from openstack to compare the resources we find on the vcenter against
     try:
@@ -381,6 +383,17 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         service = "glance"
         for image in conn.image.images(details=False, all_tenants=1):
             known[image.id] = image
+
+        # build a dict of ports related to the network interfaces on the servers on the vcenter
+        for port in conn.network.ports():
+            if str(port.binding_host_id).startswith('nova-compute-'):
+                if mac_to_server.get(port.mac_address) != None:
+                    log.warn("PLEASE CHECK MANUALLY: there seems to be another server with this mac already:")
+                    log.warn("                       old instance: %s - mac: %s - new instance: %s",
+                             str(mac_to_server.get(port.mac_address)), str(port.mac_address), str(port.device_id))
+                else:
+                    mac_to_server[str(port.mac_address)] = str(port.device_id)
+
     except exceptions.HttpException as e:
         log.warn(
             "- PLEASE CHECK MANUALLY - problems retrieving information from openstack %s: %s - retrying in next loop run",
@@ -433,10 +446,17 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
             # this check seems to be required as in one bb i got a key error otherwise - looks like a vm without that property
             if k.get('config.hardware.device'):
                 for j in k.get('config.hardware.device'):
-                    # we are only interested in disks - TODO: maybe the range needs to be adjusted
-                    if 2001 <= j.key <= 2010:
+                    # we are only interested in disks for ghost volumes ...
+                    if 2001 <= j.key < 3000:
                         vcenter_mounted[j.backing.uuid] = k['config.instanceUuid']
                         log.debug("==> mount - instance: %s - volume: %s", str(k['config.instanceUuid']), str(j.backing.uuid))
+                    # ... and network interfaces for ghost ports
+                    if 4000 <= j.key < 5000:
+                        if k['config.instanceUuid'] == mac_to_server.get(str(j.macAddress)):
+                            log.debug("- port with mac %s on %s is in sync between vcenter and neutron", str(j.macAddress), str(k['config.instanceUuid']))
+                        else:
+                            log.warn("- PLEASE CHECK MANUALLY - possible ghost port with mac %s on %s on vcenter", str(j.macAddress), str(k['config.instanceUuid']))
+                            gauge_value_ghost_ports += 1
 
     # do the check from the other end: see for which vms or volumes in the vcenter we do not have any openstack info
     missing = dict()
@@ -507,7 +527,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                          vcenter_mounted[item])
                 gauge_value_template_mounts += 1
             else:
-                log.warn("- PLEASE CHECK MANUALLY - possibly mounted ghost volume: %s mounted on %s", item,
+                log.warn("- PLEASE CHECK MANUALLY - possibly mounted ghost volume: %s mounted on %s in vcenter", item,
                          vcenter_mounted[item])
                 gauge_value_ghost_volumes += 1
         else:
@@ -649,6 +669,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         gauge_rename_ds_path.labels(kind).set(float(gauge_value[(kind, "rename_ds_path")]))
         gauge_delete_ds_path.labels(kind).set(float(gauge_value[(kind, "delete_ds_path")]))
     gauge_ghost_volumes.set(float(gauge_value_ghost_volumes))
+    gauge_ghost_ports.set(float(gauge_value_ghost_ports))
     gauge_template_mounts.set(float(gauge_value_template_mounts))
     gauge_eph_shadow_vms.set(float(gauge_value_eph_shadow_vms))
     gauge_datastore_no_access.set(float(gauge_value_datastore_no_access))
