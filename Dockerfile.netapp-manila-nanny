@@ -17,3 +17,6 @@ FROM __MANILA_NANNY_BASE_IMAGE__
 USER root
 
 ADD scripts/netapp-manila-* /scripts/
+
+# alternatively install the python modules via requirements file
+#RUN /var/lib/kolla/venv/bin/pip install -r /requirements.txt.netapp-manila-nanny
