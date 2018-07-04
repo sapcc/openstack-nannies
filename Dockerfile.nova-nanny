@@ -19,6 +19,7 @@ USER root
 ADD scripts/nova-* /scripts/
 ADD scripts/db-cleanup.py /scripts/
 ADD scripts/count-deleted.py /scripts/
+#ADD requirements.txt.nova-nanny /
 
 RUN /var/lib/kolla/venv/bin/pip install click==6.7 python-openstackclient==3.12.0 openstacksdk==0.9.19 prometheus-client==0.1.1 os-client-config==1.30.0 requestsexceptions==1.1.3
 
