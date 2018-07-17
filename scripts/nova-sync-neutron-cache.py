@@ -30,6 +30,7 @@ from nova.network.model import NetworkInfo
 from nova.network.neutronv2 import api as neutronapi
 from nova.objects.instance import InstanceList
 from nova import objects
+from nova import exception
 
 from sqlalchemy import MetaData
 from sqlalchemy import select
@@ -110,10 +111,15 @@ class NovaInstanceInfoCacheSync:
     # get the networkinfo from nova for one instance
     def get_neutron_instance_info_for_instance(self, instance):
 
-        ports = self.neutron.list_ports(self.context, device_id=instance.uuid)["ports"]
-        networks = [self.client.show_network(network_uuid).get('network') for network_uuid in set([port["network_id"] for port in ports])]
-        port_ids = [port["id"] for port in ports]
-        network_info = NetworkInfo(self.neutron._get_instance_nw_info(self.context, instance, port_ids=port_ids, networks=networks))
+        try:
+            ports = self.neutron.list_ports(self.context, device_id=instance.uuid)["ports"]
+            networks = [self.client.show_network(network_uuid).get('network') for network_uuid in set([port["network_id"] for port in ports])]
+            port_ids = [port["id"] for port in ports]
+            network_info = NetworkInfo(self.neutron._get_instance_nw_info(self.context, instance, port_ids=port_ids, networks=networks))
+        except exception.InstanceNotFound:
+            log.error("- PLEASE CHECK MANUALLY - instance could not be found: %s - continuing at next loop run", instance.uuid)
+            # exit cleanly, as we run in a loop and can retry it at the next loop run without any problem
+            sys.exit(0)
 
         return network_info
 
