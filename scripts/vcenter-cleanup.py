@@ -366,15 +366,15 @@ def detach_port(service_instance, vm, mac_address):
         log.warn("- PLEASE CHECK MANUALLY - the port to be deleted with mac addresss %s on instance %s does not seem to exist", mac_address, vm.config.instanceUuid)
 
     log.error("- action: detaching port with mac address %s from instance %s [%s]", mac_address, vm.config.instanceUuid, vm.config.name)
-    # port_to_detach_spec = vim.vm.device.VirtualDeviceSpec()
-    # port_to_detach_spec.operation = \
-    #     vim.vm.device.VirtualDeviceSpec.Operation.remove
-    # port_to_detach_spec.device = port_to_detach
-    #
-    # spec = vim.vm.ConfigSpec()
-    # spec.deviceChange = [port_to_detach_spec]
-    # task = vm.ReconfigVM_Task(spec=spec)
-    # WaitForTask(task, si=service_instance)
+    port_to_detach_spec = vim.vm.device.VirtualDeviceSpec()
+    port_to_detach_spec.operation = \
+        vim.vm.device.VirtualDeviceSpec.Operation.remove
+    port_to_detach_spec.device = port_to_detach
+
+    spec = vim.vm.ConfigSpec()
+    spec.deviceChange = [port_to_detach_spec]
+    task = vm.ReconfigVM_Task(spec=spec)
+    WaitForTask(task, si=service_instance)
     return True
 
 
@@ -398,15 +398,15 @@ def detach_volume(service_instance, vm, volume_uuid):
             "- PLEASE CHECK MANUALLY - the volume to be detached with uuid %s on instance %s does not seem to exist", volume_uuid, vm.config.instanceUuid)
 
     log.error("- action: detaching volume with uuid %s from instance %s [%s]", volume_uuid, vm.config.instanceUuid, vm.config.name)
-    # volume_to_detach_spec = vim.vm.device.VirtualDeviceSpec()
-    # volume_to_detach_spec.operation = \
-    #     vim.vm.device.VirtualDeviceSpec.Operation.remove
-    # volume_to_detach_spec.device = volume_to_detach
-    #
-    # spec = vim.vm.ConfigSpec()
-    # spec.deviceChange = [volume_to_detach_spec]
-    # task = vm.ReconfigVM_Task(spec=spec)
-    # WaitForTask(task, si=service_instance)
+    volume_to_detach_spec = vim.vm.device.VirtualDeviceSpec()
+    volume_to_detach_spec.operation = \
+        vim.vm.device.VirtualDeviceSpec.Operation.remove
+    volume_to_detach_spec.device = volume_to_detach
+
+    spec = vim.vm.ConfigSpec()
+    spec.deviceChange = [volume_to_detach_spec]
+    task = vm.ReconfigVM_Task(spec=spec)
+    WaitForTask(task, si=service_instance)
     return True
 
 
