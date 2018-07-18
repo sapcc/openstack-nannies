@@ -131,13 +131,13 @@ class NovaInstanceInfoCacheSync:
             if network_info_raw:
                 network_info = json.dumps(network_info_raw)
                 cache_info = str(self.get_instance_info_cache_entry_for_instance(instance.uuid))
-                log.debug("neutron: %s", network_info)
-                log.debug("nova:    %s", cache_info)
+                log.debug("- neutron: %s", network_info)
+                log.debug("- nova:    %s", cache_info)
 
                 if cache_info == network_info:
-                    log.debug("nova instance info cache for instance %s is in sync", str(instance.uuid))
+                    log.debug("- nova instance info cache for instance %s is in sync", str(instance.uuid))
                 else:
-                    log.error("nova instance info cache for instance %s is out of sync", str(instance.uuid))
+                    log.error("- nova instance info cache for instance %s is out of sync", str(instance.uuid))
 
     # compare the neutron an nova view of things and fix it by setting the nove cache to the neutron values for one instance
     def fix_instance_info_cache_for_instance(self, instance):
@@ -149,7 +149,7 @@ class NovaInstanceInfoCacheSync:
             log.debug("neutron: %s", network_info)
             log.debug("nova:    %s", cache_info)
             if cache_info != network_info:
-                log.error("fixing nova instance info cache for instance: %s", instance.uuid)
+                log.error("- fixing nova instance info cache for instance: %s", instance.uuid)
                 update_instance_cache_with_nw_info(None, self.context, instance, nw_info=network_info_raw)
 
     # compare the neutron an nova view of things and fix it by setting the nove cache to the neutron values for all instances
