@@ -42,6 +42,24 @@ else
     DELETE=""
 fi
 
+if [ "$VCENTER_CLEANUP_DETACH_GHOST_PORTS" = "True" ] || [ "$VCENTER_CLEANUP_DETACH_GHOST_PORTS" = "true" ]; then
+    DETACH_GHOST_PORTS="--detach-ghost-ports"
+else
+    DETACH_GHOST_PORTS=""
+fi
+
+if [ "$VCENTER_CLEANUP_DETACH_GHOST_VOLUMES" = "True" ] || [ "$VCENTER_CLEANUP_DETACH_GHOST_VOLUMES" = "true" ]; then
+    DETACH_GHOST_VOLUMES="--detach-ghost-volumes"
+else
+    DETACH_GHOST_VOLUMES=""
+fi
+
+if [ "$VCENTER_CLEANUP_DETACH_GHOST_LIMIT" != "" ]; then
+    DETACH_GHOST_LIMIT="--detach-ghost-limit $VCENTER_CLEANUP_DETACH_GHOST_LIMIT"
+else
+    DETACH_GHOST_LIMIT=""
+fi
+
 export OS_USER_DOMAIN_NAME
 export OS_PROJECT_NAME
 export OS_PASSWORD
@@ -49,4 +67,4 @@ export OS_AUTH_URL
 export OS_USERNAME
 export OS_PROJECT_DOMAIN_NAME
 
-/var/lib/kolla/venv/bin/python /scripts/vcenter-cleanup.py $DRY_RUN $POWER_OFF $UNREGISTER $DELETE --host $VCENTER_CLEANUP_HOST --username $VCENTER_CLEANUP_USER --password $VCENTER_CLEANUP_PASSWORD --iterations $VCENTER_CLEANUP_ITERATIONS --interval $VCENTER_CLEANUP_INTERVAL
+/var/lib/kolla/venv/bin/python /scripts/vcenter-cleanup.py $DRY_RUN $POWER_OFF $UNREGISTER $DELETE $DETACH_GHOST_PORTS $DETACH_GHOST_VOLUMES $DETACH_GHOST_LIMIT --host $VCENTER_CLEANUP_HOST --username $VCENTER_CLEANUP_USER --password $VCENTER_CLEANUP_PASSWORD --iterations $VCENTER_CLEANUP_ITERATIONS --interval $VCENTER_CLEANUP_INTERVAL

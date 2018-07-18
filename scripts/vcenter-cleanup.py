@@ -34,6 +34,10 @@ from prometheus_client import start_http_server, Gauge
 
 uuid_re = re.compile('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.IGNORECASE)
 
+# compile a regex for trying to filter out openstack generated vms
+#  they all have the "name:" field set
+openstack_re = re.compile("^name")
+
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
@@ -94,9 +98,9 @@ def _uuids(task):
 # cmdline handling
 @click.command()
 # vcenter host, user and password
-@click.option('--host', help='Host to connect to.')
-@click.option('--username', prompt='Your name')
-@click.option('--password', prompt='The password')
+@click.option('--host', prompt='Host to connect to')
+@click.option('--username', prompt='Username to connect with')
+@click.option('--password', prompt='Password to connect with')
 # every how many minutes the check should be preformed
 @click.option('--interval', prompt='Interval in minutes')
 # how often a vm should be continously a candidate for some action (delete etc.) before
@@ -115,9 +119,15 @@ def _uuids(task):
 @click.option('--unregister', is_flag=True)
 # do not delete datastore files or folders
 @click.option('--delete', is_flag=True)
+# detach ghost volumes if any are discovered
+@click.option('--detach-ghost-volumes', is_flag=True)
+# detach ghost ports if any are discovered
+@click.option('--detach-ghost-ports', is_flag=True)
+# deny to detach ghost volumes and ports if there are more than this number of them
+@click.option('--detach-ghost-limit', default=3, help='Ghost volume/port detachment limit')
 # port to use for prometheus exporter, otherwise we use 9456 as default
 @click.option('--port')
-def run_me(host, username, password, interval, iterations, dry_run, power_off, unregister, delete, port):
+def run_me(host, username, password, interval, iterations, dry_run, power_off, unregister, delete, detach_ghost_volumes, detach_ghost_ports, detach_ghost_limit, port):
 
     # Start http server for exported data
     if port:
@@ -163,7 +173,7 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
 
                 # iterate through all vms and get the config.hardware.device properties (and some other)
                 # get vm containerview
-                # TODO: destroy the view again
+                # TODO: destroy the view again - most probably not required, as we close the connection at the end of each loop
                 view_ref = content.viewManager.CreateContainerView(
                     container=content.rootFolder,
                     type=[vim.VirtualMachine],
@@ -179,6 +189,7 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
 
                 # do the cleanup work
                 cleanup_items(host, username, password, iterations, dry_run, power_off, unregister, delete,
+                              detach_ghost_volumes, detach_ghost_ports, detach_ghost_limit,
                               service_instance,
                               content, dc, view_ref)
 
@@ -336,9 +347,71 @@ def collect_properties(service_instance, view_ref, obj_type, path_set=None,
         data.append(properties)
     return data
 
+def detach_port(service_instance, vm, mac_address):
+    """ Deletes virtual NIC based on mac address
+    :param si: Service Instance
+    :param vm: Virtual Machine Object
+    :param mac_address: Mac Address of the port to be deleted
+    :return: True if success
+    """
+
+    # TODO proper exception handling
+    port_to_detach = None
+    for dev in vm.config.hardware.device:
+        if isinstance(dev, vim.vm.device.VirtualEthernetCard)   \
+                and dev.macAddress == mac_address:
+            port_to_detach = dev
+
+    if not port_to_detach:
+        log.warn("- PLEASE CHECK MANUALLY - the port to be deleted with mac addresss %s on instance %s does not seem to exist", mac_address, vm.config.instanceUuid)
+
+    log.error("- action: detaching port with mac address %s from instance %s [%s]", mac_address, vm.config.instanceUuid, vm.config.name)
+    # port_to_detach_spec = vim.vm.device.VirtualDeviceSpec()
+    # port_to_detach_spec.operation = \
+    #     vim.vm.device.VirtualDeviceSpec.Operation.remove
+    # port_to_detach_spec.device = port_to_detach
+    #
+    # spec = vim.vm.ConfigSpec()
+    # spec.deviceChange = [port_to_detach_spec]
+    # task = vm.ReconfigVM_Task(spec=spec)
+    # WaitForTask(task, si=service_instance)
+    return True
+
+
+def detach_volume(service_instance, vm, volume_uuid):
+    """ Deletes virtual NIC based on mac address
+    :param si: Service Instance
+    :param vm: Virtual Machine Object
+    :param volume_uuid: uuid of the volume to be deleted
+    :return: True if success
+    """
+
+    # TODO proper exception handling
+    volume_to_detach = None
+    for dev in vm.config.hardware.device:
+        if isinstance(dev, vim.vm.device.VirtualDisk) \
+                and dev.backing.uuid == volume_uuid:
+            volume_to_detach = dev
+
+    if not volume_to_detach:
+        log.warn(
+            "- PLEASE CHECK MANUALLY - the volume to be detached with uuid %s on instance %s does not seem to exist", volume_uuid, vm.config.instanceUuid)
+
+    log.error("- action: detaching volume with uuid %s from instance %s [%s]", volume_uuid, vm.config.instanceUuid, vm.config.name)
+    # volume_to_detach_spec = vim.vm.device.VirtualDeviceSpec()
+    # volume_to_detach_spec.operation = \
+    #     vim.vm.device.VirtualDeviceSpec.Operation.remove
+    # volume_to_detach_spec.device = volume_to_detach
+    #
+    # spec = vim.vm.ConfigSpec()
+    # spec.deviceChange = [volume_to_detach_spec]
+    # task = vm.ReconfigVM_Task(spec=spec)
+    # WaitForTask(task, si=service_instance)
+    return True
+
 
 # main cleanup function
-def cleanup_items(host, username, password, iterations, dry_run, power_off, unregister, delete, service_instance,
+def cleanup_items(host, username, password, iterations, dry_run, power_off, unregister, delete, detach_ghost_volumes, detach_ghost_ports, detach_ghost_limit, service_instance,
                   content, dc, view_ref):
     # openstack connection
     conn = connection.Connection(auth_url=os.getenv('OS_AUTH_URL'),
@@ -351,6 +424,8 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     mac_to_server = dict()
     known = dict()
     template = dict()
+    ghost_port_detach_candidates = dict()
+    ghost_volume_detach_candidates = dict()
 
     global gauge_value_empty_vvol_folders
 
@@ -388,8 +463,8 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         for port in conn.network.ports():
             if str(port.binding_host_id).startswith('nova-compute-'):
                 if mac_to_server.get(port.mac_address) != None:
-                    log.warn("PLEASE CHECK MANUALLY: there seems to be another server with this mac already:")
-                    log.warn("                       old instance: %s - mac: %s - new instance: %s",
+                    log.warn("- PLEASE CHECK MANUALLY - there seems to be another server with this mac already:")
+                    log.warn("                          old instance: %s - mac: %s - new instance: %s",
                              str(mac_to_server.get(port.mac_address)), str(port.mac_address), str(port.device_id))
                 else:
                     mac_to_server[str(port.mac_address)] = str(port.device_id)
@@ -420,7 +495,8 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         "config.name",
         "config.uuid",
         "config.instanceUuid",
-        "config.template"
+        "config.template",
+        "config.annotation"
     ]
 
     # collect the properties for all vms
@@ -432,11 +508,12 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
 
     # create a dict of volumes mounted to vms to compare the volumes we plan to delete against
     # to find possible ghost volumes
-    vcenter_mounted = dict()
+    vcenter_mounted_uuid = dict()
+    vcenter_mounted_name = dict()
     # iterate over the list of vms
     for k in data:
-        # only work with results, which have an instance uuid defined
-        if k.get('config.instanceUuid'):
+        # only work with results, which have an instance uuid defined and are openstack vms
+        if k.get('config.instanceUuid') and openstack_re.match(k.get('config.annotation')):
             # check if this instance is a vcenter template
             if k.get('config.template'):
                 template[k['config.instanceUuid']] = k['config.template']
@@ -447,19 +524,27 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
             if k.get('config.hardware.device'):
                 for j in k.get('config.hardware.device'):
                     # we are only interested in disks for ghost volumes ...
+                    # TODO: maybe? if isinstance(k.get('config.hardware.device'), vim.vm.device.VirtualDisk):
                     if 2001 <= j.key < 3000:
-                        vcenter_mounted[j.backing.uuid] = k['config.instanceUuid']
+                        vcenter_mounted_uuid[j.backing.uuid] = k['config.instanceUuid']
+                        vcenter_mounted_name[j.backing.uuid] = k['config.name']
                         log.debug("==> mount - instance: %s - volume: %s", str(k['config.instanceUuid']), str(j.backing.uuid))
                     # ... and network interfaces for ghost ports
+                    # TODO: maybe? if isinstance(k.get('config.hardware.device'), vim.vm.device.VirtualEthernetCard):
                     if 4000 <= j.key < 5000:
                         if k['config.instanceUuid'] == mac_to_server.get(str(j.macAddress)):
                             log.debug("- port with mac %s on %s is in sync between vcenter and neutron", str(j.macAddress), str(k['config.instanceUuid']))
                         else:
-                            log.warn("- PLEASE CHECK MANUALLY - possible ghost port with mac %s on %s on vcenter", str(j.macAddress), str(k['config.instanceUuid']))
+                            log.warn("- discovered ghost port with mac %s on %s [%s] in vcenter", str(j.macAddress), str(k['config.instanceUuid']), str(k['config.name']))
                             gauge_value_ghost_ports += 1
+                            # if we plan to delete ghost ports, collect them in a dict of mac addresses by instance uuid
+                            if detach_ghost_ports:
+                                ghost_port_detach_candidates[k['config.instanceUuid']] = str(j.macAddress)
 
     # do the check from the other end: see for which vms or volumes in the vcenter we do not have any openstack info
     missing = dict()
+    # a dict of locations by uuid known to openstack
+    not_missing = dict()
 
     # iterate through all datastores in the vcenter
     for ds in dc.datastore:
@@ -490,6 +575,12 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                 missing[uuid].append(location)
                             else:
                                 missing[uuid] = [location]
+                    else:
+                        # multiple locations are possible for one uuid, thus we need to put the locations into a list
+                        if uuid in not_missing:
+                            not_missing[uuid].append(location)
+                        else:
+                            not_missing[uuid] = [location]
             except vim.fault.InaccessibleDatastore as e:
                 log.warn("- PLEASE CHECK MANUALLY - something went wrong trying to access this datastore (vim.fault.InaccessibleDatastore): %s", e.msg)
                 gauge_value_datastore_no_access += 1
@@ -521,15 +612,18 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     for item, locationlist in six.iteritems(missing):
         # none of the uuids we do not know anything about on openstack side should be mounted anywhere in vcenter
         # so we should neither see it as vmx (shadow vm) or datastore file
-        if vcenter_mounted.get(item):
-            if template.get(vcenter_mounted[item]) is True:
+        if vcenter_mounted_uuid.get(item):
+            if template.get(vcenter_mounted_uuid[item]) is True:
                 log.warn("- PLEASE CHECK MANUALLY - volume %s is mounted on vcenter template %s", item,
-                         vcenter_mounted[item])
+                         vcenter_mounted_uuid[item])
                 gauge_value_template_mounts += 1
             else:
-                log.warn("- PLEASE CHECK MANUALLY - possibly mounted ghost volume: %s mounted on %s in vcenter", item,
-                         vcenter_mounted[item])
+                log.warn("- discovered ghost volume %s mounted on %s [%s] in vcenter", item,
+                         vcenter_mounted_uuid[item], vcenter_mounted_name[item])
                 gauge_value_ghost_volumes += 1
+                # if we plan to delete ghost volumes, collect them in a dict of volume uuids by instance uuid
+                if detach_ghost_volumes:
+                    ghost_volume_detach_candidates[vcenter_mounted_uuid[item]] = item
         else:
             for location in locationlist:
                 # foldername on datastore
@@ -684,6 +778,41 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     reset_to_be_dict(vms_to_be_unregistered, vms_seen)
     reset_to_be_dict(files_to_be_deleted, files_seen)
     reset_to_be_dict(files_to_be_renamed, files_seen)
+
+    # cleanup detached ports and/or volumes if requested
+    if detach_ghost_ports or detach_ghost_volumes:
+        if len(ghost_port_detach_candidates) > detach_ghost_limit:
+            log.warn("- PLEASE CHECK MANUALLY - number of ghost ports to be deleted larger than --detach-ghost-limit=%s - denying to delete the ghost ports", str(detach_ghost_limit))
+        elif len(ghost_volume_detach_candidates) > detach_ghost_limit:
+            log.warn("- PLEASE CHECK MANUALLY - number of ghost volumes to be deleted larger than --detach-ghost-limit=%s - denying to delete the ghost volumes", str(detach_ghost_limit))
+        else:
+            # build a dict of all uuids from the missing and not_missing ones
+            all_uuids = dict()
+            all_uuids.update(missing)
+            all_uuids.update(not_missing)
+            for item, locationlist in six.iteritems(all_uuids):
+                if ghost_port_detach_candidates.get(item) or ghost_volume_detach_candidates.get(item):
+                    for location in locationlist:
+                        # foldername on datastore
+                        path = "{folderpath}".format(**location)
+                        # filename on datastore
+                        filename = "{filepath}".format(**location)
+                        fullpath = path + filename
+                        # in the case of a vmx file we check if the vcenter still knows about it
+                        if location["filepath"].lower().endswith(".vmx"):
+                            vmx_path = "{folderpath}{filepath}".format(**location)
+                            vm = content.searchIndex.FindByDatastorePath(path=vmx_path, datacenter=dc)
+                            # there is a vm for that file path we check what to do with it
+                            if vm:
+                                if ghost_port_detach_candidates.get(item):
+                                    # double check that the port is still a ghost port to avoid accidentally deleting stuff due to timing issues
+                                    if not any(True for _ in conn.network.ports(mac_address = ghost_port_detach_candidates[item])):
+                                        detach_port(service_instance, vm, ghost_port_detach_candidates[item])
+                                    else:
+                                        log.warn("looks like the port with the mac address %s on instance %s has only been temporary a ghost port - not doing anything with it ...", ghost_port_detach_candidates[item], item)
+                                elif ghost_volume_detach_candidates.get(item):
+                                    detach_volume(service_instance, vm, ghost_volume_detach_candidates[item])
+
 
 
 if __name__ == '__main__':
