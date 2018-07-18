@@ -117,7 +117,7 @@ class NovaInstanceInfoCacheSync:
             port_ids = [port["id"] for port in ports]
             network_info = NetworkInfo(self.neutron._get_instance_nw_info(self.context, instance, port_ids=port_ids, networks=networks))
         except exception.InstanceNotFound:
-            log.error("- PLEASE CHECK MANUALLY - instance could not be found: %s - continuing at next loop run", instance.uuid)
+            log.error("- PLEASE CHECK MANUALLY - instance could not be found on neutron side: %s - ignoring this instance for now", instance.uuid)
             # return None for network_info, so that we can skip this instance in the compare function
             return None
 
