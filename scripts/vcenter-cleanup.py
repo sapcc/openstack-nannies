@@ -781,6 +781,8 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
 
     # cleanup detached ports and/or volumes if requested
     if detach_ghost_ports or detach_ghost_volumes:
+        # ghost volumes and ports should not appear often, so limit the maximum of them to delete
+        # to avoid the risk of accidentally detaching too many of them due to some failure somewhere else
         if len(ghost_port_detach_candidates) > detach_ghost_limit:
             log.warn("- PLEASE CHECK MANUALLY - number of ghost ports to be deleted larger than --detach-ghost-limit=%s - denying to delete the ghost ports", str(detach_ghost_limit))
         elif len(ghost_volume_detach_candidates) > detach_ghost_limit:
@@ -790,8 +792,11 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
             all_uuids = dict()
             all_uuids.update(missing)
             all_uuids.update(not_missing)
+            # go through all uuids we know
             for item, locationlist in six.iteritems(all_uuids):
+                # if any of them has a ghost volume or port attached do something about it
                 if ghost_port_detach_candidates.get(item) or ghost_volume_detach_candidates.get(item):
+                    # find the corresponding .vmx file and vm
                     for location in locationlist:
                         # foldername on datastore
                         path = "{folderpath}".format(**location)
