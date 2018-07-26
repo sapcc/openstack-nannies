@@ -22,10 +22,12 @@ import argparse
 import ConfigParser
 import json
 import logging
+import datetime
+
+from oslo_concurrency import lockutils
 
 from nova import config
 from nova.context import get_admin_context
-from nova.network.base_api import update_instance_cache_with_nw_info
 from nova.network.model import NetworkInfo
 from nova.network.neutronv2 import api as neutronapi
 from nova.objects.instance import InstanceList
@@ -101,6 +103,14 @@ class NovaInstanceInfoCacheSync:
 
         return cache_info
 
+    # set the neutron instance info cache entry for one instance in the nova db
+    def set_instance_info_cache_entry_for_instance(self, instance, new_cache_info):
+
+        instance_info_cache_entries_t = Table('instance_info_caches', self.metadata, autoload=True)
+        now = datetime.datetime.utcnow()
+        update_instance_info_cache_entry_q = instance_info_cache_entries_t.update().where(instance_info_cache_entries_t.c.instance_uuid == instance).values(updated_at=now, network_info=new_cache_info)
+        update_instance_info_cache_entry_q.execute()
+
     # build up a connection to neutron
     def buildup_nova_neutron_connection(self):
 
@@ -115,7 +125,8 @@ class NovaInstanceInfoCacheSync:
             ports = self.neutron.list_ports(self.context, device_id=instance.uuid)["ports"]
             networks = [self.client.show_network(network_uuid).get('network') for network_uuid in set([port["network_id"] for port in ports])]
             port_ids = [port["id"] for port in ports]
-            network_info = NetworkInfo(self.neutron._get_instance_nw_info(self.context, instance, port_ids=port_ids, networks=networks))
+            with lockutils.lock('refresh_cache-%s' % instance.uuid):
+                network_info = NetworkInfo(self.neutron._get_instance_nw_info(self.context, instance, port_ids=port_ids, networks=networks))
         except exception.InstanceNotFound:
             log.error("- PLEASE CHECK MANUALLY - instance could not be found on neutron side: %s - ignoring this instance for now", instance.uuid)
             # return None for network_info, so that we can skip this instance in the compare function
@@ -123,39 +134,84 @@ class NovaInstanceInfoCacheSync:
 
         return network_info
 
-    # compare the neutron an nova view of things
-    def compare_instance_info_cache(self):
+    # compare the neutron an nova view of things and fix inconsistencies in case we are not in dry-run mode
+    def compare_and_fix_instance_info_cache(self):
+
+        neutron_seen_mac_addresses = dict()
+        cache_seen_mac_addresses = dict()
+
         for instance in InstanceList.get_all(self.context):
-            network_info_raw = self.get_neutron_instance_info_for_instance(instance)
-            # do not try to compare if we do not have info from neutron
-            if network_info_raw:
-                network_info = json.dumps(network_info_raw)
+            # get network info from neutron via nova-network api
+            network_info_source = self.get_neutron_instance_info_for_instance(instance)
+            # do not deal with the instance if we do not have infor for it in neutron
+            if network_info_source:
+                # dicts to collect mac addressed we have already seen
+                network_info_entries = dict()
+                cache_info_entries = dict()
+                # convert network info to json string
+                network_info = json.dumps(network_info_source)
+                # ... and back to python internal, so that we have the same format as the cache entry from the db
+                network_info_raw = json.loads(network_info)
+                # get the cache entry from the nova db
                 cache_info = str(self.get_instance_info_cache_entry_for_instance(instance.uuid))
-                log.debug("- neutron: %s", network_info)
-                log.debug("- nova:    %s", cache_info)
+                # convert from json to python internal
+                cache_info_raw = json.loads(cache_info)
+                # print "network-info: " + " " + str(type(network_info_source)) + " " + str(network_info_source)
+                # print "network-info-raw: " + " " + str(type(network_info_raw)) + " " + str(network_info_raw)
+                # print "cache-info: " + " " + str(type(cache_info_raw)) + " " + str(cache_info_raw)
+                # go through all the ports in neutron ...
+                for i in network_info_raw:
+                    # create a dict of the port entries by mac address
+                    network_info_entries[i['address']] = i
+                    # safety check: we should never see a mac address here twice
+                    if not neutron_seen_mac_addresses.get(i['address']):
+                        neutron_seen_mac_addresses[i['address']] = instance.uuid
+                    else:
+                        log.error("- PLEASE CHECK MANUALLY - mac address %s for instance %s already seen in neutron for instance %s", str(i['address']), instance.uuid, neutron_seen_mac_addresses[i['address']])
+                # go through all the ports in the nova cache ...
+                for i in cache_info_raw:
+                    # create a dict of the port entries by mac address
+                    cache_info_entries[i['address']] = i
+                    # safety check: we should never see a mac address here twice
+                    if not cache_seen_mac_addresses.get(i['address']):
+                        cache_seen_mac_addresses[i['address']] = instance.uuid
+                    else:
+                        log.error("- PLEASE CHECK MANUALLY - mac address %s for instance %s already seen in nova cache for instance %s",str(i['address']), instance.uuid, neutron_seen_mac_addresses[i['address']])
 
-                if cache_info == network_info:
-                    log.debug("- nova instance info cache for instance %s is in sync", str(instance.uuid))
-                else:
-                    log.error("- nova instance info cache for instance %s is out of sync", str(instance.uuid))
+                # now check, if we have all the ports from neutron in the nova cache
+                for i in network_info_entries:
+                    if cache_info_entries.get(i):
+                        log.debug("- instance %s - mac address %s is already in the nova cache", instance.uuid, i)
+                        # for debugging
+                        # log.error("- instance %s - mac address %s is already in the nova cache", instance.uuid, i)
+                    else:
+                        if self.args.dry_run:
+                            log.error("- PLEASE CHECK MANUALLY - instance %s - mac address %s is not yet in the nova cache and needs to be added", instance.uuid, i)
+                        else:
+                            # get the proper lock for modifying the nova cache
+                            with lockutils.lock('refresh_cache-%s' % instance.uuid):
+                                log.error("- action: instance %s - adding mac address %s to nova cache", instance.uuid, i)
+                                entry_to_append = network_info_entries[i]
 
-    # compare the neutron an nova view of things and fix it by setting the nove cache to the neutron values for one instance
-    def fix_instance_info_cache_for_instance(self, instance):
-        network_info_raw = self.get_neutron_instance_info_for_instance(instance)
-        # do not try to fix if we do not have info from neutron
-        if network_info_raw:
-            network_info = json.dumps(network_info_raw)
-            cache_info = str(self.get_instance_info_cache_entry_for_instance(instance.uuid))
-            log.debug("neutron: %s", network_info)
-            log.debug("nova:    %s", cache_info)
-            if cache_info != network_info:
-                log.error("- fixing nova instance info cache for instance: %s", instance.uuid)
-                update_instance_cache_with_nw_info(None, self.context, instance, nw_info=network_info_raw)
+                                entry_to_append['preserve_on_delete'] = True
+                                # if there is already a cache entry, append the missing one
+                                if cache_info_raw:
+                                    cache_info_raw.append(entry_to_append)
+                                    new_cache_info_raw = list(cache_info_raw)
+                                # otherwise create one based on the neutron one
+                                else:
+                                    new_cache_info_raw = [entry_to_append]
+                                # for debugging
+                                # print "append: " + str(entry_to_append)
+                                # print "cache: " + str(cache_info_raw)
+                                # print "new cache: " + str(new_cache_info_raw)
+                                # print "new json: " + json.dumps(new_cache_info_raw)
+                                self.set_instance_info_cache_entry_for_instance(instance.uuid, json.dumps(new_cache_info_raw))
 
-    # compare the neutron an nova view of things and fix it by setting the nove cache to the neutron values for all instances
-    def fix_instance_info_cache(self):
-        for instance in InstanceList.get_all(self.context):
-            self.fix_instance_info_cache_for_instance(instance)
+                # safety check: check the other way around too - there should be nothing in the cache we do not have in neutron
+                for i in cache_info_entries:
+                    if not network_info_entries.get(i):
+                        log.error("- PLEASE CHECK MANUALLY - instance %s - mac address %s is in the nova cache, but not in neutron", instance.uuid, i)
 
     def run_me(self):
 
@@ -171,10 +227,7 @@ class NovaInstanceInfoCacheSync:
         self.makeConnection()
 
         self.buildup_nova_neutron_connection()
-        if self.args.dry_run:
-            self.compare_instance_info_cache()
-        else:
-            self.fix_instance_info_cache()
+        self.compare_and_fix_instance_info_cache()
 
 if __name__ == '__main__':
 
