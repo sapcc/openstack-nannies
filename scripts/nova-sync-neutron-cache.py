@@ -99,7 +99,13 @@ class NovaInstanceInfoCacheSync:
 
         instance_info_cache_entries_t = Table('instance_info_caches', self.metadata, autoload=True)
         instance_info_cache_entries_q = select(columns=[instance_info_cache_entries_t.c.network_info], whereclause=and_(instance_info_cache_entries_t.c.deleted == 0, instance_info_cache_entries_t.c.instance_uuid == instance))
-        cache_info = instance_info_cache_entries_q.execute().fetchone()[0]
+        # for debugging
+        # print instance
+        try:
+            cache_info = instance_info_cache_entries_q.execute().fetchone()[0]
+        except TypeError:
+            log.error("- PLEASE CHECK MANUALLY - instance %s does not have an entry in the instance_info_caches table - ignoring it for now", instance)
+            cache_info = None
 
         return cache_info
 
@@ -153,9 +159,16 @@ class NovaInstanceInfoCacheSync:
                 # ... and back to python internal, so that we have the same format as the cache entry from the db
                 network_info_raw = json.loads(network_info)
                 # get the cache entry from the nova db
-                cache_info = str(self.get_instance_info_cache_entry_for_instance(instance.uuid))
-                # convert from json to python internal
-                cache_info_raw = json.loads(cache_info)
+                cache_entry = self.get_instance_info_cache_entry_for_instance(instance.uuid)
+                if cache_entry is not None:
+                    cache_info = str(cache_entry)
+                    # convert from json to python internal
+                    cache_info_raw = json.loads(cache_info)
+                else:
+                    # in case we did get None then there is no instance_info_caches entry exists,
+                    # so do nothing and got the next instance, an error message has been printed
+                    # in get_instance_info_cache_entry_for_instance already in this case
+                    continue
                 # print "network-info: " + " " + str(type(network_info_source)) + " " + str(network_info_source)
                 # print "network-info-raw: " + " " + str(type(network_info_raw)) + " " + str(network_info_raw)
                 # print "cache-info: " + " " + str(type(cache_info_raw)) + " " + str(cache_info_raw)
@@ -194,10 +207,12 @@ class NovaInstanceInfoCacheSync:
                                 entry_to_append = network_info_entries[i]
 
                                 entry_to_append['preserve_on_delete'] = True
+                                # get the current instance info entry, as we might have appened some entries already within this loop
+                                fresh_cache_info_raw = json.loads(self.get_instance_info_cache_entry_for_instance(instance.uuid))
                                 # if there is already a cache entry, append the missing one
-                                if cache_info_raw:
-                                    cache_info_raw.append(entry_to_append)
-                                    new_cache_info_raw = list(cache_info_raw)
+                                if fresh_cache_info_raw:
+                                    fresh_cache_info_raw.append(entry_to_append)
+                                    new_cache_info_raw = list(fresh_cache_info_raw)
                                 # otherwise create one based on the neutron one
                                 else:
                                     new_cache_info_raw = [entry_to_append]
