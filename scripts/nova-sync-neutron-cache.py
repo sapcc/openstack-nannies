@@ -221,7 +221,8 @@ class NovaInstanceInfoCacheSync:
                                 # print "cache: " + str(cache_info_raw)
                                 # print "new cache: " + str(new_cache_info_raw)
                                 # print "new json: " + json.dumps(new_cache_info_raw)
-                                self.set_instance_info_cache_entry_for_instance(instance.uuid, json.dumps(new_cache_info_raw))
+                                if instance.uuid == '9705b834-3de7-449a-b7b7-0921dd626a06':
+                                    self.set_instance_info_cache_entry_for_instance(instance.uuid, json.dumps(new_cache_info_raw))
 
                 # safety check: check the other way around too - there should be nothing in the cache we do not have in neutron
                 for i in cache_info_entries:

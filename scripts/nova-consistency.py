@@ -49,11 +49,11 @@ def get_cinder_volumes(conn):
             cinder_volumes[cinder_volume.id] = cinder_volume
 
     except exceptions.HttpException as e:
-        log.warn("PLEASE CHECK MANUALLY - got an http exception connecting to openstack: %s", str(e))
+        log.warn("- PLEASE CHECK MANUALLY - got an http exception connecting to openstack: %s", str(e))
         sys.exit(1)
 
     except exceptions.SDKException as e:
-        log.warn("PLEASE CHECK MANUALLY - got an sdk exception connecting to openstack: %s", str(e))
+        log.warn("- PLEASE CHECK MANUALLY - got an sdk exception connecting to openstack: %s", str(e))
         sys.exit(1)
 
     #for i in cinder_volumes:
@@ -91,7 +91,7 @@ def fix_wrong_block_device_mappings(meta, wrong_block_device_mappings):
     block_device_mapping_t = Table('block_device_mapping', meta, autoload=True)
 
     for block_device_mapping_id in wrong_block_device_mappings:
-        log.info ("-- deleting block device mapping id: %s", block_device_mapping_id)
+        log.info ("-- action: deleting block device mapping id: %s", block_device_mapping_id)
         now = datetime.datetime.utcnow()
         delete_block_device_mapping_q = block_device_mapping_t.update().where(block_device_mapping_t.c.id == block_device_mapping_id).values(updated_at=now, deleted_at=now, deleted=block_device_mapping_id)
         delete_block_device_mapping_q.execute()

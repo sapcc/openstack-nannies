@@ -172,10 +172,10 @@ class Cleanup:
         try:
             self.servers = sorted(self.conn.compute.servers(details=True, all_tenants=1), key=lambda x: x.id)
         except exceptions.HttpException as e:
-            log.warn("PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
+            log.warn("- PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
             return
         except exceptions.SDKException as e:
-            log.warn("PLEASE CHECK MANUALLY - got an sdk exception: %s - retrying in next loop run", str(e))
+            log.warn("- PLEASE CHECK MANUALLY - got an sdk exception: %s - retrying in next loop run", str(e))
             return
         if self.novacmdline:
             self.seen_dict = self.servers_seen
@@ -190,10 +190,10 @@ class Cleanup:
             try:
                 self.snapshots = sorted(self.conn.block_store.snapshots(details=True, all_tenants=1), key=lambda x: x.id)
             except exceptions.HttpException as e:
-                log.warn("PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
+                log.warn("- PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
                 return
             except exceptions.SDKException as e:
-                log.warn("PLEASE CHECK MANUALLY - got an sdk exception: %s - retrying in next loop run", str(e))
+                log.warn("- PLEASE CHECK MANUALLY - got an sdk exception: %s - retrying in next loop run", str(e))
                 return
 
             self.snapshot_from = dict()
@@ -215,10 +215,10 @@ class Cleanup:
             try:
                 self.volumes = sorted(self.conn.block_store.volumes(details=True, all_tenants=1), key=lambda x: x.id)
             except exceptions.HttpException as e:
-                log.warn("PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
+                log.warn("- PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
                 return
             except exceptions.SDKException as e:
-                log.warn("PLEASE CHECK MANUALLY - got an sdk exception: %s - retrying in next loop run", str(e))
+                log.warn("- PLEASE CHECK MANUALLY - got an sdk exception: %s - retrying in next loop run", str(e))
                 return
 
             # build a dict to check later if a server exists quickly
@@ -287,14 +287,14 @@ class Cleanup:
                             self.gauge_value[('done', what_to_do)] += 1
                         except exceptions.HttpException as e:
                             log.warn("-- got an http exception: %s", str(e))
-                            log.info("--- setting the status of the snapshot %s to error in preparation to delete it", id)
+                            log.info("--- action: setting the status of the snapshot %s to error in preparation to delete it", id)
                             self.cinder.volume_snapshots.reset_state(id, "error")
-                            log.info("--- deleting the snapshot %s", id)
+                            log.info("--- action: deleting the snapshot %s", id)
                             try:
                                 self.conn.block_store.delete_snapshot(id)
                                 self.gauge_value[('done', what_to_do)] += 1
                             except exceptions.HttpException as e:
-                                log.warn("PLEASE CHECK MANUALY - got an http exception: %s - this has to be handled manually", str(e))
+                                log.warn("- PLEASE CHECK MANUALY - got an http exception: %s - this has to be handled manually", str(e))
                     elif what_to_do == "delete_volume":
                         log.info("- action: %s %s", self.state_to_name_map[what_to_do], id)
                         try:
@@ -307,16 +307,16 @@ class Cleanup:
                                 log.info("---- volume is still attached to instance: %s", self.attached_to.get(id))
                                 if not self.is_server.get(self.attached_to.get(id)):
                                     log.info("---- server %s does no longer exist - the volume can thus be deleted", self.attached_to.get(id))
-                                    log.info("---- detaching the volume %s in preparation to delete it", id)
+                                    log.info("---- action: detaching the volume %s in preparation to delete it", id)
                                     self.cinder.volumes.detach(id)
-                                    log.info("---- setting the status of the volume %s to error in preparation to delete it", id)
+                                    log.info("---- action: setting the status of the volume %s to error in preparation to delete it", id)
                                     self.cinder.volumes.reset_state(id, "error")
-                                    log.info("---- deleting the volume %s", id)
+                                    log.info("---- action: deleting the volume %s", id)
                                     try:
                                         self.conn.block_store.delete_volume(id)
                                         self.gauge_value[('done', what_to_do)] += 1
                                     except exceptions.HttpException as e:
-                                        log.warn("PLEASE CHECK MANUALLY - got an http exception: %s - this has to be handled manually", str(e))
+                                        log.warn("- PLEASE CHECK MANUALLY - got an http exception: %s - this has to be handled manually", str(e))
                             else:
                                 log.info("---- volume is not attached to any instance - must be another problem ...")
                     else:

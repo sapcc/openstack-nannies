@@ -56,7 +56,7 @@ def fix_wrong_share_network_ssas(meta, wrong_share_network_ssas):
     share_network_ssa_t = Table('share_network_security_service_association', meta, autoload=True)
 
     for share_network_ssa_id in wrong_share_network_ssas:
-        log.info ("-- deleting share network security service association id: %s", share_network_ssa_id)
+        log.info ("-- action: deleting share network security service association id: %s", share_network_ssa_id)
         delete_share_network_ssa_q = share_network_ssa_t.delete().where(share_network_ssa_t.c.id == share_network_ssa_id)
         delete_share_network_ssa_q.execute()
 
@@ -79,7 +79,7 @@ def fix_wrong_network_allocations(meta, wrong_network_allocations):
     network_allocations_t = Table('network_allocations', meta, autoload=True)
 
     for network_allocations_id in wrong_network_allocations:
-        log.info ("-- deleting network allocation id: %s", network_allocations_id)
+        log.info ("-- action: deleting network allocation id: %s", network_allocations_id)
         delete_network_allocations_q = network_allocations_t.delete().where(network_allocations_t.c.id == network_allocations_id)
         delete_network_allocations_q.execute()
 
@@ -102,7 +102,7 @@ def fix_wrong_share_metadata(meta, wrong_share_metadata):
     share_metadata_t = Table('share_metadata', meta, autoload=True)
 
     for share_metadata_id in wrong_share_metadata:
-        log.info ("-- deleting network allocation id: %s", share_metadata_id)
+        log.info ("-- action: deleting network allocation id: %s", share_metadata_id)
         delete_share_metadata_q = share_metadata_t.delete().where(share_metadata_t.c.id == share_metadata_id)
         delete_share_metadata_q.execute()
 
