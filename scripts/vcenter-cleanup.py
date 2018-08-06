@@ -61,7 +61,8 @@ gauge_rename_ds_path = Gauge('vcenter_nanny_rename_ds_path', 'ds path renames of
 gauge_delete_ds_path = Gauge('vcenter_nanny_delete_ds_path', 'ds path deletes of the vcenter nanny', ['kind'])
 gauge_ghost_volumes = Gauge('vcenter_nanny_ghost_volumes', 'number of possible ghost volumes mounted on vcenter')
 gauge_ghost_ports = Gauge('vcenter_nanny_ghost_ports', 'number of possible ghost ports on vcenter')
-gauge_template_mounts = Gauge('vcenter_nanny_template_mounts', 'number of possible volumes mounted to templates')
+gauge_template_mounts = Gauge('vcenter_nanny_template_mounts', 'number of possible ghost volumes mounted on templates')
+gauge_template_ports = Gauge('vcenter_nanny_template_ports', 'number of possible ghost ports attached to templates')
 gauge_eph_shadow_vms = Gauge('vcenter_nanny_eph_shadow_vms', 'number of possible shadow vms on eph storage')
 gauge_datastore_no_access = Gauge('vcenter_nanny_datastore_no_access', 'number of non accessible datastores')
 gauge_empty_vvol_folders = Gauge('vcenter_nanny_empty_vvol_folders', 'number of empty vvols')
@@ -436,6 +437,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     gauge_value_ghost_volumes = 0
     gauge_value_ghost_ports = 0
     gauge_value_template_mounts = 0
+    gauge_value_template_ports = 0
     gauge_value_eph_shadow_vms = 0
     gauge_value_datastore_no_access = 0
     gauge_value_empty_vvol_folders = 0
@@ -534,6 +536,9 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                     if 4000 <= j.key < 5000:
                         if k['config.instanceUuid'] == mac_to_server.get(str(j.macAddress)):
                             log.debug("- port with mac %s on %s is in sync between vcenter and neutron", str(j.macAddress), str(k['config.instanceUuid']))
+                        elif template.get(k['config.instanceUuid']):
+                            log.warn("- discovered ghost port with mac %s attached to vcenter template %s - ignoring it", str(j.macAddress), k['config.instanceUuid'])
+                            gauge_value_template_ports += 1
                         else:
                             log.warn("- discovered ghost port with mac %s on %s [%s] in vcenter", str(j.macAddress), str(k['config.instanceUuid']), str(k['config.name']))
                             gauge_value_ghost_ports += 1
@@ -614,7 +619,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         # so we should neither see it as vmx (shadow vm) or datastore file
         if vcenter_mounted_uuid.get(item):
             if template.get(vcenter_mounted_uuid[item]) is True:
-                log.warn("- PLEASE CHECK MANUALLY - volume %s is mounted on vcenter template %s", item,
+                log.warn("- discovered ghost volume %s mounted on vcenter template %s - ignoring it", item,
                          vcenter_mounted_uuid[item])
                 gauge_value_template_mounts += 1
             else:
@@ -765,6 +770,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     gauge_ghost_volumes.set(float(gauge_value_ghost_volumes))
     gauge_ghost_ports.set(float(gauge_value_ghost_ports))
     gauge_template_mounts.set(float(gauge_value_template_mounts))
+    gauge_template_mounts.set(float(gauge_value_template_ports))
     gauge_eph_shadow_vms.set(float(gauge_value_eph_shadow_vms))
     gauge_datastore_no_access.set(float(gauge_value_datastore_no_access))
     gauge_empty_vvol_folders.set(float(gauge_value_empty_vvol_folders))
