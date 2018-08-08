@@ -33,9 +33,19 @@ echo "INFO: starting a loop to periodically run the nanny job for the nova db co
 while true; do
     if [ "$NOVA_CONSISTENCY_ENABLED" = "True" ] || [ "$NOVA_CONSISTENCY_ENABLED" = "true" ]; then
         if [ "$NOVA_CONSISTENCY_DRY_RUN" = "False" ] || [ "$NOVA_CONSISTENCY_DRY_RUN" = "false" ]; then
+            if [ "$NOVA_CONSISTENCY_OLDER_THAN" != "" ]; then
+                OLDER_THAN="--older-than $NOVA_CONSISTENCY_OLDER_THAN"
+            else
+                OLDER_THAN=""
+            fi
+            if [ "$NOVA_CONSISTENCY_MAX_INSTANCE_FAULTS" != "" ]; then
+                MAX_INSTANCE_FAULTS="--max-instance-faults $NOVA_CONSISTENCY_MAX_INSTANCE_FAULTS"
+            else
+                MAX_INSTANCE_FAULTS=""
+            fi
             echo -n "INFO: checking and fixing nova db consistency - "
             date
-            /var/lib/kolla/venv/bin/python /scripts/nova-consistency.py --config /etc/nova/nova.conf
+            /var/lib/kolla/venv/bin/python /scripts/nova-consistency.py --config /etc/nova/nova.conf $OLDER_THAN $MAX_INSTANCE_FAULTS
         else
             echo -n "INFO: checking nova db consistency - "
             date

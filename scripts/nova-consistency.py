@@ -96,6 +96,47 @@ def fix_wrong_block_device_mappings(meta, wrong_block_device_mappings):
         delete_block_device_mapping_q = block_device_mapping_t.update().where(block_device_mapping_t.c.id == block_device_mapping_id).values(updated_at=now, deleted_at=now, deleted=block_device_mapping_id)
         delete_block_device_mapping_q.execute()
 
+# delete block_device_mappings in the nova db with the deleted flag set and older than a certain time
+# looks like the nova db purge does not clean those up properly
+def purge_block_device_mappings(meta, older_than):
+
+    block_device_mapping_t = Table('block_device_mapping', meta, autoload=True)
+
+    log.info ("- action: purging deleted block device mappings older than %s days", older_than)
+    older_than_date = datetime.datetime.utcnow() - datetime.timedelta(days=older_than)
+    purge_block_device_mapping_q = block_device_mapping_t.delete().where(and_(block_device_mapping_t.c.deleted != 0, block_device_mapping_t.c.deleted_at < older_than_date))
+    purge_block_device_mapping_q.execute()
+
+# delete reservations in the nova db with the deleted flag set and older than a certain time
+# looks like the nova db purge does not clean those up properly
+def purge_reservations(meta, older_than):
+
+    reservations_t = Table('reservations', meta, autoload=True)
+
+    log.info ("- action: purging deleted reservations older than %s days", older_than)
+    older_than_date = datetime.datetime.utcnow() - datetime.timedelta(days=older_than)
+    purge_reservations_q = reservations_t.delete().where(and_(reservations_t.c.deleted != 0, reservations_t.c.deleted_at < older_than_date))
+    purge_reservations_q.execute()
+
+# delete old instance fault entries in the nova db
+def purge_instance_faults(session, meta, max_instance_faults):
+
+    instance_faults_t = Table('instance_faults', meta, autoload=True)
+
+    log.info ("- action: purging instance faults to at maximum %s per instance", max_instance_faults)
+    # get the max_instance_faults latest oinstance fault entries per instance and delete all others
+    subquery = session.query(
+        instance_faults_t,
+        func.dense_rank().over(
+            order_by=instance_faults_t.c.created_at.desc(),
+            partition_by=instance_faults_t.c.instance_uuid
+        ).label('rank')
+    ).subquery()
+    for i in session.query(subquery).filter(subquery.c.rank > max_instance_faults).all():
+        log.info("- action: deleting instance fault entry for instance %s from %s", i.instance_uuid, str(i.created_at))
+        purge_instance_faults_q = instance_faults_t.delete().where(instance_faults_t.c.id == i.id)
+        purge_instance_faults_q.execute()
+
 # establish an openstack connection
 def makeOsConnection():
     try:
@@ -147,6 +188,12 @@ def parse_cmdline_args():
     parser.add_argument("--dry-run",
                        action="store_true",
                        help='print only what would be done without actually doing it')
+    parser.add_argument("--older-than",
+                       type=int,
+                       help='how many days of marked as deleted entries to keep')
+    parser.add_argument("--max-instance-faults",
+                       type=int,
+                       help='how many instance faults entries to keep')
     return parser.parse_args()
 
 def main():
@@ -162,6 +209,11 @@ def main():
     db_url = get_db_url(args.config)
     nova_session, nova_metadata, nova_Base = makeConnection(db_url)
 
+    if args.older_than and not args.dry_run:
+        purge_block_device_mappings(nova_metadata, args.older_than)
+        purge_reservations(nova_metadata, args.older_than)
+    if args.max_instance_faults and not args.dry_run:
+        purge_instance_faults(nova_session, nova_metadata, args.max_instance_faults)
     cinder_volumes = get_cinder_volumes(conn)
     block_device_mappings = get_block_device_mappings(nova_metadata)
     wrong_block_device_mappings = get_wrong_block_device_mappings(cinder_volumes, block_device_mappings)
