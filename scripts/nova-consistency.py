@@ -123,7 +123,7 @@ def purge_instance_faults(session, meta, max_instance_faults):
 
     instance_faults_t = Table('instance_faults', meta, autoload=True)
 
-    log.info ("- action: purging instance faults to at maximum %s per instance", max_instance_faults)
+    log.info ("- purging instance faults to at maximum %s per instance", max_instance_faults)
     # get the max_instance_faults latest oinstance fault entries per instance and delete all others
     subquery = session.query(
         instance_faults_t,
