@@ -348,7 +348,7 @@ def collect_properties(service_instance, view_ref, obj_type, path_set=None,
         data.append(properties)
     return data
 
-def detach_port(service_instance, vm, mac_address):
+def detach_ghost_port(service_instance, vm, mac_address):
     """ Deletes virtual NIC based on mac address
     :param si: Service Instance
     :param vm: Virtual Machine Object
@@ -366,20 +366,23 @@ def detach_port(service_instance, vm, mac_address):
     if not port_to_detach:
         log.warn("- PLEASE CHECK MANUALLY - the port to be deleted with mac addresss %s on instance %s does not seem to exist", mac_address, vm.config.instanceUuid)
 
-    log.error("- action: detaching port with mac address %s from instance %s [%s]", mac_address, vm.config.instanceUuid, vm.config.name)
-    port_to_detach_spec = vim.vm.device.VirtualDeviceSpec()
-    port_to_detach_spec.operation = \
-        vim.vm.device.VirtualDeviceSpec.Operation.remove
-    port_to_detach_spec.device = port_to_detach
-
-    spec = vim.vm.ConfigSpec()
-    spec.deviceChange = [port_to_detach_spec]
-    task = vm.ReconfigVM_Task(spec=spec)
-    WaitForTask(task, si=service_instance)
+    log.error("- action: detaching ghost port with mac address %s from instance %s [%s]", mac_address, vm.config.instanceUuid, vm.config.name)
+    # port_to_detach_spec = vim.vm.device.VirtualDeviceSpec()
+    # port_to_detach_spec.operation = \
+    #     vim.vm.device.VirtualDeviceSpec.Operation.remove
+    # port_to_detach_spec.device = port_to_detach
+    #
+    # spec = vim.vm.ConfigSpec()
+    # spec.deviceChange = [port_to_detach_spec]
+    # task = vm.ReconfigVM_Task(spec=spec)
+    # try:
+    #     WaitForTask(task, si=service_instance)
+    # except vmodl.fault.HostNotConnected:
+    #     log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - the esx host it is running on is disconnected", vm.config.instanceUuid)
     return True
 
 
-def detach_volume(service_instance, vm, volume_uuid):
+def detach_ghost_volume(service_instance, vm, volume_uuid):
     """ Deletes virtual NIC based on mac address
     :param si: Service Instance
     :param vm: Virtual Machine Object
@@ -398,16 +401,19 @@ def detach_volume(service_instance, vm, volume_uuid):
         log.warn(
             "- PLEASE CHECK MANUALLY - the volume to be detached with uuid %s on instance %s does not seem to exist", volume_uuid, vm.config.instanceUuid)
 
-    log.error("- action: detaching volume with uuid %s from instance %s [%s]", volume_uuid, vm.config.instanceUuid, vm.config.name)
-    volume_to_detach_spec = vim.vm.device.VirtualDeviceSpec()
-    volume_to_detach_spec.operation = \
-        vim.vm.device.VirtualDeviceSpec.Operation.remove
-    volume_to_detach_spec.device = volume_to_detach
-
-    spec = vim.vm.ConfigSpec()
-    spec.deviceChange = [volume_to_detach_spec]
-    task = vm.ReconfigVM_Task(spec=spec)
-    WaitForTask(task, si=service_instance)
+    log.error("- action: detaching ghost volume with uuid %s from instance %s [%s]", volume_uuid, vm.config.instanceUuid, vm.config.name)
+    # volume_to_detach_spec = vim.vm.device.VirtualDeviceSpec()
+    # volume_to_detach_spec.operation = \
+    #     vim.vm.device.VirtualDeviceSpec.Operation.remove
+    # volume_to_detach_spec.device = volume_to_detach
+    #
+    # spec = vim.vm.ConfigSpec()
+    # spec.deviceChange = [volume_to_detach_spec]
+    # task = vm.ReconfigVM_Task(spec=spec)
+    # try:
+    #     WaitForTask(task, si=service_instance)
+    # except vmodl.fault.HostNotConnected:
+    #     log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume from instance %s - the esx host it is running on is disconnected", vm.config.instanceUuid)
     return True
 
 
@@ -427,6 +433,8 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     template = dict()
     ghost_port_detach_candidates = dict()
     ghost_volume_detach_candidates = dict()
+    ghost_port_detached = dict()
+    ghost_volume_detached = dict()
 
     global gauge_value_empty_vvol_folders
 
@@ -544,7 +552,12 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                             gauge_value_ghost_ports += 1
                             # if we plan to delete ghost ports, collect them in a dict of mac addresses by instance uuid
                             if detach_ghost_ports:
-                                ghost_port_detach_candidates[k['config.instanceUuid']] = str(j.macAddress)
+                                # multiple ghost ports are possible for one instance, thus we need to put the ghost ports into a list
+                                if ghost_port_detach_candidates.get(k['config.instanceUuid']):
+                                    ghost_port_detach_candidates[k['config.instanceUuid']].append(str(j.macAddress))
+                                else:
+                                    ghost_port_detach_candidates[k['config.instanceUuid']] = [str(j.macAddress)]
+                                # TODO - remove - old: ghost_port_detach_candidates[k['config.instanceUuid']] = str(j.macAddress)
 
     # do the check from the other end: see for which vms or volumes in the vcenter we do not have any openstack info
     missing = dict()
@@ -628,7 +641,12 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                 gauge_value_ghost_volumes += 1
                 # if we plan to delete ghost volumes, collect them in a dict of volume uuids by instance uuid
                 if detach_ghost_volumes:
-                    ghost_volume_detach_candidates[vcenter_mounted_uuid[item]] = item
+                    # multiple ghost volumes are possible for one instance, thus we need to put the ghost volumes into a list
+                    if ghost_volume_detach_candidates.get(vcenter_mounted_uuid[item]):
+                        ghost_volume_detach_candidates[vcenter_mounted_uuid[item]].append(item)
+                    else:
+                        ghost_volume_detach_candidates[vcenter_mounted_uuid[item]] = [item]
+                    # TODO - remove - old: ghost_volume_detach_candidates[vcenter_mounted_uuid[item]] = item
         else:
             for location in locationlist:
                 # foldername on datastore
@@ -790,9 +808,9 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         # ghost volumes and ports should not appear often, so limit the maximum of them to delete
         # to avoid the risk of accidentally detaching too many of them due to some failure somewhere else
         if len(ghost_port_detach_candidates) > detach_ghost_limit:
-            log.warn("- PLEASE CHECK MANUALLY - number of ghost ports to be deleted larger than --detach-ghost-limit=%s - denying to delete the ghost ports", str(detach_ghost_limit))
+            log.warn("- PLEASE CHECK MANUALLY - number of instances with ghost ports to be deleted larger than --detach-ghost-limit=%s - denying to delete the ghost ports", str(detach_ghost_limit))
         elif len(ghost_volume_detach_candidates) > detach_ghost_limit:
-            log.warn("- PLEASE CHECK MANUALLY - number of ghost volumes to be deleted larger than --detach-ghost-limit=%s - denying to delete the ghost volumes", str(detach_ghost_limit))
+            log.warn("- PLEASE CHECK MANUALLY - number of instances with ghost volumes to be deleted larger than --detach-ghost-limit=%s - denying to delete the ghost volumes", str(detach_ghost_limit))
         else:
             # build a dict of all uuids from the missing and not_missing ones
             all_uuids = dict()
@@ -816,13 +834,29 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                             # there is a vm for that file path we check what to do with it
                             if vm:
                                 if ghost_port_detach_candidates.get(item):
-                                    # double check that the port is still a ghost port to avoid accidentally deleting stuff due to timing issues
-                                    if not any(True for _ in conn.network.ports(mac_address = ghost_port_detach_candidates[item])):
-                                        detach_port(service_instance, vm, ghost_port_detach_candidates[item])
-                                    else:
-                                        log.warn("looks like the port with the mac address %s on instance %s has only been temporary a ghost port - not doing anything with it ...", ghost_port_detach_candidates[item], item)
+                                    # in case we have multiple ghost ports
+                                    for ghost_port_detach_candidate in ghost_port_detach_candidates.get(item):
+                                        # double check that the port is still a ghost port to avoid accidentally deleting stuff due to timing issues
+                                        if not any(True for _ in conn.network.ports(mac_address = ghost_port_detach_candidate)):
+                                            detach_ghost_port(service_instance, vm, ghost_port_detach_candidate)
+                                            # here we do not need to worry about multiple ghost ports per instance
+                                            # as the instance is orphan or not independent of the numer of ghost ports
+                                            ghost_port_detached[item] = True
+                                        else:
+                                            log.warn("looks like the port with the mac address %s on instance %s has only been temporary a ghost port - not doing anything with it ...", ghost_port_detach_candidate, item)
                                 elif ghost_volume_detach_candidates.get(item):
-                                    detach_volume(service_instance, vm, ghost_volume_detach_candidates[item])
+                                    # in case we have multiple ghost volumes
+                                    for ghost_volume_detach_candidate in ghost_volume_detach_candidates.get(item):
+                                        detach_ghost_volume(service_instance, vm, ghost_volume_detach_candidate)
+                                        # here we do not need to worry about multiple ghost volumes per instance
+                                        # as the instance is orphan or not independent of the numer of ghost volumes
+                                        ghost_volume_detached[item] = True
+            for i in ghost_port_detach_candidates:
+                if not ghost_port_detached.get(i):
+                    log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - most probably it is an orphan at vcenter level", i)
+            for i in ghost_volume_detach_candidates:
+                if not ghost_volume_detached.get(i):
+                    log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume from instance %s - most probably it is an orphan at vcenter level", i)
 
 
 
