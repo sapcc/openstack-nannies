@@ -36,7 +36,7 @@ from sqlalchemy.ext.declarative import declarative_base
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
-# get all the rowns with a share_network_security_service_association still defined where corresponding the share_network is already deleted
+# get all the rows with a share_network_security_service_association still defined where the corresponding share_network is already deleted
 def get_wrong_share_network_ssas(meta):
 
     wrong_share_network_ssas = {}
@@ -50,7 +50,7 @@ def get_wrong_share_network_ssas(meta):
         wrong_share_network_ssas[share_network_ssa_id] = share_network_id
     return wrong_share_network_ssas
 
-# delete share_network_security_service_association still defined where corresponding the share_network is already deleted
+# delete share_network_security_service_association still defined where the corresponding share_network is already deleted
 def fix_wrong_share_network_ssas(meta, wrong_share_network_ssas):
 
     share_network_ssa_t = Table('share_network_security_service_association', meta, autoload=True)
@@ -60,7 +60,7 @@ def fix_wrong_share_network_ssas(meta, wrong_share_network_ssas):
         delete_share_network_ssa_q = share_network_ssa_t.delete().where(share_network_ssa_t.c.id == share_network_ssa_id)
         delete_share_network_ssa_q.execute()
 
-# get all the rowns with a network_allocations still defined where corresponding the share_server is already deleted
+# get all the rows with a network_allocations still defined where the corresponding share_server is already deleted
 def get_wrong_network_allocations(meta):
 
     wrong_network_allocations = {}
@@ -74,7 +74,7 @@ def get_wrong_network_allocations(meta):
         wrong_network_allocations[network_allocations_id] = share_server_id
     return wrong_network_allocations
 
-# delete network_allocations still defined where corresponding the share_server is already deleted
+# delete network_allocations still defined where the corresponding share_server is already deleted
 def fix_wrong_network_allocations(meta, wrong_network_allocations):
     network_allocations_t = Table('network_allocations', meta, autoload=True)
 
@@ -83,7 +83,7 @@ def fix_wrong_network_allocations(meta, wrong_network_allocations):
         delete_network_allocations_q = network_allocations_t.delete().where(network_allocations_t.c.id == network_allocations_id)
         delete_network_allocations_q.execute()
 
-# get all the rowns with a share_metadata still defined where corresponding the share is already deleted
+# get all the rows with a share_metadata still defined where the corresponding share is already deleted
 def get_wrong_share_metadata(meta):
 
     wrong_share_metadata = {}
@@ -97,7 +97,7 @@ def get_wrong_share_metadata(meta):
         wrong_share_metadata[share_metadata_id] = share_id
     return wrong_share_metadata
 
-# delete share_metadata still defined where corresponding the share is already deleted
+# delete share_metadata still defined where the corresponding share is already deleted
 def fix_wrong_share_metadata(meta, wrong_share_metadata):
     share_metadata_t = Table('share_metadata', meta, autoload=True)
 
@@ -105,6 +105,29 @@ def fix_wrong_share_metadata(meta, wrong_share_metadata):
         log.info ("-- action: deleting network allocation id: %s", share_metadata_id)
         delete_share_metadata_q = share_metadata_t.delete().where(share_metadata_t.c.id == share_metadata_id)
         delete_share_metadata_q.execute()
+
+# get all the rows with a share_group_type_share_type_mapping still defined where the corresponding share_group_type is already deleted
+def get_wrong_share_gtstm(meta):
+
+    wrong_share_gtstm = {}
+    share_gtstm_t = Table('share_group_type_share_type_mappings', meta, autoload=True)
+    share_group_types_t = Table('share_group_types', meta, autoload=True)
+    share_gtstm_join = share_gtstm_t.join(share_group_types_t,share_gtstm_t.c.share_group_type_id == share_group_types_t.c.id)
+    wrong_share_gtstm_q = select(columns=[share_group_types_t.c.id,share_group_types_t.c.deleted,share_gtstm_t.c.id,share_gtstm_t.c.deleted]).select_from(share_gtstm_join).where(and_(share_group_types_t.c.deleted != "False",share_gtstm_t.c.deleted == "False"))
+
+    # return a dict indexed by share_network_security_service_association id and with the value share_id for non deleted ssas
+    for (share_group_type_id, share_group_type_deleted, share_gtstm_id, share_gtstm_deleted) in wrong_share_gtstm_q.execute():
+        wrong_share_gtstm[share_gtstm_id] = share_group_type_id
+    return wrong_share_gtstm
+
+# delete share_group_type_share_type_mapping still defined where the corresponding share_group_type is already deleted
+def fix_wrong_share_gtstm(meta, wrong_share_gtstm):
+    share_gtstm_t = Table('share_group_type_share_type_mappings', meta, autoload=True)
+
+    for share_gtstm_id in wrong_share_gtstm:
+        log.info ("-- action: deleting share group type id: %s", share_gtstm_id)
+        delete_share_gtstm_q = share_gtstm_t.delete().where(share_gtstm_t.c.id == share_gtstm_id)
+        delete_share_gtstm_q.execute()
 
 # establish a database connection and return the handle
 def makeConnection(db_url):
@@ -188,6 +211,19 @@ def main():
             fix_wrong_share_metadata(manila_metadata, wrong_share_metadata)
     else:
         log.info("- share metadata is consistent")
+
+
+    wrong_share_gtstm = get_wrong_share_gtstm(manila_metadata)
+    if len(wrong_share_gtstm) != 0:
+        log.info("- share group type share type mapping inconsistencies found")
+        # print out what we would delete
+        for share_gtstm_id in wrong_share_gtstm:
+            log.info("-- share group type share type mapping id: %s - deleted share group type id: %s", share_gtstm_id, wrong_share_gtstm[share_gtstm_id])
+        if not args.dry_run:
+            log.info("- deleting share group type share type mapping inconsistencies found")
+            fix_wrong_share_gtstm(manila_metadata, wrong_share_gtstm)
+    else:
+        log.info("- share group type share type mapping is consistent")
 
 
 if __name__ == "__main__":
