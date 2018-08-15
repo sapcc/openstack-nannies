@@ -475,8 +475,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         for port in conn.network.ports():
             if str(port.binding_host_id).startswith('nova-compute-'):
                 if mac_to_server.get(port.mac_address) != None:
-                    log.warn("- PLEASE CHECK MANUALLY - there seems to be another server with this mac already:")
-                    log.warn("                          old instance: %s - mac: %s - new instance: %s",
+                    log.warn("- PLEASE CHECK MANUALLY - there seems to be another server with this mac already - old instance: %s - mac: %s - new instance: %s",
                              str(mac_to_server.get(port.mac_address)), str(port.mac_address), str(port.device_id))
                 else:
                     mac_to_server[str(port.mac_address)] = str(port.device_id)
