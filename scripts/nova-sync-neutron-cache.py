@@ -134,7 +134,7 @@ class NovaInstanceInfoCacheSync:
             with lockutils.lock('refresh_cache-%s' % instance.uuid):
                 network_info = NetworkInfo(self.neutron._get_instance_nw_info(self.context, instance, port_ids=port_ids, networks=networks))
         except exception.InstanceNotFound:
-            log.error("- PLEASE CHECK MANUALLY - instance could not be found on neutron side: %s - ignoring this instance for now", instance.uuid)
+            log.error("- instance %s could not be found on neutron side - ignoring this instance for now", instance.uuid)
             # return None for network_info, so that we can skip this instance in the compare function
             return None
 
@@ -149,7 +149,7 @@ class NovaInstanceInfoCacheSync:
         for instance in InstanceList.get_all(self.context):
             # get network info from neutron via nova-network api
             network_info_source = self.get_neutron_instance_info_for_instance(instance)
-            # do not deal with the instance if we do not have infor for it in neutron
+            # do not deal with the instance if we do not have info for it in neutron
             if network_info_source:
                 # dicts to collect mac addressed we have already seen
                 network_info_entries = dict()
@@ -198,7 +198,10 @@ class NovaInstanceInfoCacheSync:
                         # for debugging
                         # log.error("- instance %s - mac address %s is already in the nova cache", instance.uuid, i)
                     else:
-                        if self.args.dry_run:
+                        # the cache is not yet used for baremetal machines
+                        if network_info_entries[i]['vnic_type'] == "baremetal":
+                            log.debug("- instance %s - mac address %s is a baremetal machine and should not go into the nova cache", instance.uuid, i)
+                        elif self.args.dry_run:
                             log.error("- PLEASE CHECK MANUALLY - instance %s - mac address %s is not yet in the nova cache and needs to be added", instance.uuid, i)
                         else:
                             # get the proper lock for modifying the nova cache
