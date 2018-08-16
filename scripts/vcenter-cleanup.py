@@ -60,7 +60,9 @@ gauge_unregister_vm = Gauge('vcenter_nanny_unregister_vm', 'vm unregisters of th
 gauge_rename_ds_path = Gauge('vcenter_nanny_rename_ds_path', 'ds path renames of the vcenter nanny', ['kind'])
 gauge_delete_ds_path = Gauge('vcenter_nanny_delete_ds_path', 'ds path deletes of the vcenter nanny', ['kind'])
 gauge_ghost_volumes = Gauge('vcenter_nanny_ghost_volumes', 'number of possible ghost volumes mounted on vcenter')
+gauge_ghost_volumes_detached = Gauge('vcenter_nanny_ghost_volumes_detached', 'number of ghost volumes detached from vm')
 gauge_ghost_ports = Gauge('vcenter_nanny_ghost_ports', 'number of possible ghost ports on vcenter')
+gauge_ghost_ports_detached = Gauge('vcenter_nanny_ghost_ports_detached', 'number of ghost ports detached from vm')
 gauge_template_mounts = Gauge('vcenter_nanny_template_mounts', 'number of possible ghost volumes mounted on templates')
 gauge_template_ports = Gauge('vcenter_nanny_template_ports', 'number of possible ghost ports attached to templates')
 gauge_eph_shadow_vms = Gauge('vcenter_nanny_eph_shadow_vms', 'number of possible shadow vms on eph storage')
@@ -453,7 +455,9 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         for what in state_to_name_map:
             gauge_value[(kind, what)] = 0
     gauge_value_ghost_volumes = 0
+    gauge_value_ghost_volumes_detached = 0
     gauge_value_ghost_ports = 0
+    gauge_value_ghost_ports_detached = 0
     gauge_value_template_mounts = 0
     gauge_value_template_ports = 0
     gauge_value_eph_shadow_vms = 0
@@ -787,30 +791,6 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                         log.warn("- PLEASE CHECK MANUALLY - problems running vcenter tasks: %s - they will run next time then", str(e))
                         gauge_value_vcenter_task_problems += 1
 
-    # send the counters to the prometheus exporter - ugly for now, will change
-    for kind in [ "plan", "dry_run", "done"]:
-        gauge_suspend_vm.labels(kind).set(float(gauge_value[(kind, "suspend_vm")]))
-        gauge_power_off_vm.labels(kind).set(float(gauge_value[(kind, "power_off_vm")]))
-        gauge_unregister_vm.labels(kind).set(float(gauge_value[(kind, "unregister_vm")]))
-        gauge_rename_ds_path.labels(kind).set(float(gauge_value[(kind, "rename_ds_path")]))
-        gauge_delete_ds_path.labels(kind).set(float(gauge_value[(kind, "delete_ds_path")]))
-    gauge_ghost_volumes.set(float(gauge_value_ghost_volumes))
-    gauge_ghost_ports.set(float(gauge_value_ghost_ports))
-    gauge_template_mounts.set(float(gauge_value_template_mounts))
-    gauge_template_mounts.set(float(gauge_value_template_ports))
-    gauge_eph_shadow_vms.set(float(gauge_value_eph_shadow_vms))
-    gauge_datastore_no_access.set(float(gauge_value_datastore_no_access))
-    gauge_empty_vvol_folders.set(float(gauge_value_empty_vvol_folders))
-    gauge_vcenter_task_problems.set(float(gauge_value_vcenter_task_problems))
-    gauge_unknown_vcenter_templates.set(float(gauge_value_unknown_vcenter_templates))
-    gauge_complete_orphans.set(float(gauge_value_complete_orphans))
-
-    # reset the dict of vms or files we plan to do something with for all machines we did not see or which disappeared
-    reset_to_be_dict(vms_to_be_suspended, vms_seen)
-    reset_to_be_dict(vms_to_be_poweredoff, vms_seen)
-    reset_to_be_dict(vms_to_be_unregistered, vms_seen)
-    reset_to_be_dict(files_to_be_deleted, files_seen)
-    reset_to_be_dict(files_to_be_renamed, files_seen)
 
     # cleanup detached ports and/or volumes if requested
     if detach_ghost_ports or detach_ghost_volumes:
@@ -848,8 +828,9 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                         # double check that the port is still a ghost port to avoid accidentally deleting stuff due to timing issues
                                         if not any(True for _ in conn.network.ports(mac_address = ghost_port_detach_candidate)):
                                             detach_ghost_port(service_instance, vm, ghost_port_detach_candidate)
+                                            gauge_value_ghost_ports_detached += 1
                                             # here we do not need to worry about multiple ghost ports per instance
-                                            # as the instance is orphan or not independent of the numer of ghost ports
+                                            # as the instance is orphan or not, independent of the numer of ghost ports
                                             ghost_port_detached[item] = True
                                         else:
                                             log.warn("looks like the port with the mac address %s on instance %s has only been temporary a ghost port - not doing anything with it ...", ghost_port_detach_candidate, item)
@@ -857,8 +838,9 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                     # in case we have multiple ghost volumes
                                     for ghost_volume_detach_candidate in ghost_volume_detach_candidates.get(item):
                                         detach_ghost_volume(service_instance, vm, ghost_volume_detach_candidate)
+                                        gauge_value_ghost_volumes_detached += 1
                                         # here we do not need to worry about multiple ghost volumes per instance
-                                        # as the instance is orphan or not independent of the numer of ghost volumes
+                                        # as the instance is orphan or not, independent of the numer of ghost volumes
                                         ghost_volume_detached[item] = True
             for i in ghost_port_detach_candidates:
                 if not ghost_port_detached.get(i):
@@ -867,6 +849,33 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                 if not ghost_volume_detached.get(i):
                     log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume from instance %s - most probably it is an orphan at vcenter level", i)
 
+
+    # send the counters to the prometheus exporter - ugly for now, will change
+    for kind in [ "plan", "dry_run", "done"]:
+        gauge_suspend_vm.labels(kind).set(float(gauge_value[(kind, "suspend_vm")]))
+        gauge_power_off_vm.labels(kind).set(float(gauge_value[(kind, "power_off_vm")]))
+        gauge_unregister_vm.labels(kind).set(float(gauge_value[(kind, "unregister_vm")]))
+        gauge_rename_ds_path.labels(kind).set(float(gauge_value[(kind, "rename_ds_path")]))
+        gauge_delete_ds_path.labels(kind).set(float(gauge_value[(kind, "delete_ds_path")]))
+    gauge_ghost_volumes.set(float(gauge_value_ghost_volumes))
+    gauge_ghost_volumes_detached.set(float(gauge_value_ghost_volumes_detached))
+    gauge_ghost_ports.set(float(gauge_value_ghost_ports))
+    gauge_ghost_ports_detached.set(float(gauge_value_ghost_ports_detached))
+    gauge_template_mounts.set(float(gauge_value_template_mounts))
+    gauge_template_mounts.set(float(gauge_value_template_ports))
+    gauge_eph_shadow_vms.set(float(gauge_value_eph_shadow_vms))
+    gauge_datastore_no_access.set(float(gauge_value_datastore_no_access))
+    gauge_empty_vvol_folders.set(float(gauge_value_empty_vvol_folders))
+    gauge_vcenter_task_problems.set(float(gauge_value_vcenter_task_problems))
+    gauge_unknown_vcenter_templates.set(float(gauge_value_unknown_vcenter_templates))
+    gauge_complete_orphans.set(float(gauge_value_complete_orphans))
+
+    # reset the dict of vms or files we plan to do something with for all machines we did not see or which disappeared
+    reset_to_be_dict(vms_to_be_suspended, vms_seen)
+    reset_to_be_dict(vms_to_be_poweredoff, vms_seen)
+    reset_to_be_dict(vms_to_be_unregistered, vms_seen)
+    reset_to_be_dict(files_to_be_deleted, files_seen)
+    reset_to_be_dict(files_to_be_renamed, files_seen)
 
 
 if __name__ == '__main__':
