@@ -368,24 +368,24 @@ def detach_ghost_port(service_instance, vm, mac_address):
     if not port_to_detach:
         log.warn("- PLEASE CHECK MANUALLY - the port to be deleted with mac addresss %s on instance %s does not seem to exist", mac_address, vm.config.instanceUuid)
 
-    log.error("- dry-run: detaching ghost port with mac address %s from instance %s [%s]", mac_address, vm.config.instanceUuid, vm.config.name)
-    # log.error("- action: detaching ghost port with mac address %s from instance %s [%s]", mac_address, vm.config.instanceUuid, vm.config.name)
-    # port_to_detach_spec = vim.vm.device.VirtualDeviceSpec()
-    # port_to_detach_spec.operation = \
-    #     vim.vm.device.VirtualDeviceSpec.Operation.remove
-    # port_to_detach_spec.device = port_to_detach
-    #
-    # spec = vim.vm.ConfigSpec()
-    # spec.deviceChange = [port_to_detach_spec]
-    # task = vm.ReconfigVM_Task(spec=spec)
-    # try:
-    #     WaitForTask(task, si=service_instance)
-    # except vmodl.fault.HostNotConnected:
-    #     log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - the esx host it is running on is disconnected", vm.config.instanceUuid)
-    # except vim.fault.InvalidPowerState as e:
-    #     log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - %s", vm.config.instanceUuid, str(e.msg))
-    # except vim.fault.GenericVmConfigFault as e:
-    #     log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - %s", vm.config.instanceUuid, str(e.msg))
+    # log.error("- dry-run: detaching ghost port with mac address %s from instance %s [%s]", mac_address, vm.config.instanceUuid, vm.config.name)
+    log.error("- action: detaching ghost port with mac address %s from instance %s [%s]", mac_address, vm.config.instanceUuid, vm.config.name)
+    port_to_detach_spec = vim.vm.device.VirtualDeviceSpec()
+    port_to_detach_spec.operation = \
+        vim.vm.device.VirtualDeviceSpec.Operation.remove
+    port_to_detach_spec.device = port_to_detach
+
+    spec = vim.vm.ConfigSpec()
+    spec.deviceChange = [port_to_detach_spec]
+    task = vm.ReconfigVM_Task(spec=spec)
+    try:
+        WaitForTask(task, si=service_instance)
+    except vmodl.fault.HostNotConnected:
+        log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - the esx host it is running on is disconnected", vm.config.instanceUuid)
+    except vim.fault.InvalidPowerState as e:
+        log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - %s", vm.config.instanceUuid, str(e.msg))
+    except vim.fault.GenericVmConfigFault as e:
+        log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - %s", vm.config.instanceUuid, str(e.msg))
     return True
 
 
@@ -408,24 +408,24 @@ def detach_ghost_volume(service_instance, vm, volume_uuid):
         log.warn(
             "- PLEASE CHECK MANUALLY - the volume to be detached with uuid %s on instance %s does not seem to exist", volume_uuid, vm.config.instanceUuid)
 
-    log.error("- dry-run: detaching ghost volume with uuid %s from instance %s [%s]", volume_uuid, vm.config.instanceUuid, vm.config.name)
-    # log.error("- action: detaching ghost volume with uuid %s from instance %s [%s]", volume_uuid, vm.config.instanceUuid, vm.config.name)
-    # volume_to_detach_spec = vim.vm.device.VirtualDeviceSpec()
-    # volume_to_detach_spec.operation = \
-    #     vim.vm.device.VirtualDeviceSpec.Operation.remove
-    # volume_to_detach_spec.device = volume_to_detach
-    #
-    # spec = vim.vm.ConfigSpec()
-    # spec.deviceChange = [volume_to_detach_spec]
-    # task = vm.ReconfigVM_Task(spec=spec)
-    # try:
-    #     WaitForTask(task, si=service_instance)
-    # except vmodl.fault.HostNotConnected:
-    #     log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume from instance %s - the esx host it is running on is disconnected", vm.config.instanceUuid)
-    # except vim.fault.InvalidPowerState as e:
-    #     log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume from instance %s - %s", vm.config.instanceUuid, str(e.msg))
-    # except vim.fault.GenericVmConfigFault as e:
-    #     log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume from instance %s - %s", vm.config.instanceUuid, str(e.msg))
+    # log.error("- dry-run: detaching ghost volume with uuid %s from instance %s [%s]", volume_uuid, vm.config.instanceUuid, vm.config.name)
+    log.error("- action: detaching ghost volume with uuid %s from instance %s [%s]", volume_uuid, vm.config.instanceUuid, vm.config.name)
+    volume_to_detach_spec = vim.vm.device.VirtualDeviceSpec()
+    volume_to_detach_spec.operation = \
+        vim.vm.device.VirtualDeviceSpec.Operation.remove
+    volume_to_detach_spec.device = volume_to_detach
+
+    spec = vim.vm.ConfigSpec()
+    spec.deviceChange = [volume_to_detach_spec]
+    task = vm.ReconfigVM_Task(spec=spec)
+    try:
+        WaitForTask(task, si=service_instance)
+    except vmodl.fault.HostNotConnected:
+        log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume from instance %s - the esx host it is running on is disconnected", vm.config.instanceUuid)
+    except vim.fault.InvalidPowerState as e:
+        log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume from instance %s - %s", vm.config.instanceUuid, str(e.msg))
+    except vim.fault.GenericVmConfigFault as e:
+        log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume from instance %s - %s", vm.config.instanceUuid, str(e.msg))
     return True
 
 
