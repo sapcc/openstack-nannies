@@ -104,7 +104,7 @@ class NovaInstanceInfoCacheSync:
         try:
             cache_info = instance_info_cache_entries_q.execute().fetchone()[0]
         except TypeError:
-            log.error("- PLEASE CHECK MANUALLY - instance %s does not have an entry in the instance_info_caches table - ignoring it for now", instance)
+            log.debug("- PLEASE CHECK MANUALLY - instance %s does not have an entry in the instance_info_caches table - ignoring it for now", instance)
             cache_info = None
 
         return cache_info
@@ -134,7 +134,7 @@ class NovaInstanceInfoCacheSync:
             with lockutils.lock('refresh_cache-%s' % instance.uuid):
                 network_info = NetworkInfo(self.neutron._get_instance_nw_info(self.context, instance, port_ids=port_ids, networks=networks))
         except exception.InstanceNotFound:
-            log.error("- instance %s could not be found on neutron side - ignoring this instance for now", instance.uuid)
+            log.debug("- instance %s could not be found on neutron side - ignoring this instance for now", instance.uuid)
             # return None for network_info, so that we can skip this instance in the compare function
             return None
 
