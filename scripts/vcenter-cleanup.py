@@ -60,9 +60,13 @@ gauge_unregister_vm = Gauge('vcenter_nanny_unregister_vm', 'vm unregisters of th
 gauge_rename_ds_path = Gauge('vcenter_nanny_rename_ds_path', 'ds path renames of the vcenter nanny', ['kind'])
 gauge_delete_ds_path = Gauge('vcenter_nanny_delete_ds_path', 'ds path deletes of the vcenter nanny', ['kind'])
 gauge_ghost_volumes = Gauge('vcenter_nanny_ghost_volumes', 'number of possible ghost volumes mounted on vcenter')
+gauge_ghost_volumes_ignored = Gauge('vcenter_nanny_ghost_volumes_ignored', 'number of possible ghost volumes on vcenter which can be ignored')
 gauge_ghost_volumes_detached = Gauge('vcenter_nanny_ghost_volumes_detached', 'number of ghost volumes detached from vm')
+gauge_ghost_volumes_detach_errors = Gauge('vcenter_nanny_ghost_volumes_detach_errors', 'number of possible ghost volumes on vcenter which did not detach properly')
 gauge_ghost_ports = Gauge('vcenter_nanny_ghost_ports', 'number of possible ghost ports on vcenter')
+gauge_ghost_ports_ignored = Gauge('vcenter_nanny_ghost_ports_ignored', 'number of possible ghost ports on vcenter which can be ignored')
 gauge_ghost_ports_detached = Gauge('vcenter_nanny_ghost_ports_detached', 'number of ghost ports detached from vm')
+gauge_ghost_ports_detach_errors = Gauge('vcenter_nanny_ghost_ports_detach_errors', 'number of possible ghost ports on vcenter which did not detach properly')
 gauge_template_mounts = Gauge('vcenter_nanny_template_mounts', 'number of possible ghost volumes mounted on templates')
 gauge_template_ports = Gauge('vcenter_nanny_template_ports', 'number of possible ghost ports attached to templates')
 gauge_eph_shadow_vms = Gauge('vcenter_nanny_eph_shadow_vms', 'number of possible shadow vms on eph storage')
@@ -382,10 +386,13 @@ def detach_ghost_port(service_instance, vm, mac_address):
         WaitForTask(task, si=service_instance)
     except vmodl.fault.HostNotConnected:
         log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - the esx host it is running on is disconnected", vm.config.instanceUuid)
+        return False
     except vim.fault.InvalidPowerState as e:
         log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - %s", vm.config.instanceUuid, str(e.msg))
+        return False
     except vim.fault.GenericVmConfigFault as e:
         log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - %s", vm.config.instanceUuid, str(e.msg))
+        return False
     return True
 
 
@@ -422,10 +429,13 @@ def detach_ghost_volume(service_instance, vm, volume_uuid):
         WaitForTask(task, si=service_instance)
     except vmodl.fault.HostNotConnected:
         log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume from instance %s - the esx host it is running on is disconnected", vm.config.instanceUuid)
+        return False
     except vim.fault.InvalidPowerState as e:
         log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume from instance %s - %s", vm.config.instanceUuid, str(e.msg))
+        return False
     except vim.fault.GenericVmConfigFault as e:
         log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume from instance %s - %s", vm.config.instanceUuid, str(e.msg))
+        return False
     return True
 
 
@@ -455,9 +465,13 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         for what in state_to_name_map:
             gauge_value[(kind, what)] = 0
     gauge_value_ghost_volumes = 0
+    gauge_value_ghost_volumes_ignored = 0
     gauge_value_ghost_volumes_detached = 0
+    gauge_value_ghost_volumes_detach_errors = 0
     gauge_value_ghost_ports = 0
+    gauge_value_ghost_ports_ignored = 0
     gauge_value_ghost_ports_detached = 0
+    gauge_value_ghost_ports_detach_errors = 0
     gauge_value_template_mounts = 0
     gauge_value_template_ports = 0
     gauge_value_eph_shadow_vms = 0
@@ -560,6 +574,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                         elif template.get(k['config.instanceUuid']):
                             log.warn("- discovered ghost port with mac %s attached to vcenter template %s - ignoring it", str(j.macAddress), k['config.instanceUuid'])
                             gauge_value_template_ports += 1
+                            gauge_value_ghost_ports_ignored += 1
                         else:
                             log.warn("- discovered ghost port with mac %s on %s [%s] in vcenter", str(j.macAddress), str(k['config.instanceUuid']), str(k['config.name']))
                             gauge_value_ghost_ports += 1
@@ -648,6 +663,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                 log.warn("- discovered ghost volume %s mounted on vcenter template %s - ignoring it", item,
                          vcenter_mounted_uuid[item])
                 gauge_value_template_mounts += 1
+                gauge_value_ghost_volumes_ignored += 1
             else:
                 log.warn("- discovered ghost volume %s mounted on %s [%s] in vcenter", item,
                          vcenter_mounted_uuid[item], vcenter_mounted_name[item])
@@ -827,21 +843,28 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                     for ghost_port_detach_candidate in ghost_port_detach_candidates.get(item):
                                         # double check that the port is still a ghost port to avoid accidentally deleting stuff due to timing issues
                                         if not any(True for _ in conn.network.ports(mac_address = ghost_port_detach_candidate)):
-                                            detach_ghost_port(service_instance, vm, ghost_port_detach_candidate)
-                                            gauge_value_ghost_ports_detached += 1
-                                            # here we do not need to worry about multiple ghost ports per instance
-                                            # as the instance is orphan or not, independent of the numer of ghost ports
-                                            ghost_port_detached[item] = True
+                                            if detach_ghost_port(service_instance, vm, ghost_port_detach_candidate):
+                                                gauge_value_ghost_ports_detached += 1
+                                                # here we do not need to worry about multiple ghost ports per instance
+                                                # as the instance is orphan or not, independent of the numer of ghost ports
+                                                ghost_port_detached[item] = True
+                                            else:
+                                                gauge_value_ghost_ports_detach_errors += 1
+                                                ghost_port_detached[item] = False
                                         else:
                                             log.warn("looks like the port with the mac address %s on instance %s has only been temporary a ghost port - not doing anything with it ...", ghost_port_detach_candidate, item)
+                                            gauge_value_gauge_ghost_ports_ignored += 1
                                 elif ghost_volume_detach_candidates.get(item):
                                     # in case we have multiple ghost volumes
                                     for ghost_volume_detach_candidate in ghost_volume_detach_candidates.get(item):
-                                        detach_ghost_volume(service_instance, vm, ghost_volume_detach_candidate)
-                                        gauge_value_ghost_volumes_detached += 1
-                                        # here we do not need to worry about multiple ghost volumes per instance
-                                        # as the instance is orphan or not, independent of the numer of ghost volumes
-                                        ghost_volume_detached[item] = True
+                                        if detach_ghost_volume(service_instance, vm, ghost_volume_detach_candidate):
+                                            gauge_value_ghost_volumes_detached += 1
+                                            # here we do not need to worry about multiple ghost volumes per instance
+                                            # as the instance is orphan or not, independent of the numer of ghost volumes
+                                            ghost_volume_detached[item] = True
+                                        else:
+                                            gauge_value_ghost_volumes_detach_errors += 1
+                                            ghost_volume_detached[item] = False
             for i in ghost_port_detach_candidates:
                 if not ghost_port_detached.get(i):
                     log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - most probably it is an orphan at vcenter level", i)
@@ -858,9 +881,13 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         gauge_rename_ds_path.labels(kind).set(float(gauge_value[(kind, "rename_ds_path")]))
         gauge_delete_ds_path.labels(kind).set(float(gauge_value[(kind, "delete_ds_path")]))
     gauge_ghost_volumes.set(float(gauge_value_ghost_volumes))
+    gauge_ghost_volumes_ignored.set(float(gauge_value_ghost_volumes_ignored))
     gauge_ghost_volumes_detached.set(float(gauge_value_ghost_volumes_detached))
+    gauge_ghost_volumes_detach_errors.set(float(gauge_value_ghost_volumes_detach_errors))
     gauge_ghost_ports.set(float(gauge_value_ghost_ports))
+    gauge_ghost_ports_ignored.set(float(gauge_value_ghost_ports_ignored))
     gauge_ghost_ports_detached.set(float(gauge_value_ghost_ports_detached))
+    gauge_ghost_ports_detach_errors.set(float(gauge_value_ghost_ports_detach_errors))
     gauge_template_mounts.set(float(gauge_value_template_mounts))
     gauge_template_mounts.set(float(gauge_value_template_ports))
     gauge_eph_shadow_vms.set(float(gauge_value_eph_shadow_vms))
