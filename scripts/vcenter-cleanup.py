@@ -870,11 +870,9 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
             for i in ghost_port_detach_candidates:
                 if not ghost_port_detached.get(i):
                     log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - most probably it is an orphan at vcenter level", i)
-                    gauge_value_ghost_volumes_ignored += 1
             for i in ghost_volume_detach_candidates:
                 if not ghost_volume_detached.get(i):
                     log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume from instance %s - most probably it is an orphan at vcenter level", i)
-                    gauge_value_ghost_volumes_ignored += 1
 
 
     # send the counters to the prometheus exporter - ugly for now, will change
