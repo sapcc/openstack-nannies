@@ -576,7 +576,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                     if 4000 <= j.key < 5000:
                         # skip everything with a non unique mac address, otherwise this might be calling for trouble
                         if non_unique_mac.get(str(j.macAddress)):
-                            log.warn("- PLEASE CHECK MANUALLY - port with a non unique mac %s within the vcenter on %s discovered - ignoring it", str(j.macAddress), str(k['config.instanceUuid']))
+                            log.warn("- port with a non unique mac %s within the vcenter on %s discovered - ignoring it", str(j.macAddress), str(k['config.instanceUuid']))
                             gauge_value_non_unique_mac += 1
                         elif k['config.instanceUuid'] == mac_to_server.get(str(j.macAddress)):
                             log.debug("- port with mac %s on %s is in sync between vcenter and neutron", str(j.macAddress), str(k['config.instanceUuid']))
