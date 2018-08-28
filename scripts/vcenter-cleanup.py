@@ -581,7 +581,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                         elif k['config.instanceUuid'] == mac_to_server.get(str(j.macAddress)):
                             log.debug("- port with mac %s on %s is in sync between vcenter and neutron", str(j.macAddress), str(k['config.instanceUuid']))
                         elif template.get(k['config.instanceUuid']):
-                            log.warn("- discovered ghost port with mac %s attached to vcenter template %s [%s]- ignoring it", str(j.macAddress), k['config.instanceUuid'], str(k['config.name']))
+                            log.warn("- discovered ghost port with mac %s attached to vcenter template %s [%s] - ignoring it", str(j.macAddress), k['config.instanceUuid'], str(k['config.name']))
                             gauge_value_ghost_ports += 1
                             gauge_value_template_ports += 1
                             gauge_value_ghost_ports_ignored += 1
