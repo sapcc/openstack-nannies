@@ -63,6 +63,7 @@ gauge_ghost_volumes = Gauge('vcenter_nanny_ghost_volumes', 'number of possible g
 gauge_ghost_volumes_ignored = Gauge('vcenter_nanny_ghost_volumes_ignored', 'number of possible ghost volumes on vcenter which can be ignored')
 gauge_ghost_volumes_detached = Gauge('vcenter_nanny_ghost_volumes_detached', 'number of ghost volumes detached from vm')
 gauge_ghost_volumes_detach_errors = Gauge('vcenter_nanny_ghost_volumes_detach_errors', 'number of possible ghost volumes on vcenter which did not detach properly')
+gauge_non_unique_mac = Gauge('vcenter_nanny_non_unique_mac', 'number of ports with a non unique mac address in the vcenter')
 gauge_ghost_ports = Gauge('vcenter_nanny_ghost_ports', 'number of possible ghost ports on vcenter')
 gauge_ghost_ports_ignored = Gauge('vcenter_nanny_ghost_ports_ignored', 'number of possible ghost ports on vcenter which can be ignored')
 gauge_ghost_ports_detached = Gauge('vcenter_nanny_ghost_ports_detached', 'number of ghost ports detached from vm')
@@ -457,6 +458,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     ghost_volume_detach_candidates = dict()
     ghost_port_detached = dict()
     ghost_volume_detached = dict()
+    non_unique_mac = dict()
 
     global gauge_value_empty_vvol_folders
 
@@ -468,6 +470,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     gauge_value_ghost_volumes_ignored = 0
     gauge_value_ghost_volumes_detached = 0
     gauge_value_ghost_volumes_detach_errors = 0
+    gauge_value_non_unique_mac = 0
     gauge_value_ghost_ports = 0
     gauge_value_ghost_ports_ignored = 0
     gauge_value_ghost_ports_detached = 0
@@ -501,6 +504,8 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         for port in conn.network.ports():
             if str(port.binding_host_id).startswith('nova-compute-'):
                 if mac_to_server.get(port.mac_address) != None:
+                    # mark all the non unique mac adresses, so that we skip them later in the detachment phase
+                    non_unique_mac[port.mac_address] = True
                     log.warn("- PLEASE CHECK MANUALLY - there seems to be another server with this mac already - old instance: %s - mac: %s - new instance: %s",
                              str(mac_to_server.get(port.mac_address)), str(port.mac_address), str(port.device_id))
                 else:
@@ -569,7 +574,11 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                     # ... and network interfaces for ghost ports
                     # TODO: maybe? if isinstance(k.get('config.hardware.device'), vim.vm.device.VirtualEthernetCard):
                     if 4000 <= j.key < 5000:
-                        if k['config.instanceUuid'] == mac_to_server.get(str(j.macAddress)):
+                        # skip everything with a non unique mac address, otherwise this might be calling for trouble
+                        if non_unique_mac.get(str(j.macAddress)):
+                            log.warn("- PLEASE CHECK MANUALLY - port with a non unique mac %s within the vcenter on %s discovered - ignoring it", str(j.macAddress), str(k['config.instanceUuid']))
+                            gauge_value_non_unique_mac += 1
+                        elif k['config.instanceUuid'] == mac_to_server.get(str(j.macAddress)):
                             log.debug("- port with mac %s on %s is in sync between vcenter and neutron", str(j.macAddress), str(k['config.instanceUuid']))
                         elif template.get(k['config.instanceUuid']):
                             log.warn("- discovered ghost port with mac %s attached to vcenter template %s - ignoring it", str(j.macAddress), k['config.instanceUuid'])
@@ -888,6 +897,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     gauge_ghost_volumes_ignored.set(float(gauge_value_ghost_volumes_ignored))
     gauge_ghost_volumes_detached.set(float(gauge_value_ghost_volumes_detached))
     gauge_ghost_volumes_detach_errors.set(float(gauge_value_ghost_volumes_detach_errors))
+    gauge_non_unique_mac.set(float(gauge_value_non_unique_mac))
     gauge_ghost_ports.set(float(gauge_value_ghost_ports))
     gauge_ghost_ports_ignored.set(float(gauge_value_ghost_ports_ignored))
     gauge_ghost_ports_detached.set(float(gauge_value_ghost_ports_detached))
