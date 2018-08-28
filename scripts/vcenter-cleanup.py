@@ -849,10 +849,10 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                                 gauge_value_ghost_ports_detached += 1
                                                 # here we do not need to worry about multiple ghost ports per instance
                                                 # as the instance is orphan or not, independent of the numer of ghost ports
-                                                ghost_port_detached[item] = True
+                                                ghost_port_detached[item] = 1
                                             else:
                                                 gauge_value_ghost_ports_detach_errors += 1
-                                                ghost_port_detached[item] = False
+                                                ghost_port_detached[item] = 0
                                         else:
                                             log.warn("looks like the port with the mac address %s on instance %s has only been temporary a ghost port - not doing anything with it ...", ghost_port_detach_candidate, item)
                                             gauge_value_gauge_ghost_ports_ignored += 1
@@ -863,16 +863,18 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                             gauge_value_ghost_volumes_detached += 1
                                             # here we do not need to worry about multiple ghost volumes per instance
                                             # as the instance is orphan or not, independent of the numer of ghost volumes
-                                            ghost_volume_detached[item] = True
+                                            ghost_volume_detached[item] = 1
                                         else:
                                             gauge_value_ghost_volumes_detach_errors += 1
-                                            ghost_volume_detached[item] = False
+                                            ghost_volume_detached[item] = 0
             for i in ghost_port_detach_candidates:
-                if not ghost_port_detached.get(i):
-                    log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - most probably it is an orphan at vcenter level", i)
+                if not (ghost_port_detached.get(i) == 0 or ghost_port_detached.get(i) == 1):
+                    gauge_value_ghost_ports_ignored += 1
+                    log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - most probably it is an orphan at vcenter level - ignoring it", i)
             for i in ghost_volume_detach_candidates:
-                if not ghost_volume_detached.get(i):
-                    log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume from instance %s - most probably it is an orphan at vcenter level", i)
+                if not (ghost_volume_detached.get(i) == 0 or ghost_volume_detached.get(i) == 1):
+                    gauge_value_ghost_volumes_ignored += 1
+                    log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume from instance %s - most probably it is an orphan at vcenter level - ignoring it", i)
 
 
     # send the counters to the prometheus exporter - ugly for now, will change
