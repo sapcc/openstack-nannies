@@ -63,7 +63,8 @@ gauge_ghost_volumes = Gauge('vcenter_nanny_ghost_volumes', 'number of possible g
 gauge_ghost_volumes_ignored = Gauge('vcenter_nanny_ghost_volumes_ignored', 'number of possible ghost volumes on vcenter which can be ignored')
 gauge_ghost_volumes_detached = Gauge('vcenter_nanny_ghost_volumes_detached', 'number of ghost volumes detached from vm')
 gauge_ghost_volumes_detach_errors = Gauge('vcenter_nanny_ghost_volumes_detach_errors', 'number of possible ghost volumes on vcenter which did not detach properly')
-gauge_non_unique_mac = Gauge('vcenter_nanny_non_unique_mac', 'number of ports with a non unique mac address in the vcenter')
+# TODO - remove this old code at some point
+# gauge_non_unique_mac = Gauge('vcenter_nanny_non_unique_mac', 'number of ports with a non unique mac address in the vcenter')
 gauge_ghost_ports = Gauge('vcenter_nanny_ghost_ports', 'number of possible ghost ports on vcenter')
 gauge_ghost_ports_ignored = Gauge('vcenter_nanny_ghost_ports_ignored', 'number of possible ghost ports on vcenter which can be ignored')
 gauge_ghost_ports_detached = Gauge('vcenter_nanny_ghost_ports_detached', 'number of ghost ports detached from vm')
@@ -452,13 +453,15 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                  password=os.getenv('OS_PASSWORD'))
 
     mac_to_server = dict()
+    server_to_mac = dict()
     known = dict()
     template = dict()
     ghost_port_detach_candidates = dict()
     ghost_volume_detach_candidates = dict()
     ghost_port_detached = dict()
     ghost_volume_detached = dict()
-    non_unique_mac = dict()
+    # TODO - remove this old code at some point
+    # non_unique_mac = dict()
 
     global gauge_value_empty_vvol_folders
 
@@ -470,7 +473,8 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     gauge_value_ghost_volumes_ignored = 0
     gauge_value_ghost_volumes_detached = 0
     gauge_value_ghost_volumes_detach_errors = 0
-    gauge_value_non_unique_mac = 0
+    # TODO - remove this old code at some point
+    # gauge_value_non_unique_mac = 0
     gauge_value_ghost_ports = 0
     gauge_value_ghost_ports_ignored = 0
     gauge_value_ghost_ports_detached = 0
@@ -502,14 +506,24 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
 
         # build a dict of ports related to the network interfaces on the servers on the vcenter
         for port in conn.network.ports():
+            # we only care about ports handled by nova-compute here
             if str(port.binding_host_id).startswith('nova-compute-'):
-                if mac_to_server.get(port.mac_address) != None:
-                    # mark all the non unique mac adresses, so that we skip them later in the detachment phase
-                    non_unique_mac[port.mac_address] = True
-                    log.warn("- PLEASE CHECK MANUALLY - there seems to be another server with this mac already - old instance: %s - mac: %s - new instance: %s",
-                             str(mac_to_server.get(port.mac_address)), str(port.mac_address), str(port.device_id))
+                # TODO - remove this old code at some point
+                # old style code - replaced by the code below as the mac address is not always unique and this leads to trouble
+                # if mac_to_server.get(port.mac_address) != None:
+                #     # mark all the non unique mac adresses, so that we skip them later in the detachment phase
+                #     non_unique_mac[port.mac_address] = True
+                #     log.warn("- PLEASE CHECK MANUALLY - there seems to be another server with this mac already - old instance: %s - mac: %s - new instance: %s",
+                #              str(mac_to_server.get(port.mac_address)), str(port.mac_address), str(port.device_id))
+                # else:
+                #     mac_to_server[str(port.mac_address)] = str(port.device_id)
+
+                # new style code - build the comparision around the instance uuid instead of the mac address as it is definitely unique per region
+                # a server can have multiple mac addresses, so keep them in a list
+                if server_to_mac.get(port.device_id):
+                    server_to_mac[str(port.device_id)].append(str(port.mac_address))
                 else:
-                    mac_to_server[str(port.mac_address)] = str(port.device_id)
+                    server_to_mac[str(port.device_id)] = [str(port.mac_address)]
 
     except exceptions.HttpException as e:
         log.warn(
@@ -554,7 +568,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     vcenter_mounted_name = dict()
     # iterate over the list of vms
     for k in data:
-        # only work with results, which have an instance uuid defined and are openstack vms
+        # only work with results, which have an instance uuid defined and are openstack vms (i.e. have an annotation set)
         if k.get('config.instanceUuid') and openstack_re.match(k.get('config.annotation')):
             # check if this instance is a vcenter template
             if k.get('config.template'):
@@ -574,19 +588,32 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                     # ... and network interfaces for ghost ports
                     # TODO: maybe? if isinstance(k.get('config.hardware.device'), vim.vm.device.VirtualEthernetCard):
                     if 4000 <= j.key < 5000:
-                        # skip everything with a non unique mac address, otherwise this might be calling for trouble
-                        if non_unique_mac.get(str(j.macAddress)):
-                            log.warn("- discovered port with a non unique mac %s within the vcenter on %s [%s] - ignoring it", str(j.macAddress), str(k['config.instanceUuid']), str(k['config.name']))
-                            gauge_value_non_unique_mac += 1
-                        elif k['config.instanceUuid'] == mac_to_server.get(str(j.macAddress)):
-                            log.debug("- port with mac %s on %s is in sync between vcenter and neutron", str(j.macAddress), str(k['config.instanceUuid']))
-                        elif template.get(k['config.instanceUuid']):
-                            log.warn("- discovered ghost port with mac %s attached to vcenter template %s [%s] - ignoring it", str(j.macAddress), k['config.instanceUuid'], str(k['config.name']))
+                        # new style code - build the comparision around the instance uuid instead of the mac address as it is definitely unique per region
+                        if template.get(k['config.instanceUuid']):
+                            log.warn("- discovered ghost port with mac %s attached to vcenter template %s [%s] - ignoring it", str(j.macAddress), k['config.instanceUuid'], k['config.name'])
                             gauge_value_ghost_ports += 1
                             gauge_value_template_ports += 1
                             gauge_value_ghost_ports_ignored += 1
+                        elif server_to_mac.get(k['config.instanceUuid']):
+                            mac_address_found = False
+                            for i in server_to_mac[k['config.instanceUuid']]:
+                                log.debug("- instance %s - mac %s", k['config.instanceUuid'], i)
+                                if str(j.macAddress) == i:
+                                    mac_address_found = True
+                            if mac_address_found:
+                                log.debug("- port with mac %s on %s [%s] is in sync between vcenter and neutron", str(j.macAddress), str(k['config.instanceUuid']), k['config.name'])
+                            else:
+                                log.warn("- discovered ghost port with mac %s on %s [%s] in vcenter", str(j.macAddress), str(k['config.instanceUuid']), k['config.name'])
+                                gauge_value_ghost_ports += 1
+                                # if we plan to delete ghost ports, collect them in a dict of mac addresses by instance uuid
+                                if detach_ghost_ports:
+                                    # multiple ghost ports are possible for one instance, thus we need to put the ghost ports into a list
+                                    if ghost_port_detach_candidates.get(k['config.instanceUuid']):
+                                        ghost_port_detach_candidates[k['config.instanceUuid']].append(str(j.macAddress))
+                                    else:
+                                        ghost_port_detach_candidates[k['config.instanceUuid']] = [str(j.macAddress)]
                         else:
-                            log.warn("- discovered ghost port with mac %s on %s [%s] in vcenter", str(j.macAddress), str(k['config.instanceUuid']), str(k['config.name']))
+                            log.warn("- discovered ghost port with mac %s on %s [%s] in vcenter - instance does not seem to exist in neutron and is not a vcenter template", str(j.macAddress), k['config.instanceUuid'], k['config.name'])
                             gauge_value_ghost_ports += 1
                             # if we plan to delete ghost ports, collect them in a dict of mac addresses by instance uuid
                             if detach_ghost_ports:
@@ -595,7 +622,30 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                     ghost_port_detach_candidates[k['config.instanceUuid']].append(str(j.macAddress))
                                 else:
                                     ghost_port_detach_candidates[k['config.instanceUuid']] = [str(j.macAddress)]
-                                # TODO - remove - old: ghost_port_detach_candidates[k['config.instanceUuid']] = str(j.macAddress)
+                        
+                        # TODO - remove this old code at some point
+                        # old style code - replaced by the code above as the mac address is not always unique and this leads to trouble
+                        # # skip everything with a non unique mac address, otherwise this might be calling for trouble
+                        # if non_unique_mac.get(str(j.macAddress)):
+                        #     log.warn("OLD STYLE: - discovered port with a non unique mac %s within the vcenter on %s [%s] - ignoring it", str(j.macAddress), str(k['config.instanceUuid']), k['config.name'])
+                        #     gauge_value_non_unique_mac += 1
+                        # elif k['config.instanceUuid'] == mac_to_server.get(str(j.macAddress)):
+                        #     log.debug("OLD STYLE: - port with mac %s on %s is in sync between vcenter and neutron", str(j.macAddress), str(k['config.instanceUuid']))
+                        # elif template.get(k['config.instanceUuid']):
+                        #     log.warn("OLD STYLE: - discovered ghost port with mac %s attached to vcenter template %s [%s] - ignoring it", str(j.macAddress), k['config.instanceUuid'], k['config.name'])
+                        #     gauge_value_ghost_ports += 1
+                        #     gauge_value_template_ports += 1
+                        #     gauge_value_ghost_ports_ignored += 1
+                        # else:
+                        #     log.warn("OLD STYLE: - discovered ghost port with mac %s on %s [%s] in vcenter", str(j.macAddress), str(k['config.instanceUuid']), k['config.name'])
+                        #     gauge_value_ghost_ports += 1
+                        #     # if we plan to delete ghost ports, collect them in a dict of mac addresses by instance uuid
+                        #     if detach_ghost_ports:
+                        #         # multiple ghost ports are possible for one instance, thus we need to put the ghost ports into a list
+                        #         if ghost_port_detach_candidates.get(k['config.instanceUuid']):
+                        #             ghost_port_detach_candidates[k['config.instanceUuid']].append(str(j.macAddress))
+                        #         else:
+                        #             ghost_port_detach_candidates[k['config.instanceUuid']] = [str(j.macAddress)]
 
     # do the check from the other end: see for which vms or volumes in the vcenter we do not have any openstack info
     missing = dict()
@@ -897,7 +947,8 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     gauge_ghost_volumes_ignored.set(float(gauge_value_ghost_volumes_ignored))
     gauge_ghost_volumes_detached.set(float(gauge_value_ghost_volumes_detached))
     gauge_ghost_volumes_detach_errors.set(float(gauge_value_ghost_volumes_detach_errors))
-    gauge_non_unique_mac.set(float(gauge_value_non_unique_mac))
+    # TODO - remove this old code at some point
+    # gauge_non_unique_mac.set(float(gauge_value_non_unique_mac))
     gauge_ghost_ports.set(float(gauge_value_ghost_ports))
     gauge_ghost_ports_ignored.set(float(gauge_value_ghost_ports_ignored))
     gauge_ghost_ports_detached.set(float(gauge_value_ghost_ports_detached))
