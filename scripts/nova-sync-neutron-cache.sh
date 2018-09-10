@@ -28,7 +28,7 @@ echo "INFO: starting a loop to periodically run the nanny job for the nova insta
 while true; do
     if [ "$NOVA_SYNC_NEUTRON_CACHE_ENABLED" = "True" ] || [ "$NOVA_SYNC_NEUTRON_CACHE_ENABLED" = "true" ]; then
         if [ "$NOVA_SYNC_NEUTRON_CACHE_DRY_RUN" = "False" ] || [ "$NOVA_SYNC_NEUTRON_CACHE_DRY_RUN" = "false" ]; then
-            echo -n "INFO: syncing nova instance info cache sync from neutron - "
+            echo -n "INFO: syncing nova instance info cache from neutron - "
             date
             /var/lib/kolla/venv/bin/python /scripts/nova-sync-neutron-cache.py --config /etc/nova/nova.conf
         else
