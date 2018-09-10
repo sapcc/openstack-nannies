@@ -875,31 +875,33 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         # to avoid the risk of accidentally detaching too many of them due to some failure somewhere else
         if len(ghost_port_detach_candidates) > detach_ghost_limit:
             log.warn("- PLEASE CHECK MANUALLY - number of instances with ghost ports to be deleted larger than --detach-ghost-limit=%s - denying to delete the ghost ports", str(detach_ghost_limit))
-        elif len(ghost_volume_detach_candidates) > detach_ghost_limit:
+        if len(ghost_volume_detach_candidates) > detach_ghost_limit:
             log.warn("- PLEASE CHECK MANUALLY - number of instances with ghost volumes to be deleted larger than --detach-ghost-limit=%s - denying to delete the ghost volumes", str(detach_ghost_limit))
-        else:
-            # build a dict of all uuids from the missing and not_missing ones
-            all_uuids = dict()
-            all_uuids.update(missing)
-            all_uuids.update(not_missing)
-            # go through all uuids we know
-            for item, locationlist in six.iteritems(all_uuids):
-                # if any of them has a ghost volume or port attached do something about it
-                if ghost_port_detach_candidates.get(item) or ghost_volume_detach_candidates.get(item):
-                    # find the corresponding .vmx file and vm
-                    for location in locationlist:
-                        # foldername on datastore
-                        path = "{folderpath}".format(**location)
-                        # filename on datastore
-                        filename = "{filepath}".format(**location)
-                        fullpath = path + filename
-                        # in the case of a vmx file we check if the vcenter still knows about it
-                        if location["filepath"].lower().endswith(".vmx"):
-                            vmx_path = "{folderpath}{filepath}".format(**location)
-                            vm = content.searchIndex.FindByDatastorePath(path=vmx_path, datacenter=dc)
-                            # there is a vm for that file path we check what to do with it
-                            if vm:
-                                if ghost_port_detach_candidates.get(item):
+        # build a dict of all uuids from the missing and not_missing ones
+        all_uuids = dict()
+        all_uuids.update(missing)
+        all_uuids.update(not_missing)
+        # go through all uuids we know
+        for item, locationlist in six.iteritems(all_uuids):
+            # if any of them has a ghost volume or port attached do something about it
+            if ghost_port_detach_candidates.get(item) or ghost_volume_detach_candidates.get(item):
+                # find the corresponding .vmx file and vm
+                for location in locationlist:
+                    # foldername on datastore
+                    path = "{folderpath}".format(**location)
+                    # filename on datastore
+                    filename = "{filepath}".format(**location)
+                    fullpath = path + filename
+                    # in the case of a vmx file we check if the vcenter still knows about it
+                    if location["filepath"].lower().endswith(".vmx"):
+                        vmx_path = "{folderpath}{filepath}".format(**location)
+                        vm = content.searchIndex.FindByDatastorePath(path=vmx_path, datacenter=dc)
+                        # there is a vm for that file path we check what to do with it
+                        if vm:
+                            # if this vm is a ghost port detach canditate
+                            if ghost_port_detach_candidates.get(item):
+                                # only do something if we are below detach_ghost_limit for the ports
+                                if len(ghost_port_detach_candidates) <= detach_ghost_limit:
                                     # in case we have multiple ghost ports
                                     for ghost_port_detach_candidate in ghost_port_detach_candidates.get(item):
                                         # double check that the port is still a ghost port to avoid accidentally deleting stuff due to timing issues
@@ -915,7 +917,10 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                         else:
                                             log.warn("looks like the port with the mac address %s on instance %s has only been temporary a ghost port - not doing anything with it ...", ghost_port_detach_candidate, item)
                                             gauge_value_gauge_ghost_ports_ignored += 1
-                                elif ghost_volume_detach_candidates.get(item):
+                            # if this vm is a ghost volume detach canditate
+                            elif ghost_volume_detach_candidates.get(item):
+                                # only do something if we are below detach_ghost_limit for the volumes
+                                if len(ghost_volume_detach_candidates) <= detach_ghost_limit:
                                     # in case we have multiple ghost volumes
                                     for ghost_volume_detach_candidate in ghost_volume_detach_candidates.get(item):
                                         if detach_ghost_volume(service_instance, vm, ghost_volume_detach_candidate):
@@ -926,14 +931,14 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                         else:
                                             gauge_value_ghost_volumes_detach_errors += 1
                                             ghost_volume_detached[item] = 0
-            for i in ghost_port_detach_candidates:
-                if not (ghost_port_detached.get(i) == 0 or ghost_port_detached.get(i) == 1):
-                    gauge_value_ghost_ports_ignored += 1
-                    log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - most probably it is an orphan at vcenter level - ignoring it", i)
-            for i in ghost_volume_detach_candidates:
-                if not (ghost_volume_detached.get(i) == 0 or ghost_volume_detached.get(i) == 1):
-                    gauge_value_ghost_volumes_ignored += 1
-                    log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume from instance %s - most probably it is an orphan at vcenter level - ignoring it", i)
+        for i in ghost_port_detach_candidates:
+            if not (ghost_port_detached.get(i) == 0 or ghost_port_detached.get(i) == 1):
+                gauge_value_ghost_ports_ignored += 1
+                log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - most probably it is an orphan at vcenter level - ignoring it", i)
+        for i in ghost_volume_detach_candidates:
+            if not (ghost_volume_detached.get(i) == 0 or ghost_volume_detached.get(i) == 1):
+                gauge_value_ghost_volumes_ignored += 1
+                log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume from instance %s - most probably it is an orphan at vcenter level - ignoring it", i)
 
 
     # send the counters to the prometheus exporter - ugly for now, will change
