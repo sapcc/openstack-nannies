@@ -47,7 +47,7 @@ def get_nova_instances(conn):
 
     # get all instance from nova
     try:
-        for nova_instance in conn.block_store.servers(details=False, all_tenants=1):
+        for nova_instance in conn.compute.servers(details=False, all_tenants=1):
             nova_instances[nova_instance.id] = nova_instance
 
     except exceptions.HttpException as e:
@@ -64,39 +64,39 @@ def get_nova_instances(conn):
     return nova_instances
 
 # get all volume attachments for volumes
-def get_volume_attachemnts(meta):
+def get_orphan_volume_attachments(meta):
 
-    volume_attachments = {}
-    volume_attachment_t = Table('volume_attachment', meta, autoload=True)
-    volume_attachment_q = select(columns=[volume_attachment_t.c.id, volume_attachemnt_t.c.instance_uuid],whereclause=and_(volume_attachment_t.c.deleted == True))
+    orphan_volume_attachments = {}
+    orphan_volume_attachment_t = Table('volume_attachment', meta, autoload=True)
+    orphan_volume_attachment_q = select(columns=[orphan_volume_attachment_t.c.id, orphan_volume_attachment_t.c.instance_uuid],whereclause=and_(orphan_volume_attachment_t.c.deleted == True))
 
-    # return a dict indexed by volume_attachment_id and with the value nova_instance_uuid for non deleted volume_attachments
-    for (volume_attachment_id, nova_instance_uuid) in volume_attachment_q.execute():
-        volume_attachments[volume_attachment_id] = nova_instance_uuid
+    # return a dict indexed by orphan_volume_attachment_id and with the value nova_instance_uuid for non deleted orphan_volume_attachments
+    for (orphan_volume_attachment_id, nova_instance_uuid) in orphan_volume_attachment_q.execute():
+        orphan_volume_attachments[orphan_volume_attachment_id] = nova_instance_uuid
 
-    return volume_attachments
+    return orphan_volume_attachments
 
 # get all the volume attachments in the cinder db for already deleted instances in nova
-def get_wrong_volume_attachemnts(nova_instances, volume_attachemnts):
+def get_wrong_orphan_volume_attachments(nova_instances, orphan_volume_attachments):
 
-    wrong_volume_attachemnts = {}
+    wrong_orphan_volume_attachments = {}
 
-    for volume_attachemnt_id in volume_attachemnts:
-        if nova_instances.get(volume_attachemnts[volume_attachemnt_id]) is None:
-            wrong_volume_attachemnts[volume_attachemnt_id] = volume_attachemnts[volume_attachemnt_id]
+    for orphan_volume_attachment_id in orphan_volume_attachments:
+        if nova_instances.get(orphan_volume_attachments[orphan_volume_attachment_id]) is None:
+            wrong_orphan_volume_attachments[orphan_volume_attachment_id] = orphan_volume_attachments[orphan_volume_attachment_id]
 
-    return wrong_volume_attachemnts
+    return wrong_orphan_volume_attachments
 
 # delete volume attachments in the cinder db for already deleted instances in nova
-def fix_wrong_volume_attachments(meta, wrong_volume_attachments):
+def fix_wrong_orphan_volume_attachments(meta, wrong_orphan_volume_attachments):
 
-    volume_attachment_t = Table('volume_attachment', meta, autoload=True)
+    orphan_volume_attachment_t = Table('volume_attachment', meta, autoload=True)
 
-    for volume_attachment_id in volume_attachments:
-        log.info ("-- action: deleting volume attachment id: %s", volume_attachment_id)
+    for orphan_volume_attachment_id in orphan_volume_attachments:
+        log.info ("-- action: deleting orphan volume attachment id: %s", orphan_volume_attachment_id)
         now = datetime.datetime.utcnow()
-        delete_volume_attachment_q = volume_attachment_t.update().where(volume_attachment_t.c.id == volume_attachment_id).values(updated_at=now, deleted_at=now, deleted=volume_attachment_id)
-        delete_volume_attachment_q.execute()
+        delete_orphan_volume_attachment_q = orphan_volume_attachment_t.update().where(orphan_volume_attachment_t.c.id == orphan_volume_attachment_id).values(updated_at=now, deleted_at=now, deleted=orphan_volume_attachment_id)
+        delete_orphan_volume_attachment_q.execute()
 
 # get all the volumes in state "error_deleting"
 def get_error_deleting_volumes(meta):
@@ -322,19 +322,19 @@ def main():
 
     # fixing volume attachments at no longer existing instances
     nova_instances = get_nova_instances(conn)
-    volume_attachments = get_volume_attachments(nova_metadata)
-    wrong_volume_attachments = get_wrong_volume_attachments(nova_instances, volume_attachments)
-    if len(wrong_volume_attachments) != 0:
-        log.info("- volume attachment inconsistencies found:")
+    orphan_volume_attachments = get_orphan_volume_attachments(cinder_metadata)
+    wrong_orphan_volume_attachments = get_wrong_orphan_volume_attachments(nova_instances, orphan_volume_attachments)
+    if len(wrong_orphan_volume_attachments) != 0:
+        log.info("- orphan volume attachments found:")
         # print out what we would delete
-        for volume_attachment_id in wrong_volume_attachments:
-            log.info("-- volume attachment (id in cinder db: %s) for non existent instance in nova: %s", volume_attachment_id,
-                     volume_attachments[volume_attachment_id])
+        for orphan_volume_attachment_id in wrong_orphan_volume_attachments:
+            log.info("-- orphan volume attachment (id in cinder db: %s) for non existent instance in nova: %s", orphan_volume_attachment_id,
+                     orphan_volume_attachments[orphan_volume_attachment_id])
         if not args.dry_run:
-            log.info("- deleting volume attachment inconsistencies found")
-            fix_wrong_volume_attachments(nova_metadata, wrong_volume_attachments)
+            log.info("- deleting orphan volume attachment inconsistencies found")
+            fix_wrong_orphan_volume_attachments(nova_metadata, wrong_orphan_volume_attachments)
     else:
-        log.info("- volume attachments are consistent")
+        log.info("- no orphan volume attachments found")
 
     # fixing possible volumes in state "error-deleting"
     error_deleting_volumes = get_error_deleting_volumes(cinder_metadata)
