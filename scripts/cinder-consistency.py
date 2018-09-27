@@ -22,6 +22,9 @@ import sys
 import ConfigParser
 import logging
 import datetime
+import os
+
+from openstack import connection, exceptions, utils
 
 from sqlalchemy import and_
 from sqlalchemy import func
@@ -251,6 +254,23 @@ def fix_missing_deleted_at(meta, table_names):
             and_(a_table_t.c.deleted == True, a_atable_t.c.deleted_at == None)).values(
             deleted_at=now)
         a_table_set_deleted_at_q.execute()
+
+# establish an openstack connection
+def makeOsConnection():
+    try:
+        conn = connection.Connection(auth_url=os.getenv('OS_AUTH_URL'),
+                                     project_name=os.getenv('OS_PROJECT_NAME'),
+                                     project_domain_name=os.getenv('OS_PROJECT_DOMAIN_NAME'),
+                                     username=os.getenv('OS_USERNAME'),
+                                     user_domain_name=os.getenv('OS_USER_DOMAIN_NAME'),
+                                     password=os.getenv('OS_PASSWORD'),
+                                     identity_api_version="3")
+    except Exception as e:
+        log.warn("- PLEASE CHECK MANUALLY - problems connecting to openstack: %s",
+                     str(e))
+        sys.exit(1)
+
+    return conn
 
 # establish a database connection and return the handle
 def makeConnection(db_url):
