@@ -39,6 +39,7 @@ from sqlalchemy.ext.declarative import declarative_base
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
+# get all volumes from cinder
 def get_cinder_volumes(conn):
 
     cinder_volumes = dict()

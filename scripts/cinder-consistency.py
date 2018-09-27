@@ -37,6 +37,63 @@ from sqlalchemy.ext.declarative import declarative_base
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
+# get all instances from nova
+def get_nova_instances(conn):
+
+    nova_instances = dict()
+
+    # get all instance from nova
+    try:
+        for nova_instance in conn.block_store.servers(details=False, all_tenants=1):
+            nova_instances[nova_instance.id] = nova_instance
+
+    except exceptions.HttpException as e:
+        log.warn("- PLEASE CHECK MANUALLY - got an http exception connecting to openstack: %s", str(e))
+        sys.exit(1)
+
+    except exceptions.SDKException as e:
+        log.warn("- PLEASE CHECK MANUALLY - got an sdk exception connecting to openstack: %s", str(e))
+        sys.exit(1)
+
+    #for i in nova_instances:
+    #    print nova_instances[i].id
+
+    return nova_instances
+
+# get all volume attachments for volumes
+def get_volume_attachemnts(meta):
+
+    volume_attachments = {}
+    volume_attachment_t = Table('volume_attachment', meta, autoload=True)
+    volume_attachment_q = select(columns=[volume_attachment_t.c.id, volume_attachemnt_t.c.instance_uuid],whereclause=and_(volume_attachment_t.c.deleted == True))
+
+    # return a dict indexed by volume_attachment_id and with the value nova_instance_uuid for non deleted volume_attachments
+    for (volume_attachment_id, nova_instance_uuid) in volume_attachment_q.execute():
+        volume_attachments[volume_attachment_id] = nova_instance_uuid
+
+    return volume_attachments
+
+# get all the volume attachments in the cinder db for already deleted instances in nova
+def get_wrong_volume_attachemnts(nova_instances, volume_attachemnts):
+
+    wrong_volume_attachemnts = {}
+
+    for volume_attachemnt_id in volume_attachemnts:
+        if nova_instances.get(volume_attachemnts[volume_attachemnt_id]) is None:
+            wrong_volume_attachemnts[volume_attachemnt_id] = volume_attachemnts[volume_attachemnt_id]
+
+    return wrong_volume_attachemnts
+
+# delete volume attachments in the cinder db for already deleted instances in nova
+def fix_wrong_volume_attachments(meta, wrong_volume_attachments):
+
+    volume_attachment_t = Table('volume_attachment', meta, autoload=True)
+
+    for volume_attachment_id in volume_attachments:
+        log.info ("-- action: deleting volume attachment id: %s", volume_attachment_id)
+        now = datetime.datetime.utcnow()
+        delete_volume_attachment_q = volume_attachment_t.update().where(volume_attachment_t.c.id == volume_attachment_id).values(updated_at=now, deleted_at=now, deleted=volume_attachment_id)
+        delete_volume_attachment_q.execute()
 
 # get all the volumes in state "error_deleting"
 def get_error_deleting_volumes(meta):
@@ -98,7 +155,7 @@ def fix_error_deleting_snapshots(meta, error_deleting_snapshots):
         delete_snapshot_q = snapshots_t.delete().where(snapshots_t.c.id == error_deleting_snapshots_id)
         delete_snapshot_q.execute()
 
-# get all the rows with a volume_admin_metadata still defined where corresponding the volume is already deleted
+# get all the rows with a volume_admin_metadata still defined where the corresponding volume is already deleted
 def get_wrong_volume_admin_metadata(meta):
 
     wrong_admin_metadata = {}
@@ -112,7 +169,7 @@ def get_wrong_volume_admin_metadata(meta):
         wrong_admin_metadata[volume_admin_metadata_id] = volume_id
     return wrong_admin_metadata
 
-# delete volume_admin_metadata still defined where corresponding the volume is already deleted
+# delete volume_admin_metadata still defined where the corresponding volume is already deleted
 def fix_wrong_volume_admin_metadata(meta, wrong_admin_metadata):
 
     volume_admin_metadata_t = Table('volume_admin_metadata', meta, autoload=True)
@@ -122,7 +179,7 @@ def fix_wrong_volume_admin_metadata(meta, wrong_admin_metadata):
         delete_volume_admin_metadata_q = volume_admin_metadata_t.delete().where(volume_admin_metadata_t.c.id == volume_admin_metadata_id)
         delete_volume_admin_metadata_q.execute()
 
-# get all the rows with a volume_metadata still defined where corresponding the volume is already deleted
+# get all the rows with a volume_metadata still defined where the corresponding volume is already deleted
 def get_wrong_volume_metadata(meta):
 
     wrong_metadata = {}
@@ -136,7 +193,7 @@ def get_wrong_volume_metadata(meta):
         wrong_metadata[volume_metadata_id] = volume_id
     return wrong_metadata
 
-# delete volume_metadata still defined where corresponding the volume is already deleted
+# delete volume_metadata still defined where the corresponding volume is already deleted
 def fix_wrong_volume_metadata(meta, wrong_metadata):
 
     volume_metadata_t = Table('volume_metadata', meta, autoload=True)
@@ -146,7 +203,7 @@ def fix_wrong_volume_metadata(meta, wrong_metadata):
         delete_volume_metadata_q = volume_metadata_t.delete().where(volume_metadata_t.c.id == volume_metadata_id)
         delete_volume_metadata_q.execute()
 
-# get all the rows with a volume attachment still defined where corresponding volume is already deleted
+# get all the rows with a volume attachment still defined where the corresponding volume is already deleted
 def get_wrong_volume_attachments(meta):
 
     wrong_attachments = {}
@@ -160,7 +217,7 @@ def get_wrong_volume_attachments(meta):
         wrong_attachments[volume_attachment_id] = volume_id
     return wrong_attachments
 
-# delete volume attachment still defined where corresponding volume is already deleted
+# delete volume attachment still defined where the corresponding volume is already deleted
 def fix_wrong_volume_attachments(meta, wrong_attachments):
 
     volume_attachment_t = Table('volume_attachment', meta, autoload=True)
@@ -236,9 +293,28 @@ def main():
     except Exception as e:
         log.error("Check command line arguments (%s)", e.strerror)
 
+    # connect to openstack
+    conn = makeOsConnection()
+
     # connect to the DB
     db_url = get_db_url(args.config)
     cinder_session, cinder_metadata, cinder_Base = makeConnection(db_url)
+
+    # fixing volume attachments at no longer existing instances
+    nova_instances = get_nova_instances(conn)
+    volume_attachments = get_volume_attachments(nova_metadata)
+    wrong_volume_attachments = get_wrong_volume_attachments(nova_instances, volume_attachments)
+    if len(wrong_volume_attachments) != 0:
+        log.info("- volume attachment inconsistencies found:")
+        # print out what we would delete
+        for volume_attachment_id in wrong_volume_attachments:
+            log.info("-- volume attachment (id in cinder db: %s) for non existent instance in nova: %s", volume_attachment_id,
+                     volume_attachments[volume_attachment_id])
+        if not args.dry_run:
+            log.info("- deleting volume attachment inconsistencies found")
+            fix_wrong_volume_attachments(nova_metadata, wrong_volume_attachments)
+    else:
+        log.info("- volume attachments are consistent")
 
     # fixing possible volumes in state "error-deleting"
     error_deleting_volumes = get_error_deleting_volumes(cinder_metadata)
