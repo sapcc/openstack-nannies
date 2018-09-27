@@ -68,7 +68,7 @@ def get_orphan_volume_attachments(meta):
 
     orphan_volume_attachments = {}
     orphan_volume_attachment_t = Table('volume_attachment', meta, autoload=True)
-    orphan_volume_attachment_q = select(columns=[orphan_volume_attachment_t.c.id, orphan_volume_attachment_t.c.instance_uuid],whereclause=and_(orphan_volume_attachment_t.c.deleted == True))
+    orphan_volume_attachment_q = select(columns=[orphan_volume_attachment_t.c.id, orphan_volume_attachment_t.c.instance_uuid],whereclause=and_(orphan_volume_attachment_t.c.deleted == False))
 
     # return a dict indexed by orphan_volume_attachment_id and with the value nova_instance_uuid for non deleted orphan_volume_attachments
     for (orphan_volume_attachment_id, nova_instance_uuid) in orphan_volume_attachment_q.execute():
