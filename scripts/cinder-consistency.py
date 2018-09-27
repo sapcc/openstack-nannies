@@ -92,10 +92,10 @@ def fix_wrong_orphan_volume_attachments(meta, wrong_orphan_volume_attachments):
 
     orphan_volume_attachment_t = Table('volume_attachment', meta, autoload=True)
 
-    for orphan_volume_attachment_id in orphan_volume_attachments:
+    for orphan_volume_attachment_id in wrong_orphan_volume_attachments:
         log.info ("-- action: deleting orphan volume attachment id: %s", orphan_volume_attachment_id)
         now = datetime.datetime.utcnow()
-        delete_orphan_volume_attachment_q = orphan_volume_attachment_t.update().where(orphan_volume_attachment_t.c.id == orphan_volume_attachment_id).values(updated_at=now, deleted_at=now, deleted=orphan_volume_attachment_id)
+        delete_orphan_volume_attachment_q = orphan_volume_attachment_t.update().where(orphan_volume_attachment_t.c.id == orphan_volume_attachment_id).values(updated_at=now, deleted_at=now, deleted=True)
         delete_orphan_volume_attachment_q.execute()
 
 # get all the volumes in state "error_deleting"
@@ -332,7 +332,7 @@ def main():
                      orphan_volume_attachments[orphan_volume_attachment_id])
         if not args.dry_run:
             log.info("- deleting orphan volume attachment inconsistencies found")
-            fix_wrong_orphan_volume_attachments(nova_metadata, wrong_orphan_volume_attachments)
+            fix_wrong_orphan_volume_attachments(cinder_metadata, wrong_orphan_volume_attachments)
     else:
         log.info("- no orphan volume attachments found")
 
