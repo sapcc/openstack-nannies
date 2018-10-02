@@ -1083,7 +1083,7 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
             if not has_volume_attachments.get(k['config.instanceUuid']):
                 vcenter_instances_without_mounts[k['config.instanceUuid']] = k['config.name']
 
-    log.info("going through the vcenter and comparing volume mounts to nova and cinder")
+    log.info("- going through the vcenter and comparing volume mounts to nova and cinder")
     for i in vcenter_mounted_uuid:
         if i in all_volumes:
             cinder_is_attached = False
@@ -1124,7 +1124,7 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
             log.warn("- PLEASE CHECK MANUALLY - instance: %s [%s] with attached volume %s does not exist in openstack", vcenter_mounted_uuid[i], vcenter_mounted_name[i], i)
             gauge_value_volume_attachment_inconsistencies += 1
 
-    log.info("going through all vcenter instances without volume attachments")
+    log.info("- going through all vcenter instances without volume attachments")
     for i in vcenter_instances_without_mounts:
         if servers_attached_volumes.get(i):
             for j in servers_attached_volumes[i]:
