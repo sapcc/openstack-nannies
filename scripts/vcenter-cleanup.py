@@ -80,6 +80,7 @@ gauge_vcenter_task_problems = Gauge('vcenter_nanny_vcenter_task_problems', 'numb
 gauge_openstack_connection_problems = Gauge('vcenter_nanny_openstack_connection_problems', 'number of connection problems to openstack')
 gauge_unknown_vcenter_templates = Gauge('vcenter_nanny_unknown_vcenter_templates', 'number of templates unknown to openstack')
 gauge_complete_orphans = Gauge('vcenter_nanny_complete_orphans', 'number of possibly completely orphan vms')
+gauge_volume_attachment_inconsistencies = Gauge('vcenter_nanny_volume_attachment_inconsistencies', 'number of volume attachment inconsistencies between nova, cinder and the vcenter')
 
 # find vmx and vmdk files with a uuid name pattern
 def _uuids(task):
@@ -134,9 +135,11 @@ def _uuids(task):
 @click.option('--detach-ghost-ports', is_flag=True)
 # deny to detach ghost volumes and ports if there are more than this number of them
 @click.option('--detach-ghost-limit', default=3, help='Ghost volume/port detachment limit')
+# check consistency of volume attachments
+@click.option('--vol-check', is_flag=True)
 # port to use for prometheus exporter, otherwise we use 9456 as default
 @click.option('--port')
-def run_me(host, username, password, interval, iterations, dry_run, power_off, unregister, delete, detach_ghost_volumes, detach_ghost_ports, detach_ghost_limit, port):
+def run_me(host, username, password, interval, iterations, dry_run, power_off, unregister, delete, detach_ghost_volumes, detach_ghost_ports, detach_ghost_limit, vol_check, port):
 
     # Start http server for exported data
     if port:
@@ -201,6 +204,10 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
                               detach_ghost_volumes, detach_ghost_ports, detach_ghost_limit,
                               service_instance,
                               content, dc, view_ref)
+
+                # check the consistency of volume attachments if requested
+                if vol_check:
+                    sync_volume_attachments(host, username, password, dry_run, service_instance, view_ref)
 
                 # disconnect from vcenter
                 Disconnect(service_instance)
@@ -573,7 +580,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
             # check if this instance is a vcenter template
             if k.get('config.template'):
                 template[k['config.instanceUuid']] = k['config.template']
-            log.debug("uuid: %s - template: %s", str(k['config.instanceUuid']), str(k['config.template']))
+                log.debug("uuid: %s - template: %s", str(k['config.instanceUuid']), str(k['config.template']))
             # get the config.hardware.device property out of the data dict and iterate over its elements
             # for j in k['config.hardware.device']:
             # this check seems to be required as in one bb i got a key error otherwise - looks like a vm without that property
@@ -973,6 +980,169 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     reset_to_be_dict(vms_to_be_unregistered, vms_seen)
     reset_to_be_dict(files_to_be_deleted, files_seen)
     reset_to_be_dict(files_to_be_renamed, files_seen)
+
+
+# main volume attachment sync function - maybe this will be folded into the cleanup function above as well in the future
+def sync_volume_attachments(host, username, password, dry_run, service_instance, view_ref):
+
+    # openstack connection
+    conn = connection.Connection(auth_url=os.getenv('OS_AUTH_URL'),
+                                 project_name=os.getenv('OS_PROJECT_NAME'),
+                                 project_domain_name=os.getenv('OS_PROJECT_DOMAIN_NAME'),
+                                 username=os.getenv('OS_USERNAME'),
+                                 user_domain_name=os.getenv('OS_USER_DOMAIN_NAME'),
+                                 password=os.getenv('OS_PASSWORD'))
+
+    servers_attached_volumes = dict()
+    volumes_attached_at = dict()
+    all_servers = []
+    all_volumes = []
+
+    gauge_value_volume_attachment_inconsistencies = 0
+
+    # get all servers, volumes, snapshots and images from openstack to compare the resources we find on the vcenter against
+    try:
+        service = "nova"
+        for server in conn.compute.servers(details=True, all_tenants=1):
+            all_servers.append(server.id)
+            if server.attached_volumes:
+                for attachment in server.attached_volumes:
+                    if servers_attached_volumes.get(server.id):
+                        servers_attached_volumes[server.id].append(attachment['id'])
+                    else:
+                        servers_attached_volumes[server.id] = [attachment['id']]
+        service = "cinder"
+        for volume in conn.block_store.volumes(details=True, all_tenants=1):
+            all_volumes.append(volume.id)
+            if volume.attachments:
+                for attachment in volume.attachments:
+                    if volumes_attached_at.get(volume.id):
+                        volumes_attached_at[volume.id].append(attachment['server_id'])
+                    else:
+                        volumes_attached_at[volume.id] = [attachment['server_id']]
+
+    except exceptions.HttpException as e:
+        log.warn(
+            "- PLEASE CHECK MANUALLY - problems retrieving information from openstack %s: %s - retrying in next loop run",
+            service, str(e))
+        return
+    except exceptions.SDKException as e:
+        log.warn(
+            "- PLEASE CHECK MANUALLY - problems retrieving information from openstack %s: %s - retrying in next loop run",
+            service, str(e))
+        return
+
+    # the properties we want to collect - some of them are not yet used, but will at a later
+    # development stage of this script to validate the volume attachments with cinder and nova
+    vm_properties = [
+        "config.hardware.device",
+        "config.name",
+        "config.uuid",
+        "config.instanceUuid",
+        "config.template",
+        "config.annotation"
+    ]
+
+    # collect the properties for all vms
+    data = collect_properties(service_instance, view_ref, vim.VirtualMachine,
+                              vm_properties, True)
+    # in case we have problems getting the properties from the vcenter, start over from the beginning
+    if data is None:
+        return
+
+    # create a dict of volumes mounted to vms to compare the volumes we plan to delete against
+    # to find possible ghost volumes
+    vcenter_mounted_uuid = dict()
+    vcenter_mounted_name = dict()
+    has_volume_attachments = dict()
+    vcenter_instances_without_mounts = dict()
+    # iterate over the list of vms
+    for k in data:
+        # only work with results, which have an instance uuid defined and are openstack vms (i.e. have an annotation set)
+        if k.get('config.instanceUuid') and openstack_re.match(k.get('config.annotation')) and not k.get('config.template'):
+            # debug code
+            # log.info("%s - %s", k.get('config.instanceUuid'), k.get('config.name'))
+            # # check if this instance is a vcenter template
+            # if k.get('config.template'):
+            #     template[k['config.instanceUuid']] = k['config.template']
+            # log.debug("uuid: %s - template: %s", str(k['config.instanceUuid']), str(k['config.template']))
+            # get the config.hardware.device property out of the data dict and iterate over its elements
+            # for j in k['config.hardware.device']:
+            # this check seems to be required as in one bb i got a key error otherwise - looks like a vm without that property
+            if k.get('config.hardware.device'):
+                for j in k.get('config.hardware.device'):
+                    # we are only interested in disks for ghost volumes ...
+                    # TODO: maybe? if isinstance(k.get('config.hardware.device'), vim.vm.device.VirtualDisk):
+                    if 2001 <= j.key < 3000:
+                        vcenter_mounted_uuid[j.backing.uuid] = k['config.instanceUuid']
+                        vcenter_mounted_name[j.backing.uuid] = k['config.name']
+                        log.debug("==> mount - instance: %s - volume: %s", str(k['config.instanceUuid']), str(j.backing.uuid))
+                        has_volume_attachments[k['config.instanceUuid']] = True
+            else:
+                log.warn("- PLEASE CHECK MANUALLY - instance without hardware - this should not happen!")
+            if not has_volume_attachments.get(k['config.instanceUuid']):
+                vcenter_instances_without_mounts[k['config.instanceUuid']] = k['config.name']
+
+    log.info("going through the vcenter and comparing volume mounts to nova and cinder")
+    for i in vcenter_mounted_uuid:
+        if i in all_volumes:
+            cinder_is_attached = False
+            if volumes_attached_at.get(i):
+                for j in volumes_attached_at[i]:
+                    if j == vcenter_mounted_uuid[i]:
+                        cinder_is_attached = True
+                if cinder_is_attached:
+                    log.debug("- instance: %s [%s] - volume: %s - cinder: yes", vcenter_mounted_uuid[i], vcenter_mounted_name[i], i)
+                else:
+                    if vcenter_mounted_uuid[i] in all_servers:
+                        log.warn("- PLEASE CHECK MANUALLY - instance: %s [%s] - volume: %s - cinder: no", vcenter_mounted_uuid[i], vcenter_mounted_name[i], i)
+                        gauge_value_volume_attachment_inconsistencies += 1
+            else:
+                if vcenter_mounted_uuid[i] in all_servers:
+                    log.warn("- PLEASE CHECK MANUALLY - instance: %s [%s] - volume: %s - cinder: no attachments at all for this volume found", vcenter_mounted_uuid[i], vcenter_mounted_name[i], i)
+                    gauge_value_volume_attachment_inconsistencies += 1
+        else:
+            log.warn("- PLEASE CHECK MANUALLY - volume: %s attached to %s [%s] does not exist in openstack", i, vcenter_mounted_uuid[i], vcenter_mounted_name[i])
+            gauge_value_volume_attachment_inconsistencies += 1
+        if vcenter_mounted_uuid[i] in all_servers:
+            nova_is_attached = False
+            if servers_attached_volumes.get(vcenter_mounted_uuid[i]):
+                for j in servers_attached_volumes[vcenter_mounted_uuid[i]]:
+                    if j == i:
+                        nova_is_attached = True
+                if nova_is_attached:
+                    log.debug("- instance: %s [%s] - volume: %s - nova: yes", vcenter_mounted_uuid[i], vcenter_mounted_name[i], i)
+                else:
+                    if i in all_volumes:
+                        log.warn("- PLEASE CHECK MANUALLY - instance: %s [%s] - volume: %s - nova: no", vcenter_mounted_uuid[i], vcenter_mounted_name[i], i)
+                        gauge_value_volume_attachment_inconsistencies += 1
+            else:
+                if i in all_volumes:
+                    log.warn("- PLEASE CHECK MANUALLY - instance: %s [%s] - volume: %s - nova: no attachments at all on this server found", vcenter_mounted_uuid[i], vcenter_mounted_name[i], i)
+                    gauge_value_volume_attachment_inconsistencies += 1
+        else:
+            log.warn("- PLEASE CHECK MANUALLY - instance: %s [%s] with attached volume %s does not exist in openstack", vcenter_mounted_uuid[i], vcenter_mounted_name[i], i)
+            gauge_value_volume_attachment_inconsistencies += 1
+
+    log.info("going through all vcenter instances without volume attachments")
+    for i in vcenter_instances_without_mounts:
+        if servers_attached_volumes.get(i):
+            for j in servers_attached_volumes[i]:
+                log.warn("- PLEASE CHECK MANUALLY - instance: %s [%s] - no volumes attached - nova: volume %s seems to be attached anyway", i, vcenter_instances_without_mounts[i], j)
+                gauge_value_volume_attachment_inconsistencies += 1
+        else:
+            log.debug("- instance: %s [%s] - no volumes attached - nova: no attachments - good", i, vcenter_instances_without_mounts[i])
+        cinder_is_attached = False
+        for j in volumes_attached_at:
+            for k in volumes_attached_at[j]:
+                if k == i:
+                    cinder_is_attached = True
+                    log.warn("- PLEASE CHECK MANUALLY - instance: %s [%s] - no volumes attached - cinder: volume %s seems to be attached anyway", i, vcenter_instances_without_mounts[i], j)
+                    gauge_value_volume_attachment_inconsistencies += 1
+        if not cinder_is_attached:
+            log.debug("- instance: %s [%s] - no volumes attached - cinder: no attachments - good", i, vcenter_instances_without_mounts[i])
+
+    gauge_volume_attachment_inconsistencies.set(float(gauge_value_volume_attachment_inconsistencies))
 
 
 if __name__ == '__main__':
