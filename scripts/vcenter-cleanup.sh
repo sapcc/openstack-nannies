@@ -60,7 +60,7 @@ else
     DETACH_GHOST_LIMIT=""
 fi
 
-if [ "$VCENTER_CLEANUP_VOL_CHECK" = "True" ]; then
+if [ "$VCENTER_CLEANUP_VOL_CHECK" = "True" ] || [ "$VCENTER_CLEANUP_VOL_CHECK" = "true" ]; then
     VOL_CHECK="--vol-check"
 else
     VOL_CHECK=""
