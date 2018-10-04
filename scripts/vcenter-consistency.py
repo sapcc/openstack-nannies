@@ -279,7 +279,7 @@ def sync_volume_attachments(host, username, password, interval, iterations, dry_
             if not has_volume_attachments.get(k['config.instanceUuid']):
                 vcenter_instances_without_mounts[k['config.instanceUuid']] = k['config.name']
 
-    log.info("going through the vcenter and comparing volume mounts to nova and cinder:")
+    log.info("- going through the vcenter and comparing volume mounts to nova and cinder")
     for i in vcenter_mounted_uuid:
         if i in all_volumes:
             cinder_is_attached = False
@@ -314,7 +314,7 @@ def sync_volume_attachments(host, username, password, interval, iterations, dry_
         else:
             log.warn("- instance: %s [%s] with attached volume %s does not exist in openstack", vcenter_mounted_uuid[i], vcenter_mounted_name[i], i)
 
-    log.info("going through all vcenter instances without volume attachments:")
+    log.info("- going through all vcenter instances without volume attachments")
     for i in vcenter_instances_without_mounts:
         if servers_attached_volumes.get(i):
             for j in servers_attached_volumes[i]:
@@ -330,37 +330,37 @@ def sync_volume_attachments(host, username, password, interval, iterations, dry_
         if not cinder_is_attached:
             log.debug("- instance: %s [%s] - no volumes attached - cinder: no attachments - good", i, vcenter_instances_without_mounts[i])
 
-    log.info("going through all volumes and checking their attachments:")
-    for i in volumes_attached_at:
-        for j in volumes_attached_at[i]:
-            is_attached = False
-            if servers_attached_volumes.get(j):
-                for m in servers_attached_volumes[j]:
-                    if m == i:
-                        is_attached = True
-            if is_attached:
-                log.debug("good: volume %s is attached to server %s", i, j)
-            else:
-                if j in all_servers:
-                    log.warn("bad: volume %s is not attached to server %s", i, j)
-                else:
-                    log.warn("bad: volume %s is attached to non existing server %s", i, j)
+    # log.info("going through all volumes and checking their attachments:")
+    # for i in volumes_attached_at:
+    #     for j in volumes_attached_at[i]:
+    #         is_attached = False
+    #         if servers_attached_volumes.get(j):
+    #             for m in servers_attached_volumes[j]:
+    #                 if m == i:
+    #                     is_attached = True
+    #         if is_attached:
+    #             log.debug("good: volume %s is attached to server %s", i, j)
+    #         else:
+    #             if j in all_servers:
+    #                 log.warn("bad: volume %s is not attached to server %s", i, j)
+    #             else:
+    #                 log.warn("bad: volume %s is attached to non existing server %s", i, j)
 
-    log.info("going through all servers and checking attached volumes:")
-    for k in servers_attached_volumes:
-        for l in servers_attached_volumes[k]:
-            is_attached = False
-            if volumes_attached_at.get(l):
-                for n in volumes_attached_at[l]:
-                    if n == k:
-                        is_attached = True
-            if is_attached:
-                log.debug("good: volume %s is attached to server %s", l, k)
-            else:
-                if l in all_volumes:
-                    log.warn("bad: volume %s is not attached to server %s", l, k)
-                else:
-                    log.warn("bad: non existing volume %s is attached to server %s", l, k)
+    # log.info("going through all servers and checking attached volumes:")
+    # for k in servers_attached_volumes:
+    #     for l in servers_attached_volumes[k]:
+    #         is_attached = False
+    #         if volumes_attached_at.get(l):
+    #             for n in volumes_attached_at[l]:
+    #                 if n == k:
+    #                     is_attached = True
+    #         if is_attached:
+    #             log.debug("good: volume %s is attached to server %s", l, k)
+    #         else:
+    #             if l in all_volumes:
+    #                 log.warn("bad: volume %s is not attached to server %s", l, k)
+    #             else:
+    #                 log.warn("bad: non existing volume %s is attached to server %s", l, k)
 
 if __name__ == '__main__':
     while True:
