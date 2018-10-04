@@ -1085,8 +1085,10 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
 
     log.info("- going through the vcenter and comparing volume mounts to nova and cinder")
     for i in vcenter_mounted_uuid:
+        # the cinder attachment check only makes sense for volumes, which actually exist in openstack
         if i in all_volumes:
             cinder_is_attached = False
+            # for each volume attached in cinder, check if it is also attached according to the vcenter
             if volumes_attached_at.get(i):
                 for j in volumes_attached_at[i]:
                     if j == vcenter_mounted_uuid[i]:
@@ -1094,18 +1096,24 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
                 if cinder_is_attached:
                     log.debug("- instance: %s [%s] - volume: %s - cinder: yes", vcenter_mounted_uuid[i], vcenter_mounted_name[i], i)
                 else:
+                    # the cinder attachment check warning only makes sense for instances, which actually exist in openstack
+                    # otherwise the cinder nanny will take care to clean them up
                     if vcenter_mounted_uuid[i] in all_servers:
                         log.warn("- PLEASE CHECK MANUALLY - instance: %s [%s] - volume: %s - cinder: no", vcenter_mounted_uuid[i], vcenter_mounted_name[i], i)
                         gauge_value_volume_attachment_inconsistencies += 1
             else:
+                # no attachment defined at all for this volume in cinder
                 if vcenter_mounted_uuid[i] in all_servers:
                     log.warn("- PLEASE CHECK MANUALLY - instance: %s [%s] - volume: %s - cinder: no attachments at all for this volume found", vcenter_mounted_uuid[i], vcenter_mounted_name[i], i)
                     gauge_value_volume_attachment_inconsistencies += 1
         else:
+            # volume does not exist in openstack
             log.warn("- PLEASE CHECK MANUALLY - volume: %s attached to %s [%s] does not exist in openstack", i, vcenter_mounted_uuid[i], vcenter_mounted_name[i])
             gauge_value_volume_attachment_inconsistencies += 1
+        # the nova attachment check only makes sense for instances, which actually exist in openstack
         if vcenter_mounted_uuid[i] in all_servers:
             nova_is_attached = False
+            # for each volume attached in nova, check if it is also attached according to the vcenter
             if servers_attached_volumes.get(vcenter_mounted_uuid[i]):
                 for j in servers_attached_volumes[vcenter_mounted_uuid[i]]:
                     if j == i:
@@ -1113,10 +1121,13 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
                 if nova_is_attached:
                     log.debug("- instance: %s [%s] - volume: %s - nova: yes", vcenter_mounted_uuid[i], vcenter_mounted_name[i], i)
                 else:
+                    # the nova attachment check warning only makes sense for volumes, which actually exist in openstack
+                    # otherwise the nova nanny will take care to clean them up
                     if i in all_volumes:
                         log.warn("- PLEASE CHECK MANUALLY - instance: %s [%s] - volume: %s - nova: no", vcenter_mounted_uuid[i], vcenter_mounted_name[i], i)
                         gauge_value_volume_attachment_inconsistencies += 1
             else:
+                # no attachment defined at all for this instance in nova
                 if i in all_volumes:
                     log.warn("- PLEASE CHECK MANUALLY - instance: %s [%s] - volume: %s - nova: no attachments at all on this server found", vcenter_mounted_uuid[i], vcenter_mounted_name[i], i)
                     gauge_value_volume_attachment_inconsistencies += 1
@@ -1127,6 +1138,7 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
     log.info("- going through all vcenter instances without volume attachments")
     for i in vcenter_instances_without_mounts:
         if servers_attached_volumes.get(i):
+            # complain if a server without attachments in the vcenter has attachments according to nova
             for j in servers_attached_volumes[i]:
                 log.warn("- PLEASE CHECK MANUALLY - instance: %s [%s] - no volumes attached - nova: volume %s seems to be attached anyway", i, vcenter_instances_without_mounts[i], j)
                 gauge_value_volume_attachment_inconsistencies += 1
@@ -1134,6 +1146,7 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
             log.debug("- instance: %s [%s] - no volumes attached - nova: no attachments - good", i, vcenter_instances_without_mounts[i])
         cinder_is_attached = False
         for j in volumes_attached_at:
+            # complain if a volume without attachments in the vcenter has attachments according to cinder
             for k in volumes_attached_at[j]:
                 if k == i:
                     cinder_is_attached = True
