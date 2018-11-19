@@ -143,7 +143,7 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
 
     # Start http server for exported data
     if port:
-        prometheus_exporter_port = port
+        prometheus_exporter_port = int(port)
     else:
         prometheus_exporter_port = 9456
     try:
@@ -228,7 +228,7 @@ def init_seen_dict(seen_dict):
 # reset dict of all vms or files we plan to do something with (delete etc.)
 def reset_to_be_dict(to_be_dict, seen_dict):
     for i in seen_dict:
-        # if a machine we planned to delete no longer appears as canditate for delettion, remove it from the list
+        # if a machine we planned to delete no longer appears as candidate for delettion, remove it from the list
         if seen_dict[i] == 0:
             to_be_dict[i] = 0
 
@@ -881,9 +881,9 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         # ghost volumes and ports should not appear often, so limit the maximum of them to delete
         # to avoid the risk of accidentally detaching too many of them due to some failure somewhere else
         if len(ghost_port_detach_candidates) > detach_ghost_limit:
-            log.warn("- PLEASE CHECK MANUALLY - number of instances with ghost ports to be deleted larger than --detach-ghost-limit=%s - denying to delete the ghost ports", str(detach_ghost_limit))
+            log.warn("- PLEASE CHECK MANUALLY - number of instances with ghost ports to be deleted is larger than --detach-ghost-limit=%s - denying to delete the ghost ports", str(detach_ghost_limit))
         if len(ghost_volume_detach_candidates) > detach_ghost_limit:
-            log.warn("- PLEASE CHECK MANUALLY - number of instances with ghost volumes to be deleted larger than --detach-ghost-limit=%s - denying to delete the ghost volumes", str(detach_ghost_limit))
+            log.warn("- PLEASE CHECK MANUALLY - number of instances with ghost volumes to be deleted is larger than --detach-ghost-limit=%s - denying to delete the ghost volumes", str(detach_ghost_limit))
         # build a dict of all uuids from the missing and not_missing ones
         all_uuids = dict()
         all_uuids.update(missing)
@@ -905,7 +905,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                         vm = content.searchIndex.FindByDatastorePath(path=vmx_path, datacenter=dc)
                         # there is a vm for that file path we check what to do with it
                         if vm:
-                            # if this vm is a ghost port detach canditate
+                            # if this vm is a ghost port detach candidate
                             if ghost_port_detach_candidates.get(item):
                                 # only do something if we are below detach_ghost_limit for the ports
                                 if len(ghost_port_detach_candidates) <= detach_ghost_limit:
@@ -924,7 +924,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                         else:
                                             log.warn("looks like the port with the mac address %s on instance %s has only been temporary a ghost port - not doing anything with it ...", ghost_port_detach_candidate, item)
                                             gauge_value_gauge_ghost_ports_ignored += 1
-                            # if this vm is a ghost volume detach canditate
+                            # if this vm is a ghost volume detach candidate
                             elif ghost_volume_detach_candidates.get(item):
                                 # only do something if we are below detach_ghost_limit for the volumes
                                 if len(ghost_volume_detach_candidates) <= detach_ghost_limit:
@@ -940,12 +940,14 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                             ghost_volume_detached[item] = 0
         for i in ghost_port_detach_candidates:
             if not (ghost_port_detached.get(i) == 0 or ghost_port_detached.get(i) == 1):
-                gauge_value_ghost_ports_ignored += 1
-                log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - most probably it is an orphan at vcenter level - ignoring it", i)
+                # use len here to get the proper count in case we have multiple ports for one instance
+                gauge_value_ghost_ports_ignored += len(ghost_port_detach_candidates[i])
+                log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port(s) from instance %s - most probably it is an orphan at vcenter level or detaching is denied due to too many ghost ports - ignoring it", i)
         for i in ghost_volume_detach_candidates:
             if not (ghost_volume_detached.get(i) == 0 or ghost_volume_detached.get(i) == 1):
-                gauge_value_ghost_volumes_ignored += 1
-                log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume from instance %s - most probably it is an orphan at vcenter level - ignoring it", i)
+                # use len here to get the proper count in case we have multiple ports for one instance
+                gauge_value_ghost_volumes_ignored += len(ghost_volume_detach_candidates[i])
+                log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume(s) from instance %s - most probably it is an orphan at vcenter level or detaching is denied due to too many ghost volumes - ignoring it", i)
 
 
     # send the counters to the prometheus exporter - ugly for now, will change
