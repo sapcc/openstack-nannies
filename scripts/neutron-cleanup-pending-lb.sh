@@ -25,4 +25,10 @@ cp -v /neutron-etc/* /etc/neutron
 
 echo -n "INFO: cleaning up lbaas loadbalancer entries with wrong PENDING_* state - "
 date
-/var/lib/kolla/venv/bin/python /scripts/neutron-cleanup-pending-lb.py --config /etc/neutron/neutron.conf --dry-run --interval 60 --iterations 24
+if [ "$NEUTRON_CLEANUP_PENDING_LB_DRY_RUN" = "False" ] || [ "$NEUTRON_CLEANUP_PENDING_LB_DRY_RUN" = "false" ]; then
+    DRY_RUN=""
+else
+    DRY_RUN="--dry-run"
+fi
+
+/var/lib/kolla/venv/bin/python /scripts/neutron-cleanup-pending-lb.py --config /etc/neutron/neutron.conf $DRY_RUN --interval $NEUTRON_CLEANUP_PENDING_LB_INTERVAL --iterations $NEUTRON_CLEANUP_PENDING_LB_ITERATIONS

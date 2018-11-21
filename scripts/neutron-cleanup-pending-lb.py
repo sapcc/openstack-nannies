@@ -120,7 +120,7 @@ class NeutronLbaasCleanupPending:
                 log.info("- PLEASE CHECK MANUALLY - plan: to set the provisioning_status for loadbalancer %s from PENDING_* to ERROR (%s/%s)", lbaas_loadbalancer_id, str(self.to_be_dict.get(lbaas_loadbalancer_id, default) + 1), str(self.args.iterations))
             self.to_be_dict[lbaas_loadbalancer_id] = self.to_be_dict.get(lbaas_loadbalancer_id, default) + 1
         else:
-            log.warn("dry-run: ignoring this one - it should only happen in dry-run mode")
+            log.debug("dry-run: ignoring this one - it should only happen in dry-run mode")
 
     # reset dict of all lbaas loadbalancer id's we plan to do something with
     def reset_to_be_dict(self):
