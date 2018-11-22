@@ -31,4 +31,4 @@ else
     DRY_RUN="--dry-run"
 fi
 
-/var/lib/kolla/venv/bin/python /scripts/neutron-cleanup-pending-lb.py --config /etc/neutron/neutron.conf $DRY_RUN --interval $NEUTRON_CLEANUP_PENDING_LB_INTERVAL --iterations $NEUTRON_CLEANUP_PENDING_LB_ITERATIONS
+/var/lib/openstack/bin/python2 /scripts/neutron-cleanup-pending-lb.py --config /etc/neutron/neutron.conf $DRY_RUN --interval $NEUTRON_CLEANUP_PENDING_LB_INTERVAL --iterations $NEUTRON_CLEANUP_PENDING_LB_ITERATIONS
