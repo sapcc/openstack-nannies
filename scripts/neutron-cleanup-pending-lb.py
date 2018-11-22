@@ -96,7 +96,7 @@ class NeutronLbaasCleanupPending:
         pending_lbaas_loadbalancers = []
 
         lbaas_loadbalancers_t = Table('lbaas_loadbalancers', self.metadata, autoload=True)
-        pending_lbaas_loadbalancers_q = select(columns=[lbaas_loadbalancers_t.c.id], whereclause=or_(lbaas_loadbalancers_t.c.provisioning_status == "PENDING_CREATE", lbaas_loadbalancers_t.c.provisioning_status == "PENDING_UPDATE", lbaas_loadbalancers_t.c.provisioning_status == "PENDING_DELETE", lbaas_loadbalancers_t.c.provisioning_status == "ACTIVE"))
+        pending_lbaas_loadbalancers_q = select(columns=[lbaas_loadbalancers_t.c.id], whereclause=or_(lbaas_loadbalancers_t.c.provisioning_status == "PENDING_CREATE", lbaas_loadbalancers_t.c.provisioning_status == "PENDING_UPDATE", lbaas_loadbalancers_t.c.provisioning_status == "PENDING_DELETE")
 
         # convert the query result into a list
         for i in pending_lbaas_loadbalancers_q.execute():
