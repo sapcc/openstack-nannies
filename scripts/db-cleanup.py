@@ -123,7 +123,9 @@ class Cleanup:
             # get all openstack projects
             # no exception handling is done here as it would complicate things and we just
             # successfully created the connection, so that chance is low to fail
-            for project in self.conn.identity.projects():
+            for project in self.conn.identity.projects(details=False, all_projects=1):
+-           # this might be required for openstacksdk > 0.9.19
+-           #for project in self.conn.identity.projects():
                 self.projects[project.id] = project.name
 
         if self.cindercmdline:
