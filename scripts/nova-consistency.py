@@ -25,6 +25,7 @@ import os
 import datetime
 
 from openstack import connection, exceptions, utils
+
 from sqlalchemy import and_
 from sqlalchemy import func
 from sqlalchemy import MetaData
@@ -46,7 +47,7 @@ def get_cinder_volumes(conn):
 
     # get all volumes from cinder
     try:
-        for cinder_volume in conn.block_store.volumes(details=False, all_tenants=1):
+        for cinder_volume in conn.block_store.volumes(details=False, all_projects=1):
             cinder_volumes[cinder_volume.id] = cinder_volume
 
     except exceptions.HttpException as e:
