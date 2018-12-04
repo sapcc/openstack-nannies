@@ -123,9 +123,9 @@ class Cleanup:
             # get all openstack projects
             # no exception handling is done here as it would complicate things and we just
             # successfully created the connection, so that chance is low to fail
-            for project in self.conn.identity.projects(details=False, all_projects=1):
--           # this might be required for openstacksdk > 0.9.19
--           #for project in self.conn.identity.projects():
+            for project in self.conn.identity.projects(details=False, all_tenants=1):
+            # this might be required for openstacksdk > 0.9.19
+            #for project in self.conn.identity.projects():
                 self.projects[project.id] = project.name
 
         if self.cindercmdline:
@@ -170,7 +170,7 @@ class Cleanup:
 
         # get all instances from nova sorted by their id
         try:
-            self.servers = sorted(self.conn.compute.servers(details=True, all_projects=1), key=lambda x: x.id)
+            self.servers = sorted(self.conn.compute.servers(details=True, all_tenants=1), key=lambda x: x.id)
         except exceptions.HttpException as e:
             log.warn("- PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
             return
@@ -188,7 +188,7 @@ class Cleanup:
             # get all snapshots from cinder sorted by their id - do the snapshots before the volumes,
             # as they are created from them and thus should be deleted first
             try:
-                self.snapshots = sorted(self.conn.block_store.snapshots(details=True, all_projects=1), key=lambda x: x.id)
+                self.snapshots = sorted(self.conn.block_store.snapshots(details=True, all_tenants=1), key=lambda x: x.id)
             except exceptions.HttpException as e:
                 log.warn("- PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
                 return
@@ -213,7 +213,7 @@ class Cleanup:
 
             # get all volumes from cinder sorted by their id
             try:
-                self.volumes = sorted(self.conn.block_store.volumes(details=True, all_projects=1), key=lambda x: x.id)
+                self.volumes = sorted(self.conn.block_store.volumes(details=True, all_tenants=1), key=lambda x: x.id)
             except exceptions.HttpException as e:
                 log.warn("- PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
                 return

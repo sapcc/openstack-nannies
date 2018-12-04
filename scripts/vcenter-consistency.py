@@ -199,7 +199,7 @@ def sync_volume_attachments(host, username, password, interval, iterations, dry_
     # get all servers, volumes, snapshots and images from openstack to compare the resources we find on the vcenter against
     try:
         service = "nova"
-        for server in conn.compute.servers(details=True, all_projects=1):
+        for server in conn.compute.servers(details=True, all_tenants=1):
             all_servers.append(server.id)
             if server.attached_volumes:
                 for attachment in server.attached_volumes:
@@ -208,7 +208,7 @@ def sync_volume_attachments(host, username, password, interval, iterations, dry_
                     else:
                         servers_attached_volumes[server.id] = [attachment['id']]
         service = "cinder"
-        for volume in conn.block_store.volumes(details=True, all_projects=1):
+        for volume in conn.block_store.volumes(details=True, all_tenants=1):
             all_volumes.append(volume.id)
             if volume.attachments:
                 for attachment in volume.attachments:

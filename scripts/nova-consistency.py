@@ -47,7 +47,7 @@ def get_cinder_volumes(conn):
 
     # get all volumes from cinder
     try:
-        for cinder_volume in conn.block_store.volumes(details=False, all_projects=1):
+        for cinder_volume in conn.block_store.volumes(details=False, all_tenants=1):
             cinder_volumes[cinder_volume.id] = cinder_volume
 
     except exceptions.HttpException as e:

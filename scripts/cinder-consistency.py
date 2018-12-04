@@ -47,7 +47,7 @@ def get_nova_instances(conn):
 
     # get all instance from nova
     try:
-        for nova_instance in conn.compute.servers(details=False, all_projects=1):
+        for nova_instance in conn.compute.servers(details=False, all_tenants=1):
             nova_instances[nova_instance.id] = nova_instance
 
     except exceptions.HttpException as e:
