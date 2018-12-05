@@ -17,7 +17,3 @@ FROM __GLANCE_NANNY_BASE_IMAGE__
 USER root
 
 ADD scripts/glance-* /scripts/
-#ADD requirements.txt.glance-nanny /
-
-# alternatively install the python modules via requirements file
-#RUN /var/lib/kolla/venv/bin/pip install -r /requirements.txt.glance-nanny

@@ -17,18 +17,11 @@ FROM __VCENTER_NANNY_BASE_IMAGE__
 USER root
 
 ADD scripts/vcenter-* /scripts/
-#ADD requirements.txt.vcenter-nanny /
 
-RUN /var/lib/kolla/venv/bin/pip install click==6.7 python-openstackclient==3.12.0 openstacksdk==0.9.19 prometheus-client==0.1.1 os-client-config==1.30.0 requestsexceptions==1.1.3
+RUN /var/lib/kolla/venv/bin/pip install click==6.7 python-openstackclient==3.12.0 openstacksdk==0.20.0 prometheus-client==0.1.1 os-client-config==1.30.0 requestsexceptions==1.1.3
 
 # in case pyvmomi is not around
-#RUN /var/lib/kolla/venv/bin/pip install click==6.7 python-openstackclient==3.12.0 openstacksdk==0.9.19 prometheus-client==0.1.1 os-client-config==1.30.0 requestsexceptions==1.1.3 pyvmomi==6.5.0.2017.5.post1
-
-# # looks like uninstall of dogpile.core is required to avoid a conflict at runtime
-# RUN /var/lib/kolla/venv/bin/pip uninstall -y dogpile.core
+#RUN /var/lib/kolla/venv/bin/pip install click==6.7 python-openstackclient==3.12.0 openstacksdk==0.20.0 prometheus-client==0.1.1 os-client-config==1.30.0 requestsexceptions==1.1.3 pyvmomi==6.5.0.2017.5.post1
 
 # fix a bug in the openstacksdk - a proper fix in the source will follow soon
 RUN sed -i 's/_port.Port,\ paginated=False/_port.Port,\ paginated=True/g' /var/lib/kolla/venv/lib/python2.7/site-packages/openstack/network/v2/_proxy.py
-
-# alternatively install the python modules via requirements file
-#RUN /var/lib/kolla/venv/bin/pip install -r /requirements.txt.vcenter-nanny

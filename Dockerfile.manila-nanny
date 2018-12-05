@@ -19,7 +19,3 @@ USER root
 ADD scripts/manila-* /scripts/
 ADD scripts/db-cleanup.py /scripts/
 ADD scripts/count-deleted.py /scripts/
-#ADD requirements.txt.manila-nanny /
-
-# alternatively install the python modules via requirements file
-#RUN /var/lib/kolla/venv/bin/pip install -r /requirements.txt.manila-nanny

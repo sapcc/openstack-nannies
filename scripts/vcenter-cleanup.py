@@ -499,16 +499,16 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     # get all servers, volumes, snapshots and images from openstack to compare the resources we find on the vcenter against
     try:
         service = "nova"
-        for server in conn.compute.servers(details=False, all_tenants=1):
+        for server in conn.compute.servers(details=False, all_projects=1):
             known[server.id] = server
         service = "cinder"
-        for volume in conn.block_store.volumes(details=False, all_tenants=1):
+        for volume in conn.block_store.volumes(details=False, all_projects=1):
             known[volume.id] = volume
         service = "cinder"
-        for snapshot in conn.block_store.snapshots(details=False, all_tenants=1):
+        for snapshot in conn.block_store.snapshots(details=False, all_projects=1):
             known[snapshot.id] = snapshot
         service = "glance"
-        for image in conn.image.images(details=False):
+        for image in conn.image.images():
             known[image.id] = image
 
         # build a dict of ports related to the network interfaces on the servers on the vcenter
@@ -922,8 +922,8 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                                 gauge_value_ghost_ports_detach_errors += 1
                                                 ghost_port_detached[item] = 0
                                         else:
-                                            log.warn("looks like the port with the mac address %s on instance %s has only been temporary a ghost port - not doing anything with it ...", ghost_port_detach_candidate, item)
-                                            gauge_value_gauge_ghost_ports_ignored += 1
+                                            log.warn("- looks like the port with the mac address %s on instance %s has only been temporary a ghost port - not doing anything with it ...", ghost_port_detach_candidate, item)
+                                            gauge_value_ghost_ports_ignored += 1
                             # if this vm is a ghost volume detach candidate
                             elif ghost_volume_detach_candidates.get(item):
                                 # only do something if we are below detach_ghost_limit for the volumes
@@ -1005,7 +1005,7 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
     # get all servers, volumes, snapshots and images from openstack to compare the resources we find on the vcenter against
     try:
         service = "nova"
-        for server in conn.compute.servers(details=True, all_tenants=1):
+        for server in conn.compute.servers(details=True, all_projects=1):
             all_servers.append(server.id)
             if server.attached_volumes:
                 for attachment in server.attached_volumes:
@@ -1014,7 +1014,7 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
                     else:
                         servers_attached_volumes[server.id] = [attachment['id']]
         service = "cinder"
-        for volume in conn.block_store.volumes(details=True, all_tenants=1):
+        for volume in conn.block_store.volumes(details=True, all_projects=1):
             all_volumes.append(volume.id)
             if volume.attachments:
                 for attachment in volume.attachments:
