@@ -52,6 +52,18 @@ while true; do
             /var/lib/kolla/venv/bin/python /scripts/nova-consistency.py --config /etc/nova/nova.conf --dry-run
         fi
     fi
+    if [ "$NOVA_QUEENS_INSTANCE_MAPPING_ENABLED" = "True" ] || [ "$NOVA_QUEENS_INSTANCE_MAPPING_ENABLED" = "true" ]; then
+        if [ "$NOVA_INSTANCE_MAPPING_DRY_RUN" = "False" ] ||  [ "$NOVA_INSTANCE_MAPPING_DRY_RUN" = "false" ]; then
+            echo -n "INFO: "
+            DRY_RUN=""
+        else
+            echo -n "INFO: dry run mode only - "
+            DRY_RUN="--dry-run"
+        fi
+        echo -n "INFO: Searching for inconsistent instance mappings and delete duplicates - "
+        date
+        /var/lib/kolla/venv/bin/python /scripts/nova-queens-instance-mapping.py --config /etc/nova/nova.conf $DRY_RUN
+    fi
     if [ "$NOVA_DB_PURGE_ENABLED" = "True" ] || [ "$NOVA_DB_PURGE_ENABLED" = "true" ]; then
         echo -n "INFO: purge old deleted instances from the nova db - "
         date
