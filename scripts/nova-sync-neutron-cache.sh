@@ -22,6 +22,8 @@ unset http_proxy https_proxy all_proxy no_proxy
 
 echo "INFO: copying nova config files to /etc/nova"
 cp -v /nova-etc/* /etc/nova
+# this is a temporary hack to avoid annoying raven warnings - we do not need sentry for this nanny for now
+sed -i 's,raven\.handlers\.logging\.SentryHandler,logging.NullHandler,g' /etc/nova/logging.ini
 
 # we run an endless loop to run the script periodically
 echo "INFO: starting a loop to periodically run the nanny job for the nova instance info cache sync from neutron"
