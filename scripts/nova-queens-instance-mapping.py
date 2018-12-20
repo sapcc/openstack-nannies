@@ -98,12 +98,14 @@ for (instance_uuid,) in unmapped_instances:
   if instance_cell:
     log.warn("found missing instance mapping to cell %s", instance_cell['id'])
     if not args.dry_run:
-      log.info("UPDATE instance_mappings SET cell_id = '%s' WHERE instance_uuid = '%s';", (instance_cell['id'], instance_uuid))
+      log.info("UPDATE instance_mappings SET cell_id = '%s' WHERE instance_uuid = '%s';", instance_cell['id'], instance_uuid)
       api_cur.execute("UPDATE instance_mappings SET cell_id = '%s' WHERE instance_uuid = '%s';" % (instance_cell['id'], instance_uuid))
+      api_conn.commit()
     if build_request:
       if not args.dry_run:
         log.info("build requests existing for scheduled instance, deleting build-request to fix instance-list")
         api_cur.execute("DELETE FROM build_requests WHERE instance_uuid = %s", (instance_uuid,))
+        api_conn.commit()
 
   # If we reach this point, it's not in any cell?!
   log.info("%s: not found in any cell", (instance_uuid,))
