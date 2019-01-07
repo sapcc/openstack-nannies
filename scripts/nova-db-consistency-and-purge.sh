@@ -55,7 +55,7 @@ while true; do
         fi
     fi
     if [ "$NOVA_QUEENS_INSTANCE_MAPPING_ENABLED" = "True" ] || [ "$NOVA_QUEENS_INSTANCE_MAPPING_ENABLED" = "true" ]; then
-        if [ "$NOVA_INSTANCE_MAPPING_DRY_RUN" = "False" ] ||  [ "$NOVA_INSTANCE_MAPPING_DRY_RUN" = "false" ]; then
+        if [ "$NOVA_QUEENS_INSTANCE_MAPPING_DRY_RUN" = "False" ] ||  [ "$NOVA_QUEENS_INSTANCE_MAPPING_DRY_RUN" = "false" ]; then
             echo -n "INFO: "
             DRY_RUN=""
         else
