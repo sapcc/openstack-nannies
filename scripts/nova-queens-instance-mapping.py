@@ -72,7 +72,7 @@ CELLS = [{'id': id, 'name': name, 'db': _get_conn(db)} for id, name, db in api_c
 
 # Get list of all unmapped instances
 api_cur.execute("SELECT instance_uuid FROM instance_mappings WHERE cell_id IS NULL")
-log.info("Number of unmapped instances: %s", api_cur.rowcount)
+log.info("unmapped instances - discovered number: %s", api_cur.rowcount)
 
 # Go over all unmapped instances
 unmapped_instances = api_cur.fetchall()
@@ -83,7 +83,7 @@ for (instance_uuid,) in unmapped_instances:
   # Check if a build request exists, if so, skip.
   api_cur.execute("SELECT id FROM build_requests WHERE instance_uuid = %s", (instance_uuid,))
   if api_cur.rowcount != 0:
-    log.info("%s: build request exists, checking if instance has been scheduled", (instance_uuid,))
+    log.info("unmapped instances - build request for instance %s exists, checking if instance has been scheduled", instance_uuid)
     build_request = True
 
   # Check which cell contains this instance
@@ -96,16 +96,17 @@ for (instance_uuid,) in unmapped_instances:
 
   # Update to the correct cell
   if instance_cell:
-    log.warn("found missing instance mapping to cell %s", instance_cell['id'])
+    log.warn("unmapped instances - found missing instance mapping to cell %s", instance_cell['id'])
     if not args.dry_run:
-      log.info("UPDATE instance_mappings SET cell_id = '%s' WHERE instance_uuid = '%s';", instance_cell['id'], instance_uuid)
+      log.info("unmapped instances - fixing missing instance mapping of instance %s to cell %s", instance_uuid, instance_cell['id'])
+      log.debug("UPDATE instance_mappings SET cell_id = '%s' WHERE instance_uuid = '%s';", instance_cell['id'], instance_uuid)
       api_cur.execute("UPDATE instance_mappings SET cell_id = '%s' WHERE instance_uuid = '%s';" % (instance_cell['id'], instance_uuid))
       api_conn.commit()
     if build_request:
       if not args.dry_run:
-        log.info("build requests existing for scheduled instance, deleting build-request to fix instance-list")
+        log.info("unmapped instances - build requests existing for scheduled instance %s, deleting build-request to fix instance-list", instance_uuid)
         api_cur.execute("DELETE FROM build_requests WHERE instance_uuid = %s", (instance_uuid,))
         api_conn.commit()
 
   # If we reach this point, it's not in any cell?!
-  log.info("%s: not found in any cell", (instance_uuid,))
+  log.info("unmapped instances - instance %s not found in any cell", instance_uuid)
