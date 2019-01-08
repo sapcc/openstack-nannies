@@ -62,7 +62,7 @@ while true; do
             echo -n "INFO: dry run mode only - "
             DRY_RUN="--dry-run"
         fi
-        echo -n "INFO: Searching for inconsistent instance mappings and delete duplicates - "
+        echo -n "Searching for inconsistent instance mappings and deleting duplicates - "
         date
         /var/lib/kolla/venv/bin/python /scripts/nova-queens-instance-mapping.py --config /etc/nova/nova.conf $DRY_RUN
     fi
