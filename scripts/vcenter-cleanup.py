@@ -588,10 +588,13 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                 for j in k.get('config.hardware.device'):
                     # we are only interested in disks for ghost volumes ...
                     # TODO: maybe? if isinstance(k.get('config.hardware.device'), vim.vm.device.VirtualDisk):
-                    if 2001 <= j.key < 3000:
-                        vcenter_mounted_uuid[j.backing.uuid] = k['config.instanceUuid']
-                        vcenter_mounted_name[j.backing.uuid] = k['config.name']
-                        log.debug("==> mount - instance: %s - volume: %s", str(k['config.instanceUuid']), str(j.backing.uuid))
+                    if 2000 <= j.key < 3000:
+                        # we only care for vvols - in the past we checked starting with 2001 as 2000 usual was the eph
+                        # storage, but it looks like eph can also be on another id and 2000 could be a vvol as well ...
+                        if j.backing.fileName.lower().startswith('[vvol_'):
+                            vcenter_mounted_uuid[j.backing.uuid] = k['config.instanceUuid']
+                            vcenter_mounted_name[j.backing.uuid] = k['config.name']
+                            log.debug("==> mount - instance: %s - volume: %s", str(k['config.instanceUuid']), str(j.backing.uuid))
                     # ... and network interfaces for ghost ports
                     # TODO: maybe? if isinstance(k.get('config.hardware.device'), vim.vm.device.VirtualEthernetCard):
                     if 4000 <= j.key < 5000:
@@ -1075,11 +1078,14 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
                 for j in k.get('config.hardware.device'):
                     # we are only interested in disks for ghost volumes ...
                     # TODO: maybe? if isinstance(k.get('config.hardware.device'), vim.vm.device.VirtualDisk):
-                    if 2001 <= j.key < 3000:
-                        vcenter_mounted_uuid[j.backing.uuid] = k['config.instanceUuid']
-                        vcenter_mounted_name[j.backing.uuid] = k['config.name']
-                        log.debug("==> mount - instance: %s - volume: %s", str(k['config.instanceUuid']), str(j.backing.uuid))
-                        has_volume_attachments[k['config.instanceUuid']] = True
+                    if 2000 <= j.key < 3000:
+                        # we only care for vvols - in the past we checked starting with 2001 as 2000 usual was the eph
+                        # storage, but it looks like eph can also be on another id and 2000 could be a vvol as well ...
+                        if j.backing.fileName.lower().startswith('[vvol_'):
+                            vcenter_mounted_uuid[j.backing.uuid] = k['config.instanceUuid']
+                            vcenter_mounted_name[j.backing.uuid] = k['config.name']
+                            log.debug("==> mount - instance: %s - volume: %s", str(k['config.instanceUuid']), str(j.backing.uuid))
+                            has_volume_attachments[k['config.instanceUuid']] = True
             else:
                 log.warn("- PLEASE CHECK MANUALLY - instance without hardware - this should not happen!")
             if not has_volume_attachments.get(k['config.instanceUuid']):
