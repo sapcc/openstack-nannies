@@ -511,6 +511,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         for image in conn.image.images():
             known[image.id] = image
 
+        service = "neutron"
         # build a dict of ports related to the network interfaces on the servers on the vcenter
         for port in conn.network.ports():
             # we only care about ports handled by nova-compute here
