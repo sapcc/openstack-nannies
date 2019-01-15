@@ -1099,9 +1099,14 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
             cinder_is_attached = False
             # for each volume attached in cinder, check if it is also attached according to the vcenter
             if volumes_attached_at.get(i):
+                log.debug("volume: %s", str(i))
                 for j in volumes_attached_at[i]:
+                    log.debug("==> server: %s", str(j))
                     if j == vcenter_mounted_uuid[i]:
                         cinder_is_attached = True
+                    # check if we have attachments in cinder for the other servers the volume j is attached to, which are not attached in the vcenter
+                    elif not servers_attached_volumes.get(j):
+                        log.warn("- PLEASE CHECK MANUALLY - instance: %s - in cinder attached volume uuid: %s - but not attached in vcenter", volumes_attached_at[i], j)
                 if cinder_is_attached:
                     log.debug("- instance: %s [%s] - volume: %s - cinder: yes", vcenter_mounted_uuid[i], vcenter_mounted_name[i], i)
                 else:
@@ -1124,9 +1129,14 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
             nova_is_attached = False
             # for each volume attached in nova, check if it is also attached according to the vcenter
             if servers_attached_volumes.get(vcenter_mounted_uuid[i]):
+                log.debug("server: %s", str(vcenter_mounted_uuid[i]))
                 for j in servers_attached_volumes[vcenter_mounted_uuid[i]]:
+                    log.debug("==> volume: %s", str(j))
                     if j == i:
                         nova_is_attached = True
+                    # check if we have attachments in nova for the other volumes attached to server vcenter_mounted_uuid[i], which are not attached in the vcenter
+                    elif not volumes_attached_at.get(j):
+                        log.warn("- PLEASE CHECK MANUALLY - instance: %s - in nova attached volume uuid: %s - but not attached in vcenter", vcenter_mounted_uuid[i], j)
                 if nova_is_attached:
                     log.debug("- instance: %s [%s] - volume: %s - nova: yes", vcenter_mounted_uuid[i], vcenter_mounted_name[i], i)
                 else:
