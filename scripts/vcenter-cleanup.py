@@ -183,6 +183,9 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
                 content = service_instance.content
                 dc = content.rootFolder.childEntity[0]
 
+                # this is used later
+                vcenter_name = dc.name.lower()
+
                 # iterate through all vms and get the config.hardware.device properties (and some other)
                 # get vm containerview
                 # TODO: destroy the view again - most probably not required, as we close the connection at the end of each loop
@@ -207,7 +210,7 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
 
                 # check the consistency of volume attachments if requested
                 if vol_check:
-                    sync_volume_attachments(host, username, password, dry_run, service_instance, view_ref)
+                    sync_volume_attachments(host, username, password, dry_run, service_instance, view_ref, vcenter_name)
 
                 # disconnect from vcenter
                 Disconnect(service_instance)
@@ -989,7 +992,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
 
 
 # main volume attachment sync function - maybe this will be folded into the cleanup function above as well in the future
-def sync_volume_attachments(host, username, password, dry_run, service_instance, view_ref):
+def sync_volume_attachments(host, username, password, dry_run, service_instance, view_ref, vcenter_name):
 
     # openstack connection
     conn = connection.Connection(auth_url=os.getenv('OS_AUTH_URL'),
@@ -1003,6 +1006,8 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
     volumes_attached_at = dict()
     all_servers = []
     all_volumes = []
+    all_vcenter_servers = []
+    all_vcenter_volumes = []
 
     gauge_value_volume_attachment_inconsistencies = 0
 
@@ -1010,22 +1015,26 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
     try:
         service = "nova"
         for server in conn.compute.servers(details=True, all_projects=1):
-            all_servers.append(server.id)
-            if server.attached_volumes:
-                for attachment in server.attached_volumes:
-                    if servers_attached_volumes.get(server.id):
-                        servers_attached_volumes[server.id].append(attachment['id'])
-                    else:
-                        servers_attached_volumes[server.id] = [attachment['id']]
+            # we only care about servers from the vcenter this nanny is taking care of
+            if server.availability_zone.lower() == vcenter_name:
+                all_servers.append(server.id)
+                if server.attached_volumes:
+                    for attachment in server.attached_volumes:
+                        if servers_attached_volumes.get(server.id):
+                            servers_attached_volumes[server.id].append(attachment['id'])
+                        else:
+                            servers_attached_volumes[server.id] = [attachment['id']]
         service = "cinder"
         for volume in conn.block_store.volumes(details=True, all_projects=1):
-            all_volumes.append(volume.id)
-            if volume.attachments:
-                for attachment in volume.attachments:
-                    if volumes_attached_at.get(volume.id):
-                        volumes_attached_at[volume.id].append(attachment['server_id'])
-                    else:
-                        volumes_attached_at[volume.id] = [attachment['server_id']]
+            # we only care about volumes from the vcenter this nanny is taking care of
+            if volume.availability_zone.lower() == vcenter_name:
+                all_volumes.append(volume.id)
+                if volume.attachments:
+                    for attachment in volume.attachments:
+                        if volumes_attached_at.get(volume.id):
+                            volumes_attached_at[volume.id].append(attachment['server_id'])
+                        else:
+                            volumes_attached_at[volume.id] = [attachment['server_id']]
 
     except exceptions.HttpException as e:
         log.warn(
@@ -1066,6 +1075,8 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
     for k in data:
         # only work with results, which have an instance uuid defined and are openstack vms (i.e. have an annotation set)
         if k.get('config.instanceUuid') and openstack_re.match(k.get('config.annotation')) and not k.get('config.template'):
+            # build a list of all openstack volumes in the vcenter to later compare it to the volumes in openstack
+            all_vcenter_servers.append(k['config.instanceUuid'])
             # debug code
             # log.info("%s - %s", k.get('config.instanceUuid'), k.get('config.name'))
             # # check if this instance is a vcenter template
@@ -1083,7 +1094,9 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
                         # we only care for vvols - in the past we checked starting with 2001 as 2000 usual was the eph
                         # storage, but it looks like eph can also be on another id and 2000 could be a vvol as well ...
                         if j.backing.fileName.lower().startswith('[vvol_'):
+                            # map attached volume id to instance uuid - used later
                             vcenter_mounted_uuid[j.backing.uuid] = k['config.instanceUuid']
+                            # map attached volume id to instance name - used later for more detailed logging
                             vcenter_mounted_name[j.backing.uuid] = k['config.name']
                             log.debug("==> mount - instance: %s - volume: %s", str(k['config.instanceUuid']), str(j.backing.uuid))
                             has_volume_attachments[k['config.instanceUuid']] = True
@@ -1091,6 +1104,26 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
                 log.warn("- PLEASE CHECK MANUALLY - instance without hardware - this should not happen!")
             if not has_volume_attachments.get(k['config.instanceUuid']):
                 vcenter_instances_without_mounts[k['config.instanceUuid']] = k['config.name']
+
+        # build a list of all volumes in the vcenter
+        if k.get('config.instanceUuid') and not k.get('config.template'):
+            if k.get('config.hardware.device'):
+                for j in k.get('config.hardware.device'):
+                    # we are only interested in disks ...
+                    # TODO: maybe? if isinstance(k.get('config.hardware.device'), vim.vm.device.VirtualDisk):
+                    if 2000 <= j.key < 3000:
+                        # we only care for vvols - in the past we checked starting with 2001 as 2000 usual was the eph
+                        # storage, but it looks like eph can also be on another id and 2000 could be a vvol as well ...
+                        if j.backing.fileName.lower().startswith('[vvol_'):
+                            # build a list of all openstack volumes in the vcenter to later compare it to the volumes in openstack
+                            # it looks like we have to put both the uuid of the shadow vm and the uuid of the backing
+                            # storage onto the list, as otherwise we would miss out some volumes really existing in the vcenter
+                            all_vcenter_volumes.append(j.backing.uuid)
+                            all_vcenter_volumes.append(k.get('config.instanceUuid'))
+                            # all_vcenter_volumes.append(k.get('config.instanceUuid'))
+                            log.debug("==> shadow vm mount - instance: %s - volume / backing uuid: %s", str(k['config.instanceUuid']), str(j.backing.uuid))
+            else:
+                log.warn("- PLEASE CHECK MANUALLY - instance without hardware - this should not happen!")
 
     log.info("- going through the vcenter and comparing volume mounts to nova and cinder")
     for i in vcenter_mounted_uuid:
@@ -1173,6 +1206,18 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
                     gauge_value_volume_attachment_inconsistencies += 1
         if not cinder_is_attached:
             log.debug("- instance: %s [%s] - no volumes attached - cinder: no attachments - good", i, vcenter_instances_without_mounts[i])
+
+    log.info("- checking if all openstack servers exist in the vcenter")
+    for i in all_servers:
+        # this is to convert the unicode entries to ascii for the compare to work - should maybe find a better way
+        if i.encode('ascii') not in all_vcenter_servers:
+            log.warn("- PLEASE CHECK MANUALLY - instance %s exists in openstack, but not in the vcenter", i)
+
+    log.info("- checking if all openstack volumes exist in the vcenter")
+    for i in all_volumes:
+        # this is to convert the unicode entries to ascii for the compare to work - should maybe find a better way
+        if i.encode('ascii') not in all_vcenter_volumes:
+            log.warn("- PLEASE CHECK MANUALLY - volume %s exists in openstack, but not in the vcenter", i)
 
     gauge_volume_attachment_inconsistencies.set(float(gauge_value_volume_attachment_inconsistencies))
 
