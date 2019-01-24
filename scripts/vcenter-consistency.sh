@@ -17,7 +17,6 @@
 #
 
 echo -n "this script is to verify the consistency of volume attachments across nova, cinder and the vcenter"
-date
 
 export OS_USER_DOMAIN_NAME
 export OS_PROJECT_NAME
