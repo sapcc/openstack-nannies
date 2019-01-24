@@ -16,7 +16,7 @@
 #    under the License.
 #
 
-echo -n "INFO: checking consistency of volume attachments between vcenter, nova and cinder - "
+echo -n "this script is to verify the consistency of volume attachments across nova, cinder and the vcenter"
 date
 
 export OS_USER_DOMAIN_NAME
