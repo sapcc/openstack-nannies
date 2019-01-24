@@ -59,7 +59,7 @@ class ConsistencyCheck:
         self.os_servers_with_attached_volume = dict()
         self.os_all_servers = []
         self.os_all_volumes = []
-        self.os_volume_status = []
+        self.os_volume_status = dict()
         self.vc_all_servers = []
         self.vc_all_volumes = []
 
@@ -303,7 +303,7 @@ class ConsistencyCheck:
                 # we only care about volumes from the vcenter this nanny is taking care of
                 if volume.availability_zone.lower() == self.vcenter_name:
                     self.os_all_volumes.append(volume.id)
-                    self.os_volume_status = volume.status
+                    self.os_volume_status[volume.id] = volume.status
                     if volume.attachments:
                         for attachment in volume.attachments:
                             if self.os_servers_with_attached_volume.get(volume.id):
@@ -337,7 +337,7 @@ class ConsistencyCheck:
         log.info("volume uuid: %s", self.volume_query)
         if self.volume_query in self.os_all_volumes:
             log.info("- this volume exists in cinder: Yes")
-            log.info("- volume status in cinder: %s", self.os_volume_status)
+            log.info("- volume status in cinder: %s", self.os_volume_status.get(self.volume_query))
         else:
             log.info("- this volume exists in cinder: No")
         if self.os_servers_with_attached_volume.get(self.volume_query):
