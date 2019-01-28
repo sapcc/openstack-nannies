@@ -336,10 +336,10 @@ class ConsistencyCheck:
     def print_volume_information(self):
         log.info("volume uuid: %s", self.volume_query)
         if self.volume_query in self.os_all_volumes:
-            log.info("- this volume exists in cinder: Yes")
+            log.info("- this volume exists in cinder (for this az): Yes")
             log.info("- volume status in cinder: %s", self.os_volume_status.get(self.volume_query))
         else:
-            log.info("- this volume exists in cinder: No")
+            log.info("- this volume exists in cinder (for this az): No")
         if self.os_servers_with_attached_volume.get(self.volume_query):
             for i in self.os_servers_with_attached_volume[self.volume_query]:
                 log.info("os server with this volume attached (cinder): %s", i)
