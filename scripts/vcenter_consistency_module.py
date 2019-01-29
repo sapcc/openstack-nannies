@@ -39,11 +39,11 @@ log = logging.getLogger('vcenter_consistency_module')
 openstack_re = re.compile("^name")
 
 class ConsistencyCheck:
-    def __init__(self, host, username, password, dry_run):
+    def __init__(self, host, vcusername, vcpassword, dry_run):
 
         self.host = host
-        self.username = username
-        self.password = password
+        self.vcusername = vcusername
+        self.vcpassword = vcpassword
         self.dry_run = dry_run
 
         self.nova_os_all_servers = []
@@ -61,6 +61,7 @@ class ConsistencyCheck:
         self.cinder_volume_available_with_attachments = dict()
         self.cinder_volume_is_in_state_reserved = dict()
         self.cinder_os_volume_status = dict()
+
 
         # this one has the instance uuid as key
         self.nova_os_volumes_attached_at_server = dict()
@@ -84,8 +85,8 @@ class ConsistencyCheck:
 
             try:
                 self.vc_service_instance = SmartConnect(host=self.host,
-                                            user=self.username,
-                                            pwd=self.password,
+                                            user=self.vcusername,
+                                            pwd=self.vcpassword,
                                             port=443,
                                             sslContext=context)
             except Exception as e:
@@ -417,8 +418,8 @@ class ConsistencyCheck:
     def discover_problems(self, iterations):
         self.discover_cinder_volume_attaching_for_too_long(iterations)
         self.discover_cinder_volume_detaching_for_too_long(iterations)
-        self.discover_cinder_volume_available_with_attachments(iterations)
         self.discover_cinder_volume_is_in_reserved_state(iterations)
+        self.discover_cinder_volume_available_with_attachments(iterations)
 
     # in the below discover functions we increase a counter for each occurence of the problem per volume uuid
     # if the counter reaches 'iterations' then the problem is persisting for too long and we log a warning
@@ -445,28 +446,31 @@ class ConsistencyCheck:
                 self.cinder_volume_detaching_for_too_long[volume_uuid] = 0
 
     def discover_cinder_volume_available_with_attachments(self, iterations):
-        for volume_uuid in self.cinder_os_all_volumes:
-            if self.cinder_os_volume_status.get(volume_uuid) == 'available':
-                if self.cinder_os_servers_with_attached_volume.get(volume_uuid):
-                    self.cinder_volume_available_with_attachments[volume_uuid] += 1
-                    continue
-                if self.nova_os_servers_with_attached_volume.get(volume_uuid):
-                    self.cinder_volume_available_with_attachments[volume_uuid] += 1
-                    continue
-                if self.vc_server_name_with_mounted_volume.get(volume_uuid):
-                    self.cinder_volume_available_with_attachments[volume_uuid] += 1
-                    continue
-                self.cinder_volume_available_with_attachments[volume_uuid] = 0
+        try:
+            for volume_uuid in self.cinder_os_all_volumes:
+                if self.cinder_os_volume_status.get(volume_uuid) == 'available':
+                    if self.cinder_os_servers_with_attached_volume.get(volume_uuid):
+                        self.cinder_volume_available_with_attachments[volume_uuid] += 1
+                        continue
+                    if self.nova_os_servers_with_attached_volume.get(volume_uuid):
+                        self.cinder_volume_available_with_attachments[volume_uuid] += 1
+                        continue
+                    if self.vc_server_name_with_mounted_volume.get(volume_uuid):
+                        self.cinder_volume_available_with_attachments[volume_uuid] += 1
+                        continue
+                    self.cinder_volume_available_with_attachments[volume_uuid] = 0
+        except Exception as e:
+            log.error("discover_cinder_volume_available_with_attachments() error: %s", e)
 
     def discover_cinder_volume_is_in_reserved_state(self, iterations):
         for volume_uuid in self.cinder_os_all_volumes:
             if self.cinder_os_volume_status.get(volume_uuid) == 'reserved':
-                if self.cinder_volume_is_in_reserved_state[volume_uuid] < iterations:
-                    self.cinder_volume_is_in_reserved_state[volume_uuid] += 1
+                if self.cinder_volume_is_in_state_reserved[volume_uuid] < iterations:
+                    self.cinder_volume_is_in_state_reserved[volume_uuid] += 1
                 else:
                     log.warn(" - PLEASE CHECK MANUALLY - volume %s is in state 'reserved' for too long", volume_uuid)
             else:
-                self.cinder_volume_is_in_reserved_state[volume_uuid] = 0
+                self.cinder_volume_is_in_state_reserved[volume_uuid] = 0
 
     def run_check(self, interval, iterations):
         while True:

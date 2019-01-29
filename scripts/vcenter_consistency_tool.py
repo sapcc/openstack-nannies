@@ -27,13 +27,13 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 @click.command()
 # vcenter host, user and password
 @click.option('--host', prompt='vc host to connect to')
-@click.option('--username', prompt='vc username to connect with')
-@click.option('--password', prompt='vc password to connect with')
+@click.option('--vcusername', prompt='vc username to connect with')
+@click.option('--vcpassword', prompt='vc password to connect with')
 # dry run option not doing anything harmful
 @click.option('--dry-run', is_flag=True)
-def get_args_and_run(host, username, password, dry_run):
+def get_args_and_run(host, vcusername, vcpassword, dry_run):
     print host
-    c = vcenter_consistency_module.ConsistencyCheck(host, username, password, dry_run)
+    c = vcenter_consistency_module.ConsistencyCheck(host, vcusername, vcpassword, dry_run)
     c.run_tool()
     
 if __name__ == '__main__':
