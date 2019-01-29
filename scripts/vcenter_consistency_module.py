@@ -412,7 +412,7 @@ class ConsistencyCheck:
         if not self.os_connection_ok():
             log.warn("- PLEASE CHECK MANUALLY - problems connecting to the vcenter - retrying in next loop run")
             return
-        log.info("getting information from openstack (this may take a moment)")
+        log.info(" - INFO - getting information from openstack (this may take a moment)")
         # TODO add exception handling in case something goes wrong here
         self.os_get_info()
         log.info(" - INFO - disconnecting from openstack")
