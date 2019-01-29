@@ -47,7 +47,8 @@ class ConsistencyCheck:
         self.dry_run = dry_run
 
         self.os_volumes_attached_at_server = dict()
-        self.os_servers_with_attached_volume = dict()
+        self.os_nova_servers_with_attached_volume = dict()
+        self.os_cinder_servers_with_attached_volume = dict()
         self.os_all_servers = []
         self.os_all_volumes = []
         self.os_volume_status = dict()
@@ -59,6 +60,10 @@ class ConsistencyCheck:
         self.vc_server_uuid_with_mounted_volume = dict()
         self.vc_server_name_with_mounted_volume = dict()
         self.vcenter_instances_without_mounts = dict()
+        self.cinder_volume_attaching_for_too_long = dict()
+        self.cinder_volume_detaching_for_too_long = dict()
+        self.cinder_volume_available_with_attachments = dict()
+        self.cinder_volume_is_in_state_reserved = dict()
 
         # some dummy initializations
         self.vc_service_instance = None
@@ -304,6 +309,7 @@ class ConsistencyCheck:
                                 self.os_volumes_attached_at_server[server.id].append(attachment['id'].encode('ascii'))
                             else:
                                 self.os_volumes_attached_at_server[server.id] = [attachment['id'].encode('ascii')]
+                        self.os_nova_servers_with_attached_volume[attachment] = server.id
             service = "cinder"
             for volume in self.os_conn.block_store.volumes(details=True, all_projects=1):
                 # we only care about volumes from the vcenter this nanny is taking care of
@@ -312,10 +318,10 @@ class ConsistencyCheck:
                     self.os_volume_status[volume.id] = volume.status
                     if volume.attachments:
                         for attachment in volume.attachments:
-                            if self.os_servers_with_attached_volume.get(volume.id):
-                                self.os_servers_with_attached_volume[volume.id].append(attachment['server_id'].encode('ascii'))
+                            if self.os_cinder_servers_with_attached_volume.get(volume.id):
+                                self.os_cinder_servers_with_attached_volume[volume.id].append(attachment['server_id'].encode('ascii'))
                             else:
-                                self.os_servers_with_attached_volume[volume.id] = [attachment['server_id'].encode('ascii')]
+                                self.os_cinder_servers_with_attached_volume[volume.id] = [attachment['server_id'].encode('ascii')]
 
         except exceptions.HttpException as e:
             log.warn(
@@ -346,8 +352,8 @@ class ConsistencyCheck:
             log.info("- volume status in cinder: %s", self.os_volume_status.get(self.volume_query))
         else:
             log.info("- this volume exists in cinder (for this az): No")
-        if self.os_servers_with_attached_volume.get(self.volume_query):
-            for i in self.os_servers_with_attached_volume[self.volume_query]:
+        if self.os_cinder_servers_with_attached_volume.get(self.volume_query):
+            for i in self.os_cinder_servers_with_attached_volume[self.volume_query]:
                 log.info("os server with this volume attached (cinder): %s", i)
                 if i in self.os_all_servers:
                     log.info("- this instance exists in nova: Yes")
@@ -387,4 +393,81 @@ class ConsistencyCheck:
         self.vc_disconnect()
         self.os_disconnect()
 
-    # def run_check(self):
+    def run_check_loop(self, reoccurence_count):
+        log.info("connecting to vcenter")
+        self.vc_connect()
+        if not self.vc_connection_ok():
+            log.warn("- PLEASE CHECK MANUALLY - problems connecting to the vcenter - retrying in next loop run")
+            return
+        log.info("getting information from vcenter")
+        # TODO add exception handling in case something goes wrong here
+        self.vc_get_viewref()
+        self.vc_get_info()
+        self.vc_disconnect()
+        log.info("connecting to openstack")
+        self.os_connect()
+        if not self.os_connection_ok():
+            log.warn("- PLEASE CHECK MANUALLY - problems connecting to the vcenter - retrying in next loop run")
+            return
+        log.info("getting information from openstack (this may take a moment)")
+        # TODO add exception handling in case something goes wrong here
+        self.os_get_info()
+        self.os_disconnect()
+        self.discover_problems()
+
+    def discover_problems(self, reoccurence_count):
+        self.discover_cinder_volume_attaching_for_too_long(reoccurence_count)
+        self.discover_cinder_volume_detaching_for_too_long(reoccurence_count)
+        self.discover_cinder_volume_available_with_attachments(reoccurence_count)
+        self.discover_cinder_volume_is_in_reserved_state(reoccurence_count)
+
+    def discover_cinder_volume_attaching_for_too_long(self, reoccurence_count):
+        for volume_uuid in self.os_all_volumes:
+            if os_volume_status.get(volume_uuid) == 'attaching':
+                if self.cinder_volume_attaching_for_too_long[volume_uuid] < reoccurence_count:
+                    self.cinder_volume_attaching_for_too_long[volume_uuid] += 1
+                else:
+                    log.warn(" - PLEASE CHECK MANUALLY - volume %s is in state 'attaching' for too long", volume_uuid)
+            else:
+                self.cinder_volume_attaching_for_too_long[volume_uuid] = 0
+
+    def discover_cinder_volume_detaching_for_too_long(self, reoccurence_count):
+        for volume_uuid in self.os_all_volumes:
+            if os_volume_status.get(volume_uuid) == 'detaching':
+                if self.cinder_volume_detaching_for_too_long[volume_uuid] < reoccurence_count:
+                    self.cinder_volume_detaching_for_too_long[volume_uuid] += 1
+                else:
+                    log.warn(" - PLEASE CHECK MANUALLY - volume %s is in state 'detaching' for too long", volume_uuid)
+            else:
+                self.cinder_volume_detaching_for_too_long[volume_uuid] = 0
+
+    def discover_cinder_volume_available_with_attachments(self, reoccurence_count):
+        for volume_uuid in self.os_all_volumes:
+            if os_volume_status.get(volume_uuid) == 'available':
+                if self.os_cinder_servers_with_attached_volume.get(volume_uuid):
+                    self.cinder_volume_available_with_attachments[volume_uuid] += 1
+                    continue
+                if self.os_nova_servers_with_attached_volume.get(volume_uuid):
+                    self.cinder_volume_available_with_attachments[volume_uuid] += 1
+                    continue
+                if self.vc_server_name_with_mounted_volume.get(volume_uuid):
+                    self.cinder_volume_available_with_attachments[volume_uuid] += 1
+                    continue
+                self.cinder_volume_available_with_attachments[volume_uuid] = 0
+
+    def discover_cinder_volume_is_in_reserved_state(self, reoccurence_count):
+        for volume_uuid in self.os_all_volumes:
+            if os_volume_status.get(volume_uuid) == 'reserved':
+                if self.cinder_volume_is_in_reserved_state[volume_uuid] < reoccurence_count:
+                    self.cinder_volume_is_in_reserved_state[volume_uuid] += 1
+                else:
+                    log.warn(" - PLEASE CHECK MANUALLY - volume %s is in state 'reserved' for too long", volume_uuid)
+            else:
+                self.cinder_volume_is_in_reserved_state[volume_uuid] = 0
+
+    def run_check(self, interval, reoccurence_count):
+        while True:
+            self.run_check_loop()
+            # wait the interval time
+            log.info("INFO: waiting %s minutes before starting the next loop run", str(interval))
+            time.sleep(60 * int(interval))
