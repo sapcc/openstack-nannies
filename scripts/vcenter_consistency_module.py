@@ -454,23 +454,6 @@ class ConsistencyCheck:
                 self.cinder_volume_detaching_for_too_long[volume_uuid] = 0
 
     def discover_cinder_volume_available_with_attachments(self, iterations):
-<<<<<<< HEAD
-        try:
-            for volume_uuid in self.cinder_os_all_volumes:
-                if self.cinder_os_volume_status.get(volume_uuid) == 'available':
-                    if self.cinder_os_servers_with_attached_volume.get(volume_uuid):
-                        self.cinder_volume_available_with_attachments[volume_uuid] += 1
-                        continue
-                    if self.nova_os_servers_with_attached_volume.get(volume_uuid):
-                        self.cinder_volume_available_with_attachments[volume_uuid] += 1
-                        continue
-                    if self.vc_server_name_with_mounted_volume.get(volume_uuid):
-                        self.cinder_volume_available_with_attachments[volume_uuid] += 1
-                        continue
-                    self.cinder_volume_available_with_attachments[volume_uuid] = 0
-        except Exception as e:
-            log.error("discover_cinder_volume_available_with_attachments() error: %s", e)
-=======
         for volume_uuid in self.cinder_os_all_volumes:
             if self.cinder_os_volume_status.get(volume_uuid) == 'available':
                 if self.cinder_os_servers_with_attached_volume.get(volume_uuid):
@@ -498,18 +481,13 @@ class ConsistencyCheck:
                         log.warn(" - PLEASE CHECK MANUALLY - volume %s is in state 'available' with attachments for too long", volume_uuid)
                     continue
                 self.cinder_volume_available_with_attachments[volume_uuid] = 0
->>>>>>> fix some bugs
 
     def discover_cinder_volume_is_in_reserved_state(self, iterations):
         for volume_uuid in self.cinder_os_all_volumes:
             if self.cinder_os_volume_status.get(volume_uuid) == 'reserved':
-<<<<<<< HEAD
-                if self.cinder_volume_is_in_state_reserved[volume_uuid] < iterations:
-=======
                 if not self.cinder_volume_available_with_attachments.get(volume_uuid):
                     self.cinder_volume_is_in_state_reserved[volume_uuid] = 1
                 elif self.cinder_volume_is_in_state_reserved.get(volume_uuid) < iterations:
->>>>>>> fix some bugs
                     self.cinder_volume_is_in_state_reserved[volume_uuid] += 1
                 else:
                     log.warn(" - PLEASE CHECK MANUALLY - volume %s is in state 'reserved' for too long", volume_uuid)
