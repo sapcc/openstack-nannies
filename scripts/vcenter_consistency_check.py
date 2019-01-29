@@ -26,17 +26,17 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 # cmdline handling
 @click.command()
 # vcenter host, user and password
-@click.option('--host', prompt='Host to connect to')
-@click.option('--username', prompt='Username to connect with')
-@click.option('--password', prompt='Password to connect with')
-@click.option('--interval', prompt='How long to wait between loop runs')
-@click.option('--reoccurence-count', prompt='How often a problem can occur before it is creating a warniing')
+@click.option('--host', prompt='vc host to connect to')
+@click.option('--username', prompt='vc username to connect with')
+@click.option('--password', prompt='vc password to connect with')
+@click.option('--interval', prompt='how long to wait between loop runs')
+@click.option('--iterations', prompt='how often a problem can occur before it is creating a warniing')
 # dry run option not doing anything harmful
 @click.option('--dry-run', is_flag=True)
-def get_args_and_run(host, username, password, dry_run, interval, reoccurence_count):
+def get_args_and_run(host, username, password, dry_run, interval, iterations):
     print host
     c = vcenter_consistency_module.ConsistencyCheck(host, username, password, dry_run)
-    c.run_check(interval, reoccurence_count)
+    c.run_check(interval, iterations)
     
 if __name__ == '__main__':
 

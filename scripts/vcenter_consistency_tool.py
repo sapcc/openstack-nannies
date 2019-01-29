@@ -26,9 +26,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 # cmdline handling
 @click.command()
 # vcenter host, user and password
-@click.option('--host', prompt='Host to connect to')
-@click.option('--username', prompt='Username to connect with')
-@click.option('--password', prompt='Password to connect with')
+@click.option('--host', prompt='vc host to connect to')
+@click.option('--username', prompt='vc username to connect with')
+@click.option('--password', prompt='vc password to connect with')
 # dry run option not doing anything harmful
 @click.option('--dry-run', is_flag=True)
 def get_args_and_run(host, username, password, dry_run):
