@@ -376,46 +376,46 @@ class ConsistencyCheck:
         log.info("vc server with this volume attached (uuid/name): %s / %s", self.vc_server_uuid_with_mounted_volume.get(self.volume_query), self.vc_server_name_with_mounted_volume.get(self.volume_query))
 
     def run_tool(self):
-        log.info(" - INFO - connecting to vcenter")
+        log.info("- INFO - connecting to vcenter")
         self.vc_connect()
         if not self.vc_connection_ok():
             sys.exit(1)
-        log.info(" - INFO - getting information from vcenter")
+        log.info("- INFO - getting information from vcenter")
         self.vc_get_viewref()
         self.vc_get_info()
-        log.info(" - INFO - connecting to openstack")
+        log.info("- INFO - connecting to openstack")
         self.os_connect()
         if not self.os_connection_ok():
             sys.exit(1)
-        log.info(" - INFO - getting information from openstack (this may take a moment)")
+        log.info("- INFO - getting information from openstack (this may take a moment)")
         self.os_get_info()
         self.volume_uuid_query_loop()
-        log.info(" - INFO - disconnecting from vcenter")
+        log.info("- INFO - disconnecting from vcenter")
         self.vc_disconnect()
-        log.info(" - INFO - disconnecting from openstack")
+        log.info("- INFO - disconnecting from openstack")
         self.os_disconnect()
 
     def run_check_loop(self, iterations):
-        log.info(" - INFO - connecting to vcenter")
+        log.info("- INFO - connecting to vcenter")
         self.vc_connect()
         if not self.vc_connection_ok():
             log.warn("- PLEASE CHECK MANUALLY - problems connecting to the vcenter - retrying in next loop run")
             return
-        log.info(" - INFO - getting information from vcenter")
+        log.info("- INFO - getting information from vcenter")
         # TODO add exception handling in case something goes wrong here
         self.vc_get_viewref()
         self.vc_get_info()
-        log.info(" - INFO - disconnecting from vcenter")
+        log.info("- INFO - disconnecting from vcenter")
         self.vc_disconnect()
-        log.info(" - INFO - connecting to openstack")
+        log.info("- INFO - connecting to openstack")
         self.os_connect()
         if not self.os_connection_ok():
             log.warn("- PLEASE CHECK MANUALLY - problems connecting to the vcenter - retrying in next loop run")
             return
-        log.info(" - INFO - getting information from openstack (this may take a moment)")
+        log.info("- INFO - getting information from openstack (this may take a moment)")
         # TODO add exception handling in case something goes wrong here
         self.os_get_info()
-        log.info(" - INFO - disconnecting from openstack")
+        log.info("- INFO - disconnecting from openstack")
         self.os_disconnect()
         self.discover_problems(iterations)
 
@@ -437,7 +437,7 @@ class ConsistencyCheck:
                 elif self.cinder_volume_attaching_for_too_long.get(volume_uuid) < iterations:
                     self.cinder_volume_attaching_for_too_long[volume_uuid] += 1
                 else:
-                    log.warn(" - PLEASE CHECK MANUALLY - volume %s is in state 'attaching' for too long", volume_uuid)
+                    log.warn("- PLEASE CHECK MANUALLY - volume %s is in state 'attaching' for too long", volume_uuid)
             else:
                 self.cinder_volume_attaching_for_too_long[volume_uuid] = 0
 
@@ -449,7 +449,7 @@ class ConsistencyCheck:
                 elif self.cinder_volume_detaching_for_too_long.get(volume_uuid) < iterations:
                     self.cinder_volume_detaching_for_too_long[volume_uuid] += 1
                 else:
-                    log.warn(" - PLEASE CHECK MANUALLY - volume %s is in state 'detaching' for too long", volume_uuid)
+                    log.warn("- PLEASE CHECK MANUALLY - volume %s is in state 'detaching' for too long", volume_uuid)
             else:
                 self.cinder_volume_detaching_for_too_long[volume_uuid] = 0
 
@@ -462,7 +462,7 @@ class ConsistencyCheck:
                     elif self.cinder_volume_available_with_attachments.get(volume_uuid) < iterations:
                         self.cinder_volume_available_with_attachments[volume_uuid] += 1
                     else:
-                        log.warn(" - PLEASE CHECK MANUALLY - volume %s is in state 'available' with attachments for too long", volume_uuid)
+                        log.warn("- PLEASE CHECK MANUALLY - volume %s is in state 'available' with attachments for too long", volume_uuid)
                     continue
                 if self.nova_os_servers_with_attached_volume.get(volume_uuid):
                     if not self.cinder_volume_available_with_attachments.get(volume_uuid):
@@ -470,7 +470,7 @@ class ConsistencyCheck:
                     elif self.cinder_volume_available_with_attachments.get(volume_uuid) < iterations:
                         self.cinder_volume_available_with_attachments[volume_uuid] += 1
                     else:
-                        log.warn(" - PLEASE CHECK MANUALLY - volume %s is in state 'available' with attachments for too long", volume_uuid)
+                        log.warn("- PLEASE CHECK MANUALLY - volume %s is in state 'available' with attachments for too long", volume_uuid)
                     continue
                 if self.vc_server_name_with_mounted_volume.get(volume_uuid):
                     if not self.cinder_volume_available_with_attachments.get(volume_uuid):
@@ -478,7 +478,7 @@ class ConsistencyCheck:
                     elif self.cinder_volume_available_with_attachments.get(volume_uuid) < iterations:
                         self.cinder_volume_available_with_attachments[volume_uuid] += 1
                     else:
-                        log.warn(" - PLEASE CHECK MANUALLY - volume %s is in state 'available' with attachments for too long", volume_uuid)
+                        log.warn("- PLEASE CHECK MANUALLY - volume %s is in state 'available' with attachments for too long", volume_uuid)
                     continue
                 self.cinder_volume_available_with_attachments[volume_uuid] = 0
 
@@ -490,7 +490,7 @@ class ConsistencyCheck:
                 elif self.cinder_volume_is_in_state_reserved.get(volume_uuid) < iterations:
                     self.cinder_volume_is_in_state_reserved[volume_uuid] += 1
                 else:
-                    log.warn(" - PLEASE CHECK MANUALLY - volume %s is in state 'reserved' for too long", volume_uuid)
+                    log.warn("- PLEASE CHECK MANUALLY - volume %s is in state 'reserved' for too long", volume_uuid)
             else:
                 self.cinder_volume_is_in_state_reserved[volume_uuid] = 0
 
@@ -498,5 +498,5 @@ class ConsistencyCheck:
         while True:
             self.run_check_loop(iterations)
             # wait the interval time
-            log.info(" - INFO - waiting %s minutes before starting the next loop run", str(interval))
+            log.info("- INFO - waiting %s minutes before starting the next loop run", str(interval))
             time.sleep(60 * int(interval))
