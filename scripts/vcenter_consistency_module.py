@@ -62,7 +62,6 @@ class ConsistencyCheck:
         self.cinder_volume_is_in_state_reserved = dict()
         self.cinder_os_volume_status = dict()
 
-
         # this one has the instance uuid as key
         self.nova_os_volumes_attached_at_server = dict()
         self.vcenter_instances_without_mounts = dict()
@@ -198,6 +197,15 @@ class ConsistencyCheck:
     # get all servers and all volumes from the vcenter
     def vc_get_info(self):
 
+        # clear the old lists
+        self.vc_all_servers *= 0
+        self.vc_all_volumes *= 0
+
+        # clean all old dicts
+        self.vc_server_uuid_with_mounted_volume.clear()
+        self.vc_server_name_with_mounted_volume.clear()
+        self.vcenter_instances_without_mounts.clear()
+
         has_volume_attachments = dict()
 
         # the properties we want to collect - some of them are not yet used, but will at a later
@@ -296,6 +304,16 @@ class ConsistencyCheck:
 
     # get all servers and all volumes from openstack
     def os_get_info(self):
+
+        # clear old lists
+        self.nova_os_all_servers *= 0
+        self.cinder_os_all_volumes *= 0
+
+        # clean old dicts
+        self.nova_os_servers_with_attached_volume.clear()
+        self.nova_os_volumes_attached_at_server.clear()
+        self.cinder_os_servers_with_attached_volume.clear()
+        self.cinder_os_volume_status.clear()
 
         try:
             service = "nova"
@@ -432,20 +450,25 @@ class ConsistencyCheck:
     # seems to be ok again
     def discover_cinder_volume_attaching_for_too_long(self, iterations):
         for volume_uuid in self.cinder_os_all_volumes:
+            # print "volume uuid: " + str(volume_uuid)
             if self.cinder_os_volume_status.get(volume_uuid) == 'attaching':
                 if not self.cinder_volume_attaching_for_too_long.get(volume_uuid):
+                    # print "=> a"
                     self.cinder_volume_attaching_for_too_long[volume_uuid] = 1
                 elif self.cinder_volume_attaching_for_too_long.get(volume_uuid) < iterations:
+                    # print "=> b"
                     self.cinder_volume_attaching_for_too_long[volume_uuid] += 1
                 else:
+                    # print "=> c"
                     log.warn("- PLEASE CHECK MANUALLY - volume %s is in state 'attaching' for too long", volume_uuid)
             else:
+                # print "=> d"
                 self.cinder_volume_attaching_for_too_long[volume_uuid] = 0
 
     def discover_cinder_volume_detaching_for_too_long(self, iterations):
         for volume_uuid in self.cinder_os_all_volumes:
             if self.cinder_os_volume_status.get(volume_uuid) == 'detaching':
-                if not self.cinder_volume_available_with_attachments.get(volume_uuid):
+                if not self.cinder_volume_detaching_for_too_long.get(volume_uuid):
                     self.cinder_volume_detaching_for_too_long[volume_uuid] = 1
                 elif self.cinder_volume_detaching_for_too_long.get(volume_uuid) < iterations:
                     self.cinder_volume_detaching_for_too_long[volume_uuid] += 1
@@ -453,6 +476,18 @@ class ConsistencyCheck:
                     log.warn("- PLEASE CHECK MANUALLY - volume %s is in state 'detaching' for too long", volume_uuid)
             else:
                 self.cinder_volume_detaching_for_too_long[volume_uuid] = 0
+
+    def discover_cinder_volume_is_in_reserved_state(self, iterations):
+        for volume_uuid in self.cinder_os_all_volumes:
+            if self.cinder_os_volume_status.get(volume_uuid) == 'reserved':
+                if not self.cinder_volume_is_in_state_reserved.get(volume_uuid):
+                    self.cinder_volume_is_in_state_reserved[volume_uuid] = 1
+                elif self.cinder_volume_is_in_state_reserved.get(volume_uuid) < iterations:
+                    self.cinder_volume_is_in_state_reserved[volume_uuid] += 1
+                else:
+                    log.warn("- PLEASE CHECK MANUALLY - volume %s is in state 'reserved' for too long", volume_uuid)
+            else:
+                self.cinder_volume_is_in_state_reserved[volume_uuid] = 0
 
     def discover_cinder_volume_available_with_attachments(self, iterations):
         for volume_uuid in self.cinder_os_all_volumes:
@@ -483,22 +518,10 @@ class ConsistencyCheck:
                     continue
                 self.cinder_volume_available_with_attachments[volume_uuid] = 0
 
-    def discover_cinder_volume_is_in_reserved_state(self, iterations):
-        for volume_uuid in self.cinder_os_all_volumes:
-            if self.cinder_os_volume_status.get(volume_uuid) == 'reserved':
-                if not self.cinder_volume_available_with_attachments.get(volume_uuid):
-                    self.cinder_volume_is_in_state_reserved[volume_uuid] = 1
-                elif self.cinder_volume_is_in_state_reserved.get(volume_uuid) < iterations:
-                    self.cinder_volume_is_in_state_reserved[volume_uuid] += 1
-                else:
-                    log.warn("- PLEASE CHECK MANUALLY - volume %s is in state 'reserved' for too long", volume_uuid)
-            else:
-                self.cinder_volume_is_in_state_reserved[volume_uuid] = 0
-
     def run_check(self, interval, iterations):
         while True:
             # condert iterations from string to integer and avoid off by one error
-            self.run_check_loop(int(iterations) + 1)
+            self.run_check_loop(int(iterations))
             # wait the interval time
             log.info("- INFO - waiting %s minutes before starting the next loop run", str(interval))
             time.sleep(60 * int(interval))
