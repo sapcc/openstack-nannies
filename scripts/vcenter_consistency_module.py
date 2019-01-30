@@ -417,6 +417,7 @@ class ConsistencyCheck:
         self.os_get_info()
         log.info("- INFO - disconnecting from openstack")
         self.os_disconnect()
+        log.info("- INFO - checking for inconsistencies")
         self.discover_problems(iterations)
 
     def discover_problems(self, iterations):
@@ -496,7 +497,8 @@ class ConsistencyCheck:
 
     def run_check(self, interval, iterations):
         while True:
-            self.run_check_loop(iterations)
+            # condert iterations from string to integer and avoid off by one error
+            self.run_check_loop(int(iterations) + 1)
             # wait the interval time
             log.info("- INFO - waiting %s minutes before starting the next loop run", str(interval))
             time.sleep(60 * int(interval))
