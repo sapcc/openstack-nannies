@@ -450,19 +450,14 @@ class ConsistencyCheck:
     # seems to be ok again
     def discover_cinder_volume_attaching_for_too_long(self, iterations):
         for volume_uuid in self.cinder_os_all_volumes:
-            # print "volume uuid: " + str(volume_uuid)
             if self.cinder_os_volume_status.get(volume_uuid) == 'attaching':
                 if not self.cinder_volume_attaching_for_too_long.get(volume_uuid):
-                    # print "=> a"
                     self.cinder_volume_attaching_for_too_long[volume_uuid] = 1
                 elif self.cinder_volume_attaching_for_too_long.get(volume_uuid) < iterations:
-                    # print "=> b"
                     self.cinder_volume_attaching_for_too_long[volume_uuid] += 1
                 else:
-                    # print "=> c"
                     log.warn("- PLEASE CHECK MANUALLY - volume %s is in state 'attaching' for too long", volume_uuid)
             else:
-                # print "=> d"
                 self.cinder_volume_attaching_for_too_long[volume_uuid] = 0
 
     def discover_cinder_volume_detaching_for_too_long(self, iterations):
