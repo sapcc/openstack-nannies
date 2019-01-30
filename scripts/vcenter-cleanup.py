@@ -1208,17 +1208,17 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
         if not cinder_is_attached:
             log.debug("- instance: %s [%s] - no volumes attached - cinder: no attachments - good", i, vcenter_instances_without_mounts[i])
 
-    log.info("- checking if all openstack servers exist in the vcenter")
-    for i in os_all_servers:
-        # this is to convert the unicode entries to ascii for the compare to work - should maybe find a better way
-        if i.encode('ascii') not in vc_all_servers:
-            log.warn("- PLEASE CHECK MANUALLY - instance %s exists in openstack, but not in the vcenter", i)
+    # log.info("- checking if all openstack servers exist in the vcenter")
+    # for i in os_all_servers:
+    #     # this is to convert the unicode entries to ascii for the compare to work - should maybe find a better way
+    #     if i.encode('ascii') not in vc_all_servers:
+    #         log.warn("- PLEASE CHECK MANUALLY - instance %s exists in openstack, but not in the vcenter", i)
 
-    log.info("- checking if all openstack volumes exist in the vcenter")
-    for i in os_all_volumes:
-        # this is to convert the unicode entries to ascii for the compare to work - should maybe find a better way
-        if i.encode('ascii') not in vc_all_volumes:
-            log.warn("- PLEASE CHECK MANUALLY - volume %s exists in openstack, but not in the vcenter", i)
+    # log.info("- checking if all openstack volumes exist in the vcenter")
+    # for i in os_all_volumes:
+    #     # this is to convert the unicode entries to ascii for the compare to work - should maybe find a better way
+    #     if i.encode('ascii') not in vc_all_volumes:
+    #         log.warn("- PLEASE CHECK MANUALLY - volume %s exists in openstack, but not in the vcenter", i)
 
     gauge_volume_attachment_inconsistencies.set(float(gauge_value_volume_attachment_inconsistencies))
 
