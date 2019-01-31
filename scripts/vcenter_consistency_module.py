@@ -44,7 +44,7 @@ openstack_re = re.compile("^name")
 class ConsistencyCheck:
     def __init__(self, vchost, vcusername, vcpassword, dry_run, prometheus_port):
 
-        self.host = host
+        self.vchost = vchost
         self.vcusername = vcusername
         self.vcpassword = vcpassword
         self.dry_run = dry_run
@@ -120,7 +120,7 @@ class ConsistencyCheck:
             context = ssl._create_unverified_context()
 
             try:
-                self.vc_service_instance = SmartConnect(host=self.host,
+                self.vc_service_instance = SmartConnect(host=self.vchost,
                                             user=self.vcusername,
                                             pwd=self.vcpassword,
                                             port=443,
