@@ -42,7 +42,7 @@ log = logging.getLogger('vcenter_consistency_module')
 openstack_re = re.compile("^name")
 
 class ConsistencyCheck:
-    def __init__(self, host, vcusername, vcpassword, dry_run, prometheus_port):
+    def __init__(self, vchost, vcusername, vcpassword, dry_run, prometheus_port):
 
         self.host = host
         self.vcusername = vcusername

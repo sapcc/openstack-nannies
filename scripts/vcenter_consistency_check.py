@@ -26,7 +26,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 # cmdline handling
 @click.command()
 # vcenter host, user and password
-@click.option('--host', prompt='vc host to connect to')
+@click.option('--vchost', prompt='vc host to connect to')
 @click.option('--vcusername', prompt='vc username to connect with')
 @click.option('--vcpassword', prompt='vc password to connect with')
 @click.option('--interval', prompt='how long to wait between loop runs')
@@ -35,11 +35,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 @click.option('--dry-run', is_flag=True)
 # port to use for prometheus exporter, otherwise we use 9456 as default
 @click.option('--prometheus-port')
-def get_args_and_run(host, vcusername, vcpassword, dry_run, interval, iterations, prometheus_port):
+def get_args_and_run(vchost, vcusername, vcpassword, dry_run, interval, iterations, prometheus_port):
     # check if the prometheus port is set and if not set it to the default value
     if not prometheus_port:
         prometheus_port = 9456
-    c = vcenter_consistency_module.ConsistencyCheck(host, vcusername, vcpassword, dry_run, int(prometheus_port))
+    c = vcenter_consistency_module.ConsistencyCheck(vchost, vcusername, vcpassword, dry_run, int(prometheus_port))
     c.run_check(interval, iterations)
     
 if __name__ == '__main__':

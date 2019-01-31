@@ -26,15 +26,15 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 # cmdline handling
 @click.command()
 # vcenter host, user and password
-@click.option('--host', prompt='vc host to connect to')
+@click.option('--vchost', prompt='vc host to connect to')
 @click.option('--vcusername', prompt='vc username to connect with')
 @click.option('--vcpassword', prompt='vc password to connect with')
 # dry run option not doing anything harmful
 @click.option('--dry-run', is_flag=True)
-def get_args_and_run(host, vcusername, vcpassword, dry_run):
+def get_args_and_run(vchost, vcusername, vcpassword, dry_run):
     print host
     # the "None" below is for the prometheus_port we are not using here
-    c = vcenter_consistency_module.ConsistencyCheck(host, vcusername, vcpassword, dry_run, None)
+    c = vcenter_consistency_module.ConsistencyCheck(vchost, vcusername, vcpassword, dry_run, None)
     c.run_tool()
     
 if __name__ == '__main__':
