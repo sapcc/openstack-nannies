@@ -16,7 +16,13 @@
 #    under the License.
 #
 
-echo -n "this script is to verify the consistency of volume attachments across nova, cinder and the vcenter"
+echo -n "INFO: checking consistency between vcenter , nova and cinder - "
+date
+if [ "$VCENTER_CONSISTENCY_DRY_RUN" = "False" ] || [ "$VCENTER_CONSISTENCY_DRY_RUN" = "false" ]; then
+    DRY_RUN=""
+else
+    DRY_RUN="--dry-run"
+fi
 
 export OS_USER_DOMAIN_NAME
 export OS_PROJECT_NAME
@@ -25,4 +31,4 @@ export OS_AUTH_URL
 export OS_USERNAME
 export OS_PROJECT_DOMAIN_NAME
 
-/var/lib/kolla/venv/bin/python /scripts/vcenter-consistency.py --host $VCENTER_CLEANUP_HOST --username $VCENTER_CLEANUP_USER --password $VCENTER_CLEANUP_PASSWORD
+/var/lib/kolla/venv/bin/python /scripts/vcenter-cleanup.py $DRY_RUN $POWER_OFF $UNREGISTER $DELETE $DETACH_GHOST_PORTS $DETACH_GHOST_VOLUMES $DETACH_GHOST_LIMIT $VOL_CHECK --host $VCENTER_CLEANUP_HOST --username $VCENTER_CLEANUP_USER --password $VCENTER_CLEANUP_PASSWORD --iterations $VCENTER_CONSISTENCY_ITERATIONS --interval $VCENTER_CONSISTENCY_INTERVAL

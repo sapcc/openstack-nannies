@@ -33,9 +33,13 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 @click.option('--iterations', prompt='how often a problem can occur before it is creating a warniing')
 # dry run option not doing anything harmful
 @click.option('--dry-run', is_flag=True)
-def get_args_and_run(host, vcusername, vcpassword, dry_run, interval, iterations):
-    #print host
-    c = vcenter_consistency_module.ConsistencyCheck(host, vcusername, vcpassword, dry_run)
+# port to use for prometheus exporter, otherwise we use 9456 as default
+@click.option('--prometheus-port')
+def get_args_and_run(host, vcusername, vcpassword, dry_run, interval, iterations, prometheus_port):
+    # check if the prometheus port is set and if not set it to the default value
+    if not prometheus_port:
+        prometheus_port = 9456
+    c = vcenter_consistency_module.ConsistencyCheck(host, vcusername, vcpassword, dry_run, int(prometheus_port))
     c.run_check(interval, iterations)
     
 if __name__ == '__main__':

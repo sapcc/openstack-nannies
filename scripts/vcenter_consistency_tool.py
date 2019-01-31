@@ -33,7 +33,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 @click.option('--dry-run', is_flag=True)
 def get_args_and_run(host, vcusername, vcpassword, dry_run):
     print host
-    c = vcenter_consistency_module.ConsistencyCheck(host, vcusername, vcpassword, dry_run)
+    # the "None" below is for the prometheus_port we are not using here
+    c = vcenter_consistency_module.ConsistencyCheck(host, vcusername, vcpassword, dry_run, None)
     c.run_tool()
     
 if __name__ == '__main__':

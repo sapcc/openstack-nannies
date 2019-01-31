@@ -32,6 +32,9 @@ from pyVmomi import vim, vmodl
 
 from openstack import connection, exceptions
 
+# prometheus export functionality
+from prometheus_client import start_http_server, Gauge
+
 log = logging.getLogger('vcenter_consistency_module')
 
 # compile a regex for trying to filter out openstack generated vms
@@ -39,12 +42,13 @@ log = logging.getLogger('vcenter_consistency_module')
 openstack_re = re.compile("^name")
 
 class ConsistencyCheck:
-    def __init__(self, host, vcusername, vcpassword, dry_run):
+    def __init__(self, host, vcusername, vcpassword, dry_run, prometheus_port):
 
         self.host = host
         self.vcusername = vcusername
         self.vcpassword = vcpassword
         self.dry_run = dry_run
+        self.prometheus_port = prometheus_port
 
         self.nova_os_all_servers = []
         self.cinder_os_all_volumes = []
@@ -58,8 +62,8 @@ class ConsistencyCheck:
         self.vc_server_name_with_mounted_volume = dict()
         self.cinder_volume_attaching_for_too_long = dict()
         self.cinder_volume_detaching_for_too_long = dict()
-        self.cinder_volume_available_with_attachments = dict()
         self.cinder_volume_is_in_state_reserved = dict()
+        self.cinder_volume_available_with_attachments = dict()
         self.cinder_os_volume_status = dict()
 
         # this one has the instance uuid as key
@@ -75,6 +79,39 @@ class ConsistencyCheck:
         self.os_conn = None
         self.vcenter_name = None
         self.volume_query = None
+
+        # flag if the prometheus exporter is enabled
+        self.prometheus_exporter_enabled = True
+
+        self.gauge_cinder_volume_attaching_for_too_long = Gauge('vcenter_nanny_consistency_cinder_volume_attaching_for_too_long',
+                                                  'how many volumes are in the state attaching for too long')
+        self.gauge_cinder_volume_detaching_for_too_long = Gauge('vcenter_nanny_consistency_cinder_volume_detaching_for_too_long',
+                                                  'how many volumes are in the state detaching for too long')
+        self.gauge_cinder_volume_is_in_state_reserved = Gauge('vcenter_nanny_consistency_cinder_volume_is_in_state_reserved',
+                                                  'how many volumes are in the state reserved for too long')
+        self.gauge_cinder_volume_available_with_attachments = Gauge('vcenter_nanny_consistency_cinder_volume_available_with_attachments',
+                                                  'how many volumes are available with attachments for too long')
+
+        # actual values we want to send to the prometheus exporter
+        self.gauge_value_cinder_volume_attaching_for_too_long = 0
+        self.gauge_value_cinder_volume_detaching_for_too_long = 0
+        self.gauge_values_cinder_volume_is_in_state_reserved = 0
+        self.gauge_values_cinder_volume_available_with_attachments = 0
+
+
+    # start prometheus exporter if needed
+    def start_prometheus_exporter(self):
+
+        # if the port is not set, we do not start the prometheus exporter - for instance in the cmdline tool
+        if not self.prometheus_port:
+            self.prometheus_exporter_enabled = False
+            return
+        else:
+            # start http server for exported data
+            try:
+                start_http_server(self.prometheus_port)
+            except Exception as e:
+                logging.error(" - ERROR - failed to start prometheus exporter http server: " + str(e))
 
     # connect to vcenter
     def vc_connect(self):
@@ -140,8 +177,6 @@ class ConsistencyCheck:
         Returns:
             A list of properties for the managed objects
         """
-
-        gauge_value_vcenter_get_properties_problems = 0
 
         collector = self.vc_service_instance.content.propertyCollector
 
@@ -436,13 +471,21 @@ class ConsistencyCheck:
         log.info("- INFO - disconnecting from openstack")
         self.os_disconnect()
         log.info("- INFO - checking for inconsistencies")
+        self.reset_gauge_values()
         self.discover_problems(iterations)
+
+    def reset_gauge_values(self):
+        self.gauge_value_cinder_volume_attaching_for_too_long = 0
+        self.gauge_value_cinder_volume_detaching_for_too_long = 0
+        self.gauge_values_cinder_volume_is_in_state_reserved = 0
+        self.gauge_values_cinder_volume_available_with_attachments = 0
 
     def discover_problems(self, iterations):
         self.discover_cinder_volume_attaching_for_too_long(iterations)
         self.discover_cinder_volume_detaching_for_too_long(iterations)
         self.discover_cinder_volume_is_in_reserved_state(iterations)
         self.discover_cinder_volume_available_with_attachments(iterations)
+        self.send_gauge_values()
 
     # in the below discover functions we increase a counter for each occurence of the problem per volume uuid
     # if the counter reaches 'iterations' then the problem is persisting for too long and we log a warning
@@ -456,6 +499,7 @@ class ConsistencyCheck:
                 elif self.cinder_volume_attaching_for_too_long.get(volume_uuid) < iterations:
                     self.cinder_volume_attaching_for_too_long[volume_uuid] += 1
                 else:
+                    self.gauge_value_cinder_volume_attaching_for_too_long += 1
                     log.warn("- PLEASE CHECK MANUALLY - volume %s is in state 'attaching' for too long", volume_uuid)
             else:
                 self.cinder_volume_attaching_for_too_long[volume_uuid] = 0
@@ -468,6 +512,7 @@ class ConsistencyCheck:
                 elif self.cinder_volume_detaching_for_too_long.get(volume_uuid) < iterations:
                     self.cinder_volume_detaching_for_too_long[volume_uuid] += 1
                 else:
+                    self.gauge_value_cinder_volume_detaching_for_too_long += 1
                     log.warn("- PLEASE CHECK MANUALLY - volume %s is in state 'detaching' for too long", volume_uuid)
             else:
                 self.cinder_volume_detaching_for_too_long[volume_uuid] = 0
@@ -480,6 +525,7 @@ class ConsistencyCheck:
                 elif self.cinder_volume_is_in_state_reserved.get(volume_uuid) < iterations:
                     self.cinder_volume_is_in_state_reserved[volume_uuid] += 1
                 else:
+                    self.gauge_values_cinder_volume_is_in_state_reserved += 1
                     log.warn("- PLEASE CHECK MANUALLY - volume %s is in state 'reserved' for too long", volume_uuid)
             else:
                 self.cinder_volume_is_in_state_reserved[volume_uuid] = 0
@@ -493,6 +539,7 @@ class ConsistencyCheck:
                     elif self.cinder_volume_available_with_attachments.get(volume_uuid) < iterations:
                         self.cinder_volume_available_with_attachments[volume_uuid] += 1
                     else:
+                        self.gauge_values_cinder_volume_available_with_attachments += 1
                         log.warn("- PLEASE CHECK MANUALLY - volume %s is in state 'available' with attachments for too long", volume_uuid)
                     continue
                 if self.nova_os_servers_with_attached_volume.get(volume_uuid):
@@ -501,6 +548,7 @@ class ConsistencyCheck:
                     elif self.cinder_volume_available_with_attachments.get(volume_uuid) < iterations:
                         self.cinder_volume_available_with_attachments[volume_uuid] += 1
                     else:
+                        self.gauge_values_cinder_volume_available_with_attachments += 1
                         log.warn("- PLEASE CHECK MANUALLY - volume %s is in state 'available' with attachments for too long", volume_uuid)
                     continue
                 if self.vc_server_name_with_mounted_volume.get(volume_uuid):
@@ -509,13 +557,21 @@ class ConsistencyCheck:
                     elif self.cinder_volume_available_with_attachments.get(volume_uuid) < iterations:
                         self.cinder_volume_available_with_attachments[volume_uuid] += 1
                     else:
+                        self.gauge_values_cinder_volume_available_with_attachments += 1
                         log.warn("- PLEASE CHECK MANUALLY - volume %s is in state 'available' with attachments for too long", volume_uuid)
                     continue
                 self.cinder_volume_available_with_attachments[volume_uuid] = 0
 
+    def send_gauge_values(self):
+        self.gauge_cinder_volume_attaching_for_too_long.set(self.gauge_value_cinder_volume_attaching_for_too_long)
+        self.gauge_cinder_volume_detaching_for_too_long.set(self.gauge_value_cinder_volume_detaching_for_too_long)
+        self.gauge_cinder_volume_is_in_state_reserved.set(self.gauge_values_cinder_volume_is_in_state_reserved)
+        self.gauge_cinder_volume_available_with_attachments.set(self.gauge_values_cinder_volume_available_with_attachments)
+
     def run_check(self, interval, iterations):
+        self.start_prometheus_exporter()
         while True:
-            # condert iterations from string to integer and avoid off by one error
+            # convert iterations from string to integer and avoid off by one error
             self.run_check_loop(int(iterations))
             # wait the interval time
             log.info("- INFO - waiting %s minutes before starting the next loop run", str(interval))
