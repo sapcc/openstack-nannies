@@ -32,7 +32,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 # dry run option not doing anything harmful
 @click.option('--dry-run', is_flag=True)
 def get_args_and_run(vchost, vcusername, vcpassword, dry_run):
-    print host
     # the "None" below is for the prometheus_port we are not using here
     c = vcenter_consistency_module.ConsistencyCheck(vchost, vcusername, vcpassword, dry_run, None)
     c.run_tool()
@@ -43,3 +42,4 @@ if __name__ == '__main__':
         get_args_and_run()
     except Exception as e:
         log.error("get_args_and_run() error: %s", e)
+        raise

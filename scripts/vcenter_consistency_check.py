@@ -48,3 +48,4 @@ if __name__ == '__main__':
         get_args_and_run()
     except Exception as e:
         log.error("get_args_and_run() error: %s", e)
+        raise
