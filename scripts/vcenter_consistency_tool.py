@@ -29,11 +29,18 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 @click.option('--vchost', prompt='vc host to connect to')
 @click.option('--vcusername', prompt='vc username to connect with')
 @click.option('--vcpassword', prompt='vc password to connect with')
+# @click.option('--cinderpassword', prompt='cinder db password to connect with')
+# @click.option('--novapassword', prompt='nova db password to connect with')
+# @click.option('--region', prompt='region we are running in')
+# make the above optional for now
+@click.option('--cinderpassword')
+@click.option('--novapassword')
+@click.option('--region')
 # dry run option not doing anything harmful
 @click.option('--dry-run', is_flag=True)
-def get_args_and_run(vchost, vcusername, vcpassword, dry_run):
+def get_args_and_run(vchost, vcusername, vcpassword, cinderpassword, novapassword, region, dry_run):
     # the "None" below is for the prometheus_port we are not using here
-    c = vcenter_consistency_module.ConsistencyCheck(vchost, vcusername, vcpassword, dry_run, None)
+    c = vcenter_consistency_module.ConsistencyCheck(vchost, vcusername, vcpassword, cinderpassword, novapassword, region, dry_run, None)
     c.run_tool()
     
 if __name__ == '__main__':
