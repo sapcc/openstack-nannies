@@ -97,10 +97,12 @@ class ConsistencyCheck:
         self.volume_query = None
         # some db related stuff
         self.cinder_engine = None
+        self.cinder_connection = None
         self.cinder_thisSession = None
         self.cinder_metadata = None
         self.cinder_Base = None
         self.nova_engine = None
+        self.nova_connection = None
         self.nova_thisSession = None
         self.nova_metadata = None
         self.nova_Base = None
@@ -366,7 +368,7 @@ class ConsistencyCheck:
 
 
         self.cinder_engine = create_engine(db_url)
-        self.cinder_engine.connect()
+        self.cinder_connection = self.cinder_engine.connect()
         Session = sessionmaker(bind=self.cinder_engine)
         self.cinder_thisSession = Session()
         self.cinder_metadata = MetaData()
@@ -383,8 +385,8 @@ class ConsistencyCheck:
 
     # disconnect from the cinder db
     def cinder_db_disconnect(self):
-        print "still TODO ..."
-        self.cinder_engine.disconnect()
+        self.cinder_thisSession.close()
+        self.cinder_connection.close()
 
     # connect to the nova db
     def nova_db_connect(self):
@@ -414,8 +416,8 @@ class ConsistencyCheck:
 
     # disconnect from the nova db
     def nova_db_disconnect(self):
-        print "still TODO ..."
-        self.nova_engine.disconnect()
+        self.nova_thisSession.close()
+        self.nova_connection.close()
 
     # openstack connection
     def os_connect(self):
