@@ -171,7 +171,7 @@ class ConsistencyCheck:
         else:
             return False
 
-    # disconnect from vcenter
+    # disconnect from the vcenter
     def vc_disconnect(self):
 
         Disconnect(self.vc_service_instance)
@@ -189,7 +189,7 @@ class ConsistencyCheck:
                 recursive=True
             )
         except Exception as e:
-            log.warn("problems getting viewref from vcenter: %s", str(e))
+            log.warn("problems getting viewref from the vcenter: %s", str(e))
             return False
 
         return True
@@ -251,7 +251,7 @@ class ConsistencyCheck:
         try:
             props = collector.RetrieveContents([filter_spec])
         except vmodl.fault.ManagedObjectNotFound as e:
-            log.warn("problems retrieving properties from vcenter: %s - retrying in next loop run", str(e))
+            log.warn("problems retrieving properties from the vcenter: %s - retrying in next loop run", str(e))
             return data
 
         for obj in props:
@@ -662,64 +662,91 @@ class ConsistencyCheck:
     def run_tool(self):
         log.info("- INFO - connecting to vcenter")
         self.vc_connect()
+        # exit here in case we get problems connecting to the vcenter
         if not self.vc_connection_ok():
-            log.error("problems connecting to the vcenter")
+            log.error("- PLEASE CHECK MANUALLY - problems connecting to the vcenter - retrying in next loop run")
             sys.exit(1)
-        log.info("- INFO - getting information from vcenter")
-        self.vc_get_viewref()
-        self.vc_get_info()
+        log.info("- INFO - getting information from the vcenter")
+        # exit here in case we get problems getting the viewref from the vcenter
+        if not self.vc_get_viewref():
+            log.error("- PLEASE CHECK MANUALLY - problems getting the viewref from the vcenter - retrying in next loop run")
+            log.info("- INFO - disconnecting from the vcenter")
+            self.vc_disconnect()
+            sys.exit(1)
+        # exit here in case we get problems getting data from openstack
+        if not self.vc_get_info():
+            log.error("- PLEASE CHECK MANUALLY - problems getting data from the vcenter - retrying in next loop run")
+            log.info("- INFO - disconnecting from the vcenter")
+            self.vc_disconnect()
+            sys.exit(1)
         log.info("- INFO - connecting to openstack")
         self.os_connect()
+        # exit here in case we get problems connecting to openstack
         if not self.os_connection_ok():
-            log.error("problems connecting to openstack")
+            log.error("- PLEASE CHECK MANUALLY - problems connecting to openstack - retrying in next loop run")
             sys.exit(1)
         log.info("- INFO - getting information from openstack (this may take a moment)")
-        self.os_get_info()
-        if cinderpassword:
+        # exit here in case we get problems getting data from openstack
+        if not self.os_get_info():
+            log.error("- PLEASE CHECK MANUALLY - problems getting data from openstack - retrying in next loop run")
+            log.info("- INFO - disconnecting from openstack")
+            self.os_disconnect()
+            sys.exit(1)
+        # until this is fully implmented ...
+        if self.cinderpassword:
             log.info("- INFO - connecting to the cinder db")
             self.cinder_db_connect()
             if not self.cinder_db_connection_ok():
                 log.error("problems connecting to the cinder db")
                 sys.exit(1)
-        if novapassword:
+        # until this is fully implmented ...
+        if self.novapassword:
             log.info("- INFO - connecting to the nova db")
             self.nova_db_connect()
             if not self.nova_db_connection_ok():
                 log.error("problems connecting to the nova db")
                 sys.exit(1)
         self.volume_uuid_query_loop()
-        log.info("- INFO - disconnecting from vcenter")
+        log.info("- INFO - disconnecting from the vcenter")
         self.vc_disconnect()
         log.info("- INFO - disconnecting from openstack")
         self.os_disconnect()
-        if cinderpassword:
+        # until this is fully implmented ...
+        if self.cinderpassword:
             log.info("- INFO - disconnecting from the cinder db")
             self.cinder_db_disconnect()
-        if novapassword:
+        # until this is fully implmented ...
+        if self.novapassword:
             log.info("- INFO - disconnecting from the nova db")
             self.nova_db_disconnect()
 
     def run_check_loop(self, iterations):
         log.info("- INFO - connecting to vcenter")
         self.vc_connect()
+        # stop this loop iteration here in case we get problems connecting to the vcenter
         if not self.vc_connection_ok():
             log.warn("- PLEASE CHECK MANUALLY - problems connecting to the vcenter - retrying in next loop run")
             return
-        log.info("- INFO - getting information from vcenter")
-        # TODO add exception handling in case something goes wrong here
-        self.vc_get_viewref()
-        # stop this loop iteration here in case we get problems getting data from openstack
-        if not self.vc_get_info():
-            log.warn("- PLEASE CHECK MANUALLY - problems getting data from vcenter - retrying in next loop run")
-            log.info("- INFO - disconnecting from vcenter")
+        log.info("- INFO - getting information from the vcenter")
+        # stop this loop iteration here in case we get problems getting the viewref from the vcenter
+        if not self.vc_get_viewref():
+            log.warn("- PLEASE CHECK MANUALLY - problems getting the viewref from the vcenter - retrying in next loop run")
+            log.info("- INFO - disconnecting from the vcenter")
             self.vc_disconnect()
             return
-        log.info("- INFO - disconnecting from vcenter")
+        # stop this loop iteration here in case we get problems getting data from openstack
+        if not self.vc_get_info():
+            log.warn("- PLEASE CHECK MANUALLY - problems getting data from the vcenter - retrying in next loop run")
+            log.info("- INFO - disconnecting from the vcenter")
+            self.vc_disconnect()
+            return
+        log.info("- INFO - disconnecting from the vcenter")
         self.vc_disconnect()
         log.info("- INFO - connecting to openstack")
         self.os_connect()
+        # stop this loop iteration here in case we get problems connecting to openstack
         if not self.os_connection_ok():
-            log.warn("- PLEASE CHECK MANUALLY - problems connecting to the vcenter - retrying in next loop run")
+            log.warn("- PLEASE CHECK MANUALLY - problems connecting to openstack - retrying in next loop run")
             return
         log.info("- INFO - getting information from openstack (this may take a moment)")
         # stop this loop iteration here in case we get problems getting data from openstack
