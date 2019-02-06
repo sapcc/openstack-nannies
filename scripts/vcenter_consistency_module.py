@@ -648,6 +648,7 @@ class ConsistencyCheck:
                             self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] += 1
                         log.warn("- PLEASE CHECK MANUALLY - volume %s in project %s is in state 'available' with attachments for too long", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid))
                     continue
+                self.cinder_volume_available_with_attachments[volume_uuid] = 0
             else:
                 self.cinder_volume_available_with_attachments[volume_uuid] = 0
 
