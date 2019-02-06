@@ -26,8 +26,6 @@ import time
 import sys
 
 from pyVim.connect import SmartConnect, Disconnect
-# TODO - not yet needed
-# from pyVim.task import WaitForTask, WaitForTasks
 from pyVmomi import vim, vmodl
 
 from openstack import connection, exceptions
@@ -270,7 +268,7 @@ class ConsistencyCheck:
     # get all servers and all volumes from the vcenter
     def vc_get_info(self):
 
-        # TODO exception handling
+        # TODO better exception handling
 
         # clear the old lists
         self.vc_all_servers *= 0
@@ -542,15 +540,16 @@ class ConsistencyCheck:
         log.info("vc server with this volume attached (uuid/name): %s / %s", self.vc_server_uuid_with_mounted_volume.get(self.volume_query), self.vc_server_name_with_mounted_volume.get(self.volume_query))
 
     def reset_gauge_values(self):
-        self.gauge_value_cinder_volume_attaching_for_too_long.clear()
-        self.gauge_value_cinder_volume_detaching_for_too_long.clear()
-        self.gauge_value_cinder_volume_is_in_state_reserved.clear()
-        self.gauge_value_cinder_volume_available_with_attachments.clear()
-        # initialize a value without project_id, so that the mtric always exists, even if there is no problem
-        self.gauge_value_cinder_volume_attaching_for_too_long['NOVOLUME_DUMMY'] = 0
-        self.gauge_value_cinder_volume_detaching_for_too_long['NOVOLUME_DUMMY'] = 0
-        self.gauge_value_cinder_volume_is_in_state_reserved['NOVOLUME_DUMMY'] = 0
-        self.gauge_value_cinder_volume_available_with_attachments['NOVOLUME_DUMMY'] = 0
+        # this is ugly, but for now should at least give us reliable prometheus metrics, i.e.
+        # metrics, which also go back to 0 in case a problem or volume disappears ...
+        for i in self.gauge_value_cinder_volume_attaching_for_too_long:
+            self.gauge_value_cinder_volume_attaching_for_too_long[i] = 0
+        for i in self.gauge_value_cinder_volume_detaching_for_too_long:
+            self.gauge_value_cinder_volume_detaching_for_too_long[i] = 0
+        for i in self.gauge_value_cinder_volume_is_in_state_reserved:
+            self.gauge_value_cinder_volume_is_in_state_reserved[i] = 0
+        for i in self.gauge_value_cinder_volume_available_with_attachments:
+            self.gauge_value_cinder_volume_available_with_attachments[i] = 0
 
     def discover_problems(self, iterations):
         self.discover_cinder_volume_attaching_for_too_long(iterations)
@@ -649,6 +648,7 @@ class ConsistencyCheck:
                             self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] += 1
                         log.warn("- PLEASE CHECK MANUALLY - volume %s in project %s is in state 'available' with attachments for too long", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid))
                     continue
+            else:
                 self.cinder_volume_available_with_attachments[volume_uuid] = 0
 
     def send_gauge_values(self):
@@ -763,7 +763,6 @@ class ConsistencyCheck:
         self.reset_gauge_values()
         self.discover_problems(iterations)
         self.send_gauge_values()
-
 
     def run_check(self, interval, iterations):
         self.start_prometheus_exporter()
