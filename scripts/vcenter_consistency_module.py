@@ -391,6 +391,7 @@ class ConsistencyCheck:
 
     def cinder_db_get_info(self):
         self.cinder_db_get_volume_attach_status()
+        self.cinder_db_get_volume_attachment_attach_status()
 
     def cinder_db_get_volume_attach_status(self):
 
