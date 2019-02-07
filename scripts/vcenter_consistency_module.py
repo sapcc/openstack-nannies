@@ -79,6 +79,8 @@ class ConsistencyCheck:
         self.cinder_volume_available_with_attachments = dict()
         self.cinder_os_volume_status = dict()
         self.cinder_os_volume_project_id = dict()
+        self.cinder_db_volume_attach_status = dict()
+        self.cinder_db_volume_attachment_attach_status = dict()
 
         # this one has the instance uuid as key
         self.nova_os_volumes_attached_at_server = dict()
@@ -386,6 +388,28 @@ class ConsistencyCheck:
         self.cinder_thisSession.close()
         self.cinder_connection.close()
 
+
+    def cinder_db_get_info(self):
+        self.cinder_db_get_volume_attach_status()
+
+    def cinder_db_get_volume_attach_status(self):
+
+        cinder_db_volumes_t = Table('volumes', self.cinder_metadata, autoload=True)
+        cinder_db_volume_attach_status_q = select(columns=[cinder_db_volumes_t.c.id, cinder_db_volumes_t.c.attach_status])
+
+        # build a dict indexed by volume_uuid (=.c.id) and with the value of attach_status
+        for (volume_uuid, attach_status) in cinder_db_volume_attach_status_q.execute():
+            self.cinder_db_volume_attach_status[volume_uuid] = attach_status
+
+    def cinder_db_get_volume_attachment_attach_status(self):
+
+        cinder_db_volume_attachment_t = Table('volume_attachment', self.cinder_metadata, autoload=True)
+        cinder_db_volume_attachment_attach_status_q = select(columns=[cinder_db_volume_attachment_t.c.volume_id, cinder_db_volume_attachment_t.c.attach_status])
+
+        # build a dict indexed by volume_uuid (=.c.volume_id) and with the value of attach_status
+        for (volume_uuid, attach_status) in cinder_db_volume_attachment_attach_status_q.execute():
+            self.cinder_db_volume_attachment_attach_status[volume_uuid] = attach_status
+
     # connect to the nova db
     def nova_db_connect(self):
 
@@ -514,6 +538,9 @@ class ConsistencyCheck:
             log.info("- this volume exists in cinder (for this az): Yes")
             log.info("- project id: %s", self.cinder_os_volume_project_id.get(self.volume_query))
             log.info("- volume status in cinder: %s", self.cinder_os_volume_status.get(self.volume_query))
+            # until this is fully implmented ...
+            if self.cinderpassword:
+                log.info("- volume attach_status in cinder db: %s", self.cinder_db_volume_attach_status.get(self.volume_query))
         else:
             log.info("- this volume exists in cinder (for this az): No")
         if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
@@ -523,6 +550,9 @@ class ConsistencyCheck:
                     log.info("- this instance exists in nova: Yes")
                 else:
                     log.info("- this instance exists in nova: No")
+                # until this is fully implmented ...
+                if self.cinderpassword:
+                    log.info("- volume_attachment attach_status in cinder db: %s", self.cinder_db_volume_attachment_attach_status.get(self.volume_query))
         else:
             log.info("os server with this volume attached (cinder): None")
         is_attached_in_nova = False
@@ -702,6 +732,8 @@ class ConsistencyCheck:
             if not self.cinder_db_connection_ok():
                 log.error("problems connecting to the cinder db")
                 sys.exit(1)
+            log.info("- INFO - getting information from the cinder db")
+            self.cinder_db_get_info()
         # until this is fully implmented ...
         if self.novapassword:
             log.info("- INFO - connecting to the nova db")
