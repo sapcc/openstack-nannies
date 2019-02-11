@@ -24,6 +24,7 @@ import re
 import ssl
 import time
 import sys
+import datetime
 
 from pyVim.connect import SmartConnect, Disconnect
 from pyVmomi import vim, vmodl
@@ -52,7 +53,7 @@ log = logging.getLogger('vcenter_consistency_module')
 openstack_re = re.compile("^name")
 
 class ConsistencyCheck:
-    def __init__(self, vchost, vcusername, vcpassword, cinderpassword, novapassword, region, dry_run, prometheus_port):
+    def __init__(self, vchost, vcusername, vcpassword, cinderpassword, novapassword, region, dry_run, prometheus_port, interactive):
 
         self.vchost = vchost
         self.vcusername = vcusername
@@ -62,6 +63,7 @@ class ConsistencyCheck:
         self.region = region
         self.dry_run = dry_run
         self.prometheus_port = prometheus_port
+        self.interactive = interactive
 
         self.nova_os_all_servers = []
         self.cinder_os_all_volumes = []
@@ -360,20 +362,25 @@ class ConsistencyCheck:
     # connect to the cinder db
     def cinder_db_connect(self):
 
-        # TODO exception handling
+        try:
+            # db_url = 'postgresql+psycopg2://cinder:' + self.cinderpassword + '@cinder-postgresql.monsoon3.svc.kubernetes.' + self.region + '.cloud.sap:5432/cinder?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
+            # for debugging
+            db_url = 'postgresql+psycopg2://cinder:' + self.cinderpassword + '@localhost:5432/cinder?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
 
-        # db_url = 'postgresql+psycopg2://cinder:' + self.cinderpassword + '@cinder-postgresql.monsoon3.svc.kubernetes.' + self.region + '.cloud.sap:5432/cinder?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
-        # for debugging
-        db_url = 'postgresql+psycopg2://cinder:' + self.cinderpassword + '@localhost:5432/cinder?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
 
+            self.cinder_engine = create_engine(db_url)
+            self.cinder_connection = self.cinder_engine.connect()
+            Session = sessionmaker(bind=self.cinder_engine)
+            self.cinder_thisSession = Session()
+            self.cinder_metadata = MetaData()
+            self.cinder_metadata.bind = self.cinder_engine
+            self.cinder_Base = declarative_base()
 
-        self.cinder_engine = create_engine(db_url)
-        self.cinder_connection = self.cinder_engine.connect()
-        Session = sessionmaker(bind=self.cinder_engine)
-        self.cinder_thisSession = Session()
-        self.cinder_metadata = MetaData()
-        self.cinder_metadata.bind = self.cinder_engine
-        self.cinder_Base = declarative_base()
+        except Exception as e:
+            log.warn(" - WARNING - problems connecting to the cinder db")
+            return False
+
+        return True
 
     # check if the cinder db connection is ok, so that we can use it later to exit (cmdline tool) or return (in a loop)
     def cinder_db_connection_ok(self):
@@ -396,7 +403,7 @@ class ConsistencyCheck:
     def cinder_db_get_volume_attach_status(self):
 
         cinder_db_volumes_t = Table('volumes', self.cinder_metadata, autoload=True)
-        cinder_db_volume_attach_status_q = select(columns=[cinder_db_volumes_t.c.id, cinder_db_volumes_t.c.attach_status])
+        cinder_db_volume_attach_status_q = select(columns=[cinder_db_volumes_t.c.id, cinder_db_volumes_t.c.attach_status],whereclause=and_(cinder_db_volumes_t.c.deleted == False))
 
         # build a dict indexed by volume_uuid (=.c.id) and with the value of attach_status
         for (volume_uuid, attach_status) in cinder_db_volume_attach_status_q.execute():
@@ -405,29 +412,60 @@ class ConsistencyCheck:
     def cinder_db_get_volume_attachment_attach_status(self):
 
         cinder_db_volume_attachment_t = Table('volume_attachment', self.cinder_metadata, autoload=True)
-        cinder_db_volume_attachment_attach_status_q = select(columns=[cinder_db_volume_attachment_t.c.volume_id, cinder_db_volume_attachment_t.c.attach_status])
+        cinder_db_volume_attachment_attach_status_q = select(columns=[cinder_db_volume_attachment_t.c.volume_id, cinder_db_volume_attachment_t.c.attach_status],whereclause=and_(cinder_db_volume_attachment_t.c.deleted == False))
 
         # build a dict indexed by volume_uuid (=.c.volume_id) and with the value of attach_status
         for (volume_uuid, attach_status) in cinder_db_volume_attachment_attach_status_q.execute():
             self.cinder_db_volume_attachment_attach_status[volume_uuid] = attach_status
 
+    def cinder_db_update_volume_status(self, volume_uuid, new_status, new_attach_status):
+
+        now = datetime.datetime.utcnow()
+        cinder_db_volumes_t = Table('volumes', self.cinder_metadata, autoload=True)
+        cinder_db_update_volume_attach_status_q = cinder_db_volumes_t.update().where(and_(cinder_db_volumes_t.c.id == volume_uuid, cinder_db_volumes_t.c.deleted == False)).values(updated_at=now, status=new_status, attach_status=new_attach_status)
+        try:
+            if self.dry_run:
+                log.info("dry-run mode: cinder_db_update_volume_attach_status_q.execute()")
+            else:
+                cinder_db_update_volume_attach_status_q.execute()
+        except Exception as e:
+            log.warn("- WARNING - there was an error setting the status / attach_status of volume %s to %s / %s in the cinder db", volume_uuid, new_status, new_attach_status)
+
+    def cinder_db_delete_volume_attachement(self, volume_uuid):
+
+        now = datetime.datetime.utcnow()
+        cinder_db_volume_attachment_t = Table('volume_attachment', self.cinder_metadata, autoload=True)
+        cinder_db_delete_volume_attachment_q = cinder_db_volume_attachment_t.update().where(and_(cinder_db_volume_attachment_t.c.volume_id == volume_uuid, cinder_db_volume_attachment_t.c.deleted == False)).values(update_at=now, deleted_at=now, deleted=True)
+        try:
+            if self.dry_run:
+                log.info("dry-run mode: cinder_db_delete_volume_attachment_q.execute()")
+            else:
+                cinder_db_delete_volume_attachment_q.execute()
+        except Exception as e:
+            log.warn("- WARNING - there was an error deleting the volume_attachment for the volume %s in the cinder db", volume_uuid)
+
     # connect to the nova db
     def nova_db_connect(self):
 
-        # TODO exception handling
+        try:
+            # db_url = 'postgresql+psycopg2://nova:' + self.novapassword + '@nova-postgresql.monsoon3.svc.kubernetes.' + self.region + '.cloud.sap:5432/nova?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
+            # for debugging
+            db_url = 'postgresql+psycopg2://nova:' + self.novapassword + '@localhost:15432/nova?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
 
-        # db_url = 'postgresql+psycopg2://nova:' + self.novapassword + '@nova-postgresql.monsoon3.svc.kubernetes.' + self.region + '.cloud.sap:5432/nova?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
-        # for debugging
-        db_url = 'postgresql+psycopg2://nova:' + self.novapassword + '@localhost:15432/nova?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
 
+            self.nova_engine = create_engine(db_url)
+            self.nova_connection = self.nova_engine.connect()
+            Session = sessionmaker(bind=self.nova_engine)
+            self.nova_thisSession = Session()
+            self.nova_metadata = MetaData()
+            self.nova_metadata.bind = self.nova_engine
+            self.nova_Base = declarative_base()
 
-        self.nova_engine = create_engine(db_url)
-        self.nova_connection = self.nova_engine.connect()
-        Session = sessionmaker(bind=self.nova_engine)
-        self.nova_thisSession = Session()
-        self.nova_metadata = MetaData()
-        self.nova_metadata.bind = self.nova_engine
-        self.nova_Base = declarative_base()
+        except Exception as e:
+            log.warn(" - WARNING - problems connecting to the nova db")
+            return False
+
+        return True
 
     # check if the nova db connection is ok, so that we can use it later to exit (cmdline tool) or return (in a loop)
     def nova_db_connection_ok(self):
@@ -441,6 +479,19 @@ class ConsistencyCheck:
     def nova_db_disconnect(self):
         self.nova_thisSession.close()
         self.nova_connection.close()
+
+    def nova_db_delete_block_device_mapping(self, volume_uuid):
+
+        now = datetime.datetime.utcnow()
+        nova_db_block_device_mapping_t = Table('block_device_mapping', self.nova_metadata, autoload=True)
+        nova_db_delete_block_device_mapping_q = nova_db_block_device_mapping_t.update().where(and_(nova_db_block_device_mapping_t.c.volume_id == volume_uuid, nova_db_block_device_mapping_t.c.deleted == 0)).values(update_at=now, deleted_at=now, deleted=nova_db_block_device_mapping_t.c.id)
+        try:
+            if self.dry_run:
+                log.info("dry-run mode: nova_db_delete_block_device_mapping_q.execute()")
+            else:
+                nova_db_delete_block_device_mapping_q.execute()
+        except Exception as e:
+            log.warn("- WARNING - there was an error deleting the block device mapping for the volume %s in the nova db", volume_uuid)
 
     # openstack connection
     def os_connect(self):
@@ -494,7 +545,7 @@ class ConsistencyCheck:
                                 self.nova_os_volumes_attached_at_server[server.id].append(attachment['id'].encode('ascii'))
                             else:
                                 self.nova_os_volumes_attached_at_server[server.id] = [attachment['id'].encode('ascii')]
-                        self.nova_os_servers_with_attached_volume[attachment['id']] = server.id
+                            self.nova_os_servers_with_attached_volume[attachment['id'].encode('ascii')] = server.id.encode('ascii')
             service = "cinder"
             for volume in self.os_conn.block_store.volumes(details=True, all_projects=1):
                 # we only care about volumes from the vcenter this nanny is taking care of
@@ -532,6 +583,124 @@ class ConsistencyCheck:
                 log.error("there was a problem with your input: %s",  str(e))
                 sys.exit(1)
             self.print_volume_information()
+            if self.cinderpassword and self.novapassword:
+                self.offer_problem_fixes()
+
+    def offer_problem_fixes(self):
+        if self.offer_problem_fix_volume_status_nothing_attached():
+            return True
+        if self.offer_problem_fix_volume_status_all_attached():
+            return True
+        if self.offer_problem_fix_only_partially_attached():
+            return True
+        log.warning("i have no idea how to fix this particualr case - please check by hand")
+
+    def offer_problem_fix_volume_status_nothing_attached(self):
+
+        # TODO maybe even consider checking and setting the cinder_db_volume_attach_status
+
+        if (self.cinder_os_volume_status[self.volume_query] in ['in-use', 'attaching', 'detaching', 'reserved']):
+            if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
+                return False
+            if self.nova_os_servers_with_attached_volume.get(self.volume_query):
+                return False
+            if self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
+                return False
+        if self.interactive:
+            log.info("the state of the volume %s should be set to available / detached to fix the problem", self.volume_query)
+            if self.ask_user_yes_no():
+                log.info("- setting the state of the volume %s will be set to available / detached as requested", self.volume_query)
+                self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
+            else:
+                log.info("- not fixing the problem as requested")
+        else:
+            print("non interactive mode not yet implemented")
+
+        return True
+
+    def offer_problem_fix_volume_status_all_attached(self):
+
+        # TODO maybe even consider checking and setting the cinder_db_volume_attach_status
+
+        if (self.cinder_os_volume_status[self.volume_query] in ['available', 'attaching', 'detaching', 'reserved']):
+            if not self.cinder_os_servers_with_attached_volume.get(self.volume_query):
+                return False
+            if not self.nova_os_servers_with_attached_volume.get(self.volume_query):
+                return False
+            if not self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
+                return False
+        else:
+            return False
+        if self.interactive:
+            log.info("the state of the volume %s should be set to in-use / attached to fix the problem", self.volume_query)
+            if self.ask_user_yes_no():
+                log.info("- setting the state of the volume %s will be set to in-use / attached as requested", self.volume_query)
+                self.cinder_db_update_volume_status(self.volume_query, 'in-use', 'attached')
+            else:
+                log.info("- not fixing the problem as requested")
+        else:
+            print("non interactive mode not yet implemented")
+
+        return True
+
+    def offer_problem_fix_only_partially_attached(self):
+
+        # TODO maybe even consider checking and setting the cinder_db_volume_attach_status
+
+        if (self.cinder_os_volume_status[self.volume_query] in ['in-use', 'attaching', 'detaching', 'reserved']):
+            something_attached = False
+            something_not_attached = False
+            if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
+                something_attached = True
+            if self.nova_os_servers_with_attached_volume.get(self.volume_query):
+                something_attached = True
+            if self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
+                something_attached = True
+            if not self.cinder_os_servers_with_attached_volume.get(self.volume_query):
+                something_not_attached = True
+            if not self.nova_os_servers_with_attached_volume.get(self.volume_query):
+                something_not_attached = True
+            if not self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
+                something_not_attached = True
+        if self.interactive:
+            if something_attached and something_not_attached:
+                if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
+                    # below the self.cinder_os_servers_with_attached_volume.get(self.volume_query)[0] should maybe be replaced with proper handling of the corresponding list
+                    log.info("the volume %s should be detached from server %s in cinder to fix the problem", self.volume_query, self.cinder_os_servers_with_attached_volume.get(self.volume_query)[0])
+                if self.nova_os_servers_with_attached_volume.get(self.volume_query):
+                    log.info("the volume %s should be detached from server %s in nova to fix the problem", self.volume_query, self.nova_os_servers_with_attached_volume.get(self.volume_query))
+                if self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
+                    log.info("the volume %s should be detached from server %s in the vcenter to fix the problem", self.volume_query, self.vc_server_uuid_with_mounted_volume.get(self.volume_query))
+                log.info("the state of the volume %s should be set to available / detached to fix the problem", self.volume_query)
+                if self.ask_user_yes_no():
+                    if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
+                        # below the self.cinder_os_servers_with_attached_volume.get(self.volume_query)[0] should maybe be replaced with proper handling of the corresponding list
+                        log.info("- detaching the volume %s from server %s in cinder as requested", self.volume_query, self.cinder_os_servers_with_attached_volume.get(self.volume_query)[0])
+                        self.cinder_db_delete_volume_attachement(self.volume_query)
+                    if self.nova_os_servers_with_attached_volume.get(self.volume_query):
+                        log.info("- detaching the volume %s from server %s in nova as requested", self.volume_query, self.nova_os_servers_with_attached_volume.get(self.volume_query))
+                        self.nova_db_delete_block_device_mapping(self.volume_query)
+                    if self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
+                        log.info("ACTION REQUIRED: vcenter detachments are not yet implemented - please detach volume %s from server %s by hand from the vcenter", self.volume_query, self.vc_server_uuid_with_mounted_volume.get(self.volume_query))
+                    log.info("- setting the state of the volume %s will be set to available / detached as requested", self.volume_query)
+                    self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
+                else:
+                    log.info("- not fixing the problem as requested")
+        else:
+            print("non interactive mode not yet implemented")
+
+        return True
+
+
+    def ask_user_yes_no(self):
+        while True:
+            yesno=str(raw_input('do you want to do the above action(s) (y/n): '))
+            if yesno == 'y':
+                return True
+            elif yesno == 'n':
+                return False
+            else:
+                log.warn("wrong input - please answer again (y/n)")
 
     def print_volume_information(self):
         log.info("volume uuid: %s", self.volume_query)
@@ -694,6 +863,8 @@ class ConsistencyCheck:
             self.gauge_cinder_volume_available_with_attachments.labels(i, self.cinder_os_volume_project_id.get(i)).set(self.gauge_value_cinder_volume_available_with_attachments[i])
 
     def run_tool(self):
+        if self.dry_run:
+            log.info("- INFO - running in dry run mode")
         log.info("- INFO - connecting to vcenter")
         self.vc_connect()
         # exit here in case we get problems connecting to the vcenter
@@ -757,6 +928,8 @@ class ConsistencyCheck:
             self.nova_db_disconnect()
 
     def run_check_loop(self, iterations):
+        if self.dry_run:
+            log.info("- INFO - running in dry run mode")
         log.info("- INFO - connecting to vcenter")
         self.vc_connect()
         # stop this loop iteration here in case we get problems connecting to the vcenter

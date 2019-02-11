@@ -46,7 +46,8 @@ def get_args_and_run(vchost, vcusername, vcpassword, cinderpassword, novapasswor
     # check if the prometheus port is set and if not set it to the default value
     if not prometheus_port:
         prometheus_port = 9456
-    c = vcenter_consistency_module.ConsistencyCheck(vchost, vcusername, vcpassword, cinderpassword, novapassword, region, dry_run, int(prometheus_port))
+    # the "None" below is for the interactive mode we are not using here
+    c = vcenter_consistency_module.ConsistencyCheck(vchost, vcusername, vcpassword, cinderpassword, novapassword, region, dry_run, int(prometheus_port), False)
     c.run_check(interval, iterations)
     
 if __name__ == '__main__':

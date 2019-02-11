@@ -24,6 +24,24 @@ else
     DRY_RUN="--dry-run"
 fi
 
+if [ "$CINDER_POSTGRESQL_PW" != "" ]; then
+    CINDER_PW="--cinderpassword $CINDER_POSTGRESQL_PW"
+else
+    CINDER_PW=""
+fi
+
+if [ "$NOVA_POSTGRESQL_PW" != "" ]; then
+    NOVA_PW="--novapassword $NOVA_POSTGRESQL_PW"
+else
+    NOVA_PW=""
+fi
+
+if [ "$REGION" != "" ]; then
+    CURRENT_REGION="--region $REGION"
+else
+    CURRENT_REGION=""
+fi
+
 export OS_USER_DOMAIN_NAME
 export OS_PROJECT_NAME
 export OS_PASSWORD
@@ -31,4 +49,4 @@ export OS_AUTH_URL
 export OS_USERNAME
 export OS_PROJECT_DOMAIN_NAME
 
-/var/lib/kolla/venv/bin/python /scripts/vcenter_consistency_tool.py $DRY_RUN --vchost $VCENTER_CONSISTENCY_HOST --vcusername $VCENTER_CONSISTENCY_USER --vcpassword $VCENTER_CONSISTENCY_PASSWORD
+/var/lib/kolla/venv/bin/python /scripts/vcenter_consistency_tool.py $DRY_RUN --vchost $VCENTER_CONSISTENCY_HOST --vcusername $VCENTER_CONSISTENCY_USER --vcpassword $VCENTER_CONSISTENCY_PASSWORD $CINDER_PW $NOVA_PW $CURRENT_REGION
