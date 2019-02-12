@@ -420,26 +420,26 @@ class ConsistencyCheck:
 
     def cinder_db_update_volume_status(self, volume_uuid, new_status, new_attach_status):
 
-        now = datetime.datetime.utcnow()
-        cinder_db_volumes_t = Table('volumes', self.cinder_metadata, autoload=True)
-        cinder_db_update_volume_attach_status_q = cinder_db_volumes_t.update().where(and_(cinder_db_volumes_t.c.id == volume_uuid, cinder_db_volumes_t.c.deleted == False)).values(updated_at=now, status=new_status, attach_status=new_attach_status)
         try:
             if self.dry_run:
                 log.info("dry-run mode: cinder_db_update_volume_attach_status_q.execute()")
             else:
+                now = datetime.datetime.utcnow()
+                cinder_db_volumes_t = Table('volumes', self.cinder_metadata, autoload=True)
+                cinder_db_update_volume_attach_status_q = cinder_db_volumes_t.update().where(and_(cinder_db_volumes_t.c.id == volume_uuid, cinder_db_volumes_t.c.deleted == False)).values(updated_at=now, status=new_status, attach_status=new_attach_status)
                 cinder_db_update_volume_attach_status_q.execute()
         except Exception as e:
             log.warn("- WARNING - there was an error setting the status / attach_status of volume %s to %s / %s in the cinder db - %s", volume_uuid, new_status, new_attach_status, str(e))
 
     def cinder_db_delete_volume_attachement(self, volume_uuid):
 
-        now = datetime.datetime.utcnow()
-        cinder_db_volume_attachment_t = Table('volume_attachment', self.cinder_metadata, autoload=True)
-        cinder_db_delete_volume_attachment_q = cinder_db_volume_attachment_t.update().where(and_(cinder_db_volume_attachment_t.c.volume_id == volume_uuid, cinder_db_volume_attachment_t.c.deleted == False)).values(update_at=now, deleted_at=now, deleted=True)
         try:
             if self.dry_run:
                 log.info("dry-run mode: cinder_db_delete_volume_attachment_q.execute()")
             else:
+                now = datetime.datetime.utcnow()
+                cinder_db_volume_attachment_t = Table('volume_attachment', self.cinder_metadata, autoload=True)
+                cinder_db_delete_volume_attachment_q = cinder_db_volume_attachment_t.update().where(and_(cinder_db_volume_attachment_t.c.volume_id == volume_uuid, cinder_db_volume_attachment_t.c.deleted == False)).values(update_at=now, deleted_at=now, deleted=True)
                 cinder_db_delete_volume_attachment_q.execute()
         except Exception as e:
             log.warn("- WARNING - there was an error deleting the volume_attachment for the volume %s in the cinder db", volume_uuid)
@@ -482,13 +482,13 @@ class ConsistencyCheck:
 
     def nova_db_delete_block_device_mapping(self, volume_uuid):
 
-        now = datetime.datetime.utcnow()
-        nova_db_block_device_mapping_t = Table('block_device_mapping', self.nova_metadata, autoload=True)
-        nova_db_delete_block_device_mapping_q = nova_db_block_device_mapping_t.update().where(and_(nova_db_block_device_mapping_t.c.volume_id == volume_uuid, nova_db_block_device_mapping_t.c.deleted == 0)).values(update_at=now, deleted_at=now, deleted=nova_db_block_device_mapping_t.c.id)
         try:
             if self.dry_run:
                 log.info("dry-run mode: nova_db_delete_block_device_mapping_q.execute()")
             else:
+                now = datetime.datetime.utcnow()
+                nova_db_block_device_mapping_t = Table('block_device_mapping', self.nova_metadata, autoload=True)
+                nova_db_delete_block_device_mapping_q = nova_db_block_device_mapping_t.update().where(and_(nova_db_block_device_mapping_t.c.volume_id == volume_uuid, nova_db_block_device_mapping_t.c.deleted == 0)).values(update_at=now, deleted_at=now, deleted=nova_db_block_device_mapping_t.c.id)
                 nova_db_delete_block_device_mapping_q.execute()
         except Exception as e:
             log.warn("- WARNING - there was an error deleting the block device mapping for the volume %s in the nova db - %s", volume_uuid, str(e))
@@ -550,15 +550,15 @@ class ConsistencyCheck:
             for volume in self.os_conn.block_store.volumes(details=True, all_projects=1):
                 # we only care about volumes from the vcenter this nanny is taking care of
                 if volume.availability_zone.lower() == self.vcenter_name:
-                    self.cinder_os_all_volumes.append(volume.id)
-                    self.cinder_os_volume_status[volume.id] = volume.status
-                    self.cinder_os_volume_project_id[volume.id] = volume.project_id.encode('ascii')
+                    self.cinder_os_all_volumes.append(volume.id.encode('ascii'))
+                    self.cinder_os_volume_status[volume.id.encode('ascii')] = volume.status.encode('ascii')
+                    self.cinder_os_volume_project_id[volume.id.encode('ascii')] = volume.project_id.encode('ascii')
                     if volume.attachments:
                         for attachment in volume.attachments:
-                            if self.cinder_os_servers_with_attached_volume.get(volume.id):
-                                self.cinder_os_servers_with_attached_volume[volume.id].append(attachment['server_id'].encode('ascii'))
+                            if self.cinder_os_servers_with_attached_volume.get(volume.id.encode('ascii')):
+                                self.cinder_os_servers_with_attached_volume[volume.id.encode('ascii')].append(attachment['server_id'].encode('ascii'))
                             else:
-                                self.cinder_os_servers_with_attached_volume[volume.id] = [attachment['server_id'].encode('ascii')]
+                                self.cinder_os_servers_with_attached_volume[volume.id.encode('ascii')] = [attachment['server_id'].encode('ascii')]
 
         except exceptions.HttpException as e:
             log.warn(
