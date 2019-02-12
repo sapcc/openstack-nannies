@@ -144,7 +144,7 @@ class ConsistencyCheck:
             try:
                 start_http_server(self.prometheus_port)
             except Exception as e:
-                logging.error(" - ERROR - failed to start prometheus exporter http server: " + str(e))
+                logging.error(" - ERROR - failed to start prometheus exporter http server: %s", str(e))
 
     # connect to vcenter
     def vc_connect(self):
@@ -363,9 +363,9 @@ class ConsistencyCheck:
     def cinder_db_connect(self):
 
         try:
-            # db_url = 'postgresql+psycopg2://cinder:' + self.cinderpassword + '@cinder-postgresql.monsoon3.svc.kubernetes.' + self.region + '.cloud.sap:5432/cinder?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
+            db_url = 'postgresql+psycopg2://cinder:' + self.cinderpassword + '@cinder-postgresql.monsoon3.svc.kubernetes.' + self.region + '.cloud.sap:5432/cinder?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
             # for debugging
-            db_url = 'postgresql+psycopg2://cinder:' + self.cinderpassword + '@localhost:5432/cinder?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
+            # db_url = 'postgresql+psycopg2://cinder:' + self.cinderpassword + '@localhost:5432/cinder?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
 
 
             self.cinder_engine = create_engine(db_url)
@@ -377,7 +377,7 @@ class ConsistencyCheck:
             self.cinder_Base = declarative_base()
 
         except Exception as e:
-            log.warn(" - WARNING - problems connecting to the cinder db")
+            log.warn("- WARNING - problems connecting to the cinder db - %s", str(e))
             return False
 
         return True
@@ -429,7 +429,7 @@ class ConsistencyCheck:
             else:
                 cinder_db_update_volume_attach_status_q.execute()
         except Exception as e:
-            log.warn("- WARNING - there was an error setting the status / attach_status of volume %s to %s / %s in the cinder db", volume_uuid, new_status, new_attach_status)
+            log.warn("- WARNING - there was an error setting the status / attach_status of volume %s to %s / %s in the cinder db - %s", volume_uuid, new_status, new_attach_status, str(e))
 
     def cinder_db_delete_volume_attachement(self, volume_uuid):
 
@@ -448,9 +448,9 @@ class ConsistencyCheck:
     def nova_db_connect(self):
 
         try:
-            # db_url = 'postgresql+psycopg2://nova:' + self.novapassword + '@nova-postgresql.monsoon3.svc.kubernetes.' + self.region + '.cloud.sap:5432/nova?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
+            db_url = 'postgresql+psycopg2://nova:' + self.novapassword + '@nova-postgresql.monsoon3.svc.kubernetes.' + self.region + '.cloud.sap:5432/nova?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
             # for debugging
-            db_url = 'postgresql+psycopg2://nova:' + self.novapassword + '@localhost:15432/nova?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
+            # db_url = 'postgresql+psycopg2://nova:' + self.novapassword + '@localhost:15432/nova?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
 
 
             self.nova_engine = create_engine(db_url)
@@ -462,7 +462,7 @@ class ConsistencyCheck:
             self.nova_Base = declarative_base()
 
         except Exception as e:
-            log.warn(" - WARNING - problems connecting to the nova db")
+            log.warn(" - WARNING - problems connecting to the nova db - %s", str(e))
             return False
 
         return True
@@ -491,7 +491,7 @@ class ConsistencyCheck:
             else:
                 nova_db_delete_block_device_mapping_q.execute()
         except Exception as e:
-            log.warn("- WARNING - there was an error deleting the block device mapping for the volume %s in the nova db", volume_uuid)
+            log.warn("- WARNING - there was an error deleting the block device mapping for the volume %s in the nova db - %s", volume_uuid, str(e))
 
     # openstack connection
     def os_connect(self):
@@ -587,19 +587,24 @@ class ConsistencyCheck:
                 self.offer_problem_fixes()
 
     def offer_problem_fixes(self):
-        if self.offer_problem_fix_volume_status_nothing_attached():
-            return True
-        if self.offer_problem_fix_volume_status_all_attached():
-            return True
-        if self.offer_problem_fix_only_partially_attached():
-            return True
-        log.warning("i have no idea how to fix this particualr case - please check by hand")
+        # only offer fixes if the volume uuid entered is in the az this code is running against
+        if self.volume_query in self.cinder_os_all_volumes:
+            if self.offer_problem_fix_volume_status_nothing_attached():
+                return True
+            if self.offer_problem_fix_volume_status_all_attached():
+                return True
+            if self.offer_problem_fix_only_partially_attached():
+                return True
+            log.warning("i have no idea how to fix this particualr case - please check by hand")
+        else:
+            log.info("the volume %s does not exist in this az, so no fix options offered", self.volume_query)
 
     def offer_problem_fix_volume_status_nothing_attached(self):
 
         # TODO maybe even consider checking and setting the cinder_db_volume_attach_status
+        # TODO maybe rethink if the in-use state should be ommited below
 
-        if (self.cinder_os_volume_status[self.volume_query] in ['in-use', 'attaching', 'detaching', 'reserved']):
+        if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'attaching', 'detaching', 'reserved']):
             if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
                 return False
             if self.nova_os_servers_with_attached_volume.get(self.volume_query):
@@ -621,8 +626,9 @@ class ConsistencyCheck:
     def offer_problem_fix_volume_status_all_attached(self):
 
         # TODO maybe even consider checking and setting the cinder_db_volume_attach_status
+        # TODO maybe rethink if the available state should be ommited below
 
-        if (self.cinder_os_volume_status[self.volume_query] in ['available', 'attaching', 'detaching', 'reserved']):
+        if (self.cinder_os_volume_status.get(self.volume_query) in ['available', 'attaching', 'detaching', 'reserved']):
             if not self.cinder_os_servers_with_attached_volume.get(self.volume_query):
                 return False
             if not self.nova_os_servers_with_attached_volume.get(self.volume_query):
@@ -647,7 +653,7 @@ class ConsistencyCheck:
 
         # TODO maybe even consider checking and setting the cinder_db_volume_attach_status
 
-        if (self.cinder_os_volume_status[self.volume_query] in ['in-use', 'attaching', 'detaching', 'reserved']):
+        if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'attaching', 'detaching', 'reserved']):
             something_attached = False
             something_not_attached = False
             if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
