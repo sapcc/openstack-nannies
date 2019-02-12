@@ -363,9 +363,9 @@ class ConsistencyCheck:
     def cinder_db_connect(self):
 
         try:
-            db_url = 'postgresql+psycopg2://cinder:' + self.cinderpassword + '@cinder-postgresql.monsoon3.svc.kubernetes.' + self.region + '.cloud.sap:5432/cinder?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
+            # db_url = 'postgresql+psycopg2://cinder:' + self.cinderpassword + '@cinder-postgresql.monsoon3.svc.kubernetes.' + self.region + '.cloud.sap:5432/cinder?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
             # for debugging
-            # db_url = 'postgresql+psycopg2://cinder:' + self.cinderpassword + '@localhost:5432/cinder?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
+            db_url = 'postgresql+psycopg2://cinder:' + self.cinderpassword + '@localhost:5432/cinder?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
 
 
             self.cinder_engine = create_engine(db_url)
@@ -448,9 +448,9 @@ class ConsistencyCheck:
     def nova_db_connect(self):
 
         try:
-            db_url = 'postgresql+psycopg2://nova:' + self.novapassword + '@nova-postgresql.monsoon3.svc.kubernetes.' + self.region + '.cloud.sap:5432/nova?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
+            # db_url = 'postgresql+psycopg2://nova:' + self.novapassword + '@nova-postgresql.monsoon3.svc.kubernetes.' + self.region + '.cloud.sap:5432/nova?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
             # for debugging
-            # db_url = 'postgresql+psycopg2://nova:' + self.novapassword + '@localhost:15432/nova?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
+            db_url = 'postgresql+psycopg2://nova:' + self.novapassword + '@localhost:15432/nova?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
 
 
             self.nova_engine = create_engine(db_url)
@@ -611,17 +611,20 @@ class ConsistencyCheck:
                 return False
             if self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
                 return False
-        if self.interactive:
-            log.info("the state of the volume %s should be set to available / detached to fix the problem", self.volume_query)
-            if self.ask_user_yes_no():
-                log.info("- setting the state of the volume %s will be set to available / detached as requested", self.volume_query)
-                self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
+            if self.interactive:
+                log.info("the state of the volume %s should be set to available / detached to fix the problem", self.volume_query)
+                if self.ask_user_yes_no():
+                    log.info("- setting the state of the volume %s will be set to available / detached as requested", self.volume_query)
+                    self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
+                else:
+                    log.info("- not fixing the problem as requested")
             else:
-                log.info("- not fixing the problem as requested")
-        else:
-            print("non interactive mode not yet implemented")
+                print("non interactive mode not yet implemented")
 
-        return True
+            return True
+        else:
+            log.debug("offer_problem_fix_volume_status_nothing_attached does not apply")
+            return False
 
     def offer_problem_fix_volume_status_all_attached(self):
 
@@ -635,19 +638,21 @@ class ConsistencyCheck:
                 return False
             if not self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
                 return False
-        else:
-            return False
-        if self.interactive:
-            log.info("the state of the volume %s should be set to in-use / attached to fix the problem", self.volume_query)
-            if self.ask_user_yes_no():
-                log.info("- setting the state of the volume %s will be set to in-use / attached as requested", self.volume_query)
-                self.cinder_db_update_volume_status(self.volume_query, 'in-use', 'attached')
+            if self.interactive:
+                log.info("the state of the volume %s should be set to in-use / attached to fix the problem", self.volume_query)
+                if self.ask_user_yes_no():
+                    log.info("- setting the state of the volume %s will be set to in-use / attached as requested", self.volume_query)
+                    self.cinder_db_update_volume_status(self.volume_query, 'in-use', 'attached')
+                else:
+                    log.info("- not fixing the problem as requested")
             else:
-                log.info("- not fixing the problem as requested")
-        else:
-            print("non interactive mode not yet implemented")
+                print("non interactive mode not yet implemented")
 
-        return True
+            return True
+
+        else:
+            log.debug("offer_problem_fix_volume_status_all_attached does not apply")
+            return False
 
     def offer_problem_fix_only_partially_attached(self):
 
@@ -668,35 +673,41 @@ class ConsistencyCheck:
                 something_not_attached = True
             if not self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
                 something_not_attached = True
-        if self.interactive:
-            if something_attached and something_not_attached:
-                if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
-                    # below the self.cinder_os_servers_with_attached_volume.get(self.volume_query)[0] should maybe be replaced with proper handling of the corresponding list
-                    log.info("the volume %s should be detached from server %s in cinder to fix the problem", self.volume_query, self.cinder_os_servers_with_attached_volume.get(self.volume_query)[0])
-                if self.nova_os_servers_with_attached_volume.get(self.volume_query):
-                    log.info("the volume %s should be detached from server %s in nova to fix the problem", self.volume_query, self.nova_os_servers_with_attached_volume.get(self.volume_query))
-                if self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
-                    log.info("the volume %s should be detached from server %s in the vcenter to fix the problem", self.volume_query, self.vc_server_uuid_with_mounted_volume.get(self.volume_query))
-                log.info("the state of the volume %s should be set to available / detached to fix the problem", self.volume_query)
-                if self.ask_user_yes_no():
+            if self.interactive:
+                if something_attached and something_not_attached:
                     if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
                         # below the self.cinder_os_servers_with_attached_volume.get(self.volume_query)[0] should maybe be replaced with proper handling of the corresponding list
-                        log.info("- detaching the volume %s from server %s in cinder as requested", self.volume_query, self.cinder_os_servers_with_attached_volume.get(self.volume_query)[0])
-                        self.cinder_db_delete_volume_attachement(self.volume_query)
+                        log.info("the volume %s should be detached from server %s in cinder to fix the problem", self.volume_query, self.cinder_os_servers_with_attached_volume.get(self.volume_query)[0])
                     if self.nova_os_servers_with_attached_volume.get(self.volume_query):
-                        log.info("- detaching the volume %s from server %s in nova as requested", self.volume_query, self.nova_os_servers_with_attached_volume.get(self.volume_query))
-                        self.nova_db_delete_block_device_mapping(self.volume_query)
+                        log.info("the volume %s should be detached from server %s in nova to fix the problem", self.volume_query, self.nova_os_servers_with_attached_volume.get(self.volume_query))
                     if self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
-                        log.info("ACTION REQUIRED: vcenter detachments are not yet implemented - please detach volume %s from server %s by hand from the vcenter", self.volume_query, self.vc_server_uuid_with_mounted_volume.get(self.volume_query))
-                    log.info("- setting the state of the volume %s will be set to available / detached as requested", self.volume_query)
-                    self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
+                        log.info("the volume %s should be detached from server %s in the vcenter to fix the problem", self.volume_query, self.vc_server_uuid_with_mounted_volume.get(self.volume_query))
+                    log.info("the state of the volume %s should be set to available / detached to fix the problem", self.volume_query)
+                    if self.ask_user_yes_no():
+                        if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
+                            # below the self.cinder_os_servers_with_attached_volume.get(self.volume_query)[0] should maybe be replaced with proper handling of the corresponding list
+                            log.info("- detaching the volume %s from server %s in cinder as requested", self.volume_query, self.cinder_os_servers_with_attached_volume.get(self.volume_query)[0])
+                            self.cinder_db_delete_volume_attachement(self.volume_query)
+                        if self.nova_os_servers_with_attached_volume.get(self.volume_query):
+                            log.info("- detaching the volume %s from server %s in nova as requested", self.volume_query, self.nova_os_servers_with_attached_volume.get(self.volume_query))
+                            self.nova_db_delete_block_device_mapping(self.volume_query)
+                        if self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
+                            log.info("ACTION REQUIRED: vcenter detachments are not yet implemented - please detach volume %s from server %s by hand from the vcenter", self.volume_query, self.vc_server_uuid_with_mounted_volume.get(self.volume_query))
+                        log.info("- setting the state of the volume %s will be set to available / detached as requested", self.volume_query)
+                        self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
+                    else:
+                        log.info("- not fixing the problem as requested")
                 else:
-                    log.info("- not fixing the problem as requested")
+                    log.debug("offer_problem_fix_only_partially_attached does not apply")
+                    return False
+            else:
+                print("non interactive mode not yet implemented")
+
+            return True
+
         else:
-            print("non interactive mode not yet implemented")
-
-        return True
-
+            log.debug("offer_problem_fix_only_partially_attached does not apply")
+            return False
 
     def ask_user_yes_no(self):
         while True:
