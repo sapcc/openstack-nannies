@@ -200,58 +200,60 @@ class ConsistencyCheck:
 
         return True
 
-    def vc_instance_handle(self,instance_uuid):
+    def vc_get_instance_handle(self,instance_uuid):
 
         try:
             search_index = self.vc_service_instance.content.searchIndex
             vm_handle = search_index.FindByUuid(None,instance_uuid, True, True)
 
         except Exception as e:
-            log.warn("Problem getting instance search in vcenter %s", str(e))
+            log.warn("Problem during instance search in vcenter %s", str(e))
             return False
 
         return vm_handle
 
     def vc_detach_volume_instance(self,vm_handle,volume_uuid):
 
-        # TODO proper exception handling
-        #finding volume_handle here
-        volume_to_detach = None
-        for dev in vm_handle.config.hardware.device:
-            if isinstance(dev, vim.vm.device.VirtualDisk) \
-                    and dev.backing.uuid == volume_uuid:
-                volume_to_detach = dev
+        try:
+            #finding volume_handle here
+            volume_to_detach = None
+            for dev in vm_handle.config.hardware.device:
+                if isinstance(dev, vim.vm.device.VirtualDisk) \
+                        and dev.backing.uuid == volume_uuid:
+                    volume_to_detach = dev
 
-        if not volume_to_detach:
-            log.warn(
-                "- PLEASE CHECK MANUALLY - the volume to be detached with uuid %s on instance %s does not seem to exist", volume_uuid, vm_handle.config.instanceUuid)
-        if self.dry_run:
-            log.info("- dry-run: detaching ghost volume with uuid %s from instance %s [%s]", volume_uuid, vm_handle.config.instanceUuid, vm_handle.config.name)
-            return True
+            if not volume_to_detach:
+                log.warn(
+                    "- PLEASE CHECK MANUALLY - the volume %s on server %s does not seem to exist", volume_uuid, vm_handle.config.instanceUuid)
+            if self.dry_run:
+                log.info("- dry-run mode: detaching volume %s from server %s [%s]", volume_uuid, vm_handle.config.instanceUuid, vm_handle.config.name)
+                return True
 
-        else:
-            log.info("- action: detaching ghost volume with uuid %s from instance %s [%s]", volume_uuid, vm_handle.config.instanceUuid, vm_handle.config.name)
-            volume_to_detach_spec = vim.vm.device.VirtualDeviceSpec()
-            volume_to_detach_spec.operation = \
-                vim.vm.device.VirtualDeviceSpec.Operation.remove
-            volume_to_detach_spec.device = volume_to_detach
+            else:
+                log.info("- detaching volume  %s from server %s [%s]", volume_uuid, vm_handle.config.instanceUuid, vm_handle.config.name)
+                volume_to_detach_spec = vim.vm.device.VirtualDeviceSpec()
+                volume_to_detach_spec.operation = \
+                    vim.vm.device.VirtualDeviceSpec.Operation.remove
+                volume_to_detach_spec.device = volume_to_detach
 
-            spec = vim.vm.ConfigSpec()
-            spec.deviceChange = [volume_to_detach_spec]
-            task = vm_handle.ReconfigVM_Task(spec=spec)
-            try:
-                WaitForTask(task, si=self.vc_service_instance)
-            except vmodl.fault.HostNotConnected:
-                log.warn("- PLEASE CHECK MANUALLY - cannot detach volume from instance %s - the esx host it is running on is disconnected", vm_handle.config.instanceUuid)
-                return False
-            except vim.fault.InvalidPowerState as e:
-                log.warn("- PLEASE CHECK MANUALLY - cannot detach volume from instance %s - %s", vm_handle.config.instanceUuid, str(e.msg))
-                return False
-            except vim.fault.GenericVmConfigFault as e:
-                log.warn("- PLEASE CHECK MANUALLY - cannot detach volume from instance %s - %s", vm_handle.config.instanceUuid, str(e.msg))
-                return False
-            return True
+                spec = vim.vm.ConfigSpec()
+                spec.deviceChange = [volume_to_detach_spec]
+                task = vm_handle.ReconfigVM_Task(spec=spec)
+                try:
+                    WaitForTask(task, si=self.vc_service_instance)
+                except vmodl.fault.HostNotConnected:
+                    log.warn("- PLEASE CHECK MANUALLY - cannot detach volume from server %s - the esx host it is running on is disconnected", vm_handle.config.instanceUuid)
+                    return False
+                except vim.fault.InvalidPowerState as e:
+                    log.warn("- PLEASE CHECK MANUALLY - cannot detach volume from server %s - %s", vm_handle.config.instanceUuid, str(e.msg))
+                    return False
+                except vim.fault.GenericVmConfigFault as e:
+                    log.warn("- PLEASE CHECK MANUALLY - cannot detach volume from server %s - %s", vm_handle.config.instanceUuid, str(e.msg))
+                    return False
+                return True
 
+        except Exception as e:
+                log.info("- PLEASE CHECK MANUALLY - error detaching volume %s from server %s - %s", volume_uuid, vm_handle.config.instanceUuid, str(e))
 
     # Shamelessly borrowed from:
     # https://github.com/dnaeon/py-vconnector/blob/master/src/vconnector/core.py
@@ -493,7 +495,7 @@ class ConsistencyCheck:
             else:
                 now = datetime.datetime.utcnow()
                 cinder_db_volume_attachment_t = Table('volume_attachment', self.cinder_metadata, autoload=True)
-                cinder_db_delete_volume_attachment_q = cinder_db_volume_attachment_t.update().where(and_(cinder_db_volume_attachment_t.c.volume_id == volume_uuid, cinder_db_volume_attachment_t.c.deleted == False)).values(update_at=now, deleted_at=now, deleted=True)
+                cinder_db_delete_volume_attachment_q = cinder_db_volume_attachment_t.update().where(and_(cinder_db_volume_attachment_t.c.volume_id == volume_uuid, cinder_db_volume_attachment_t.c.deleted == False)).values(updated_at=now, deleted_at=now, deleted=True)
                 cinder_db_delete_volume_attachment_q.execute()
         except Exception as e:
             log.warn("- WARNING - there was an error deleting the volume_attachment for the volume %s in the cinder db", volume_uuid)
@@ -542,7 +544,7 @@ class ConsistencyCheck:
             else:
                 now = datetime.datetime.utcnow()
                 nova_db_block_device_mapping_t = Table('block_device_mapping', self.nova_metadata, autoload=True)
-                nova_db_delete_block_device_mapping_q = nova_db_block_device_mapping_t.update().where(and_(nova_db_block_device_mapping_t.c.volume_id == volume_uuid, nova_db_block_device_mapping_t.c.deleted == 0)).values(update_at=now, deleted_at=now, deleted=nova_db_block_device_mapping_t.c.id)
+                nova_db_delete_block_device_mapping_q = nova_db_block_device_mapping_t.update().where(and_(nova_db_block_device_mapping_t.c.volume_id == volume_uuid, nova_db_block_device_mapping_t.c.deleted == 0)).values(updated_at=now, deleted_at=now, deleted=nova_db_block_device_mapping_t.c.id)
                 nova_db_delete_block_device_mapping_q.execute()
         except Exception as e:
             log.warn("- WARNING - there was an error deleting the block device mapping for the volume %s in the nova db - %s", volume_uuid, str(e))
@@ -637,14 +639,6 @@ class ConsistencyCheck:
                 log.error("there was a problem with your input: %s",  str(e))
                 sys.exit(1)
             self.print_volume_information()
-            if self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
-                vm_handle = self.vc_instance_handle(self.vc_server_uuid_with_mounted_volume.get(self.volume_query))
-                if vm_handle:
-                    log.info("detaching volume from instance")
-                    self.vc_detach_volume_instance(vm_handle, self.volume_query)
-                else:
-                    log.warn("instance not found")
-
             if self.cinderpassword and self.novapassword:
                 self.offer_problem_fixes()
 
@@ -657,7 +651,7 @@ class ConsistencyCheck:
                 return True
             if self.offer_problem_fix_only_partially_attached():
                 return True
-            log.warning("i have no idea how to fix this particualr case - please check by hand")
+            log.warning("looks like everything is good - otherwise i have no idea how to fix this particualr case, then please check by hand")
         else:
             log.info("the volume %s does not exist in this az, so no fix options offered", self.volume_query)
 
@@ -720,7 +714,7 @@ class ConsistencyCheck:
 
         # TODO maybe even consider checking and setting the cinder_db_volume_attach_status
 
-        if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'attaching', 'detaching', 'reserved']):
+        if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'available', 'attaching', 'detaching', 'reserved']):
             something_attached = False
             something_not_attached = False
             if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
@@ -754,7 +748,10 @@ class ConsistencyCheck:
                             log.info("- detaching the volume %s from server %s in nova as requested", self.volume_query, self.nova_os_servers_with_attached_volume.get(self.volume_query))
                             self.nova_db_delete_block_device_mapping(self.volume_query)
                         if self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
-                            log.info("ACTION REQUIRED: vcenter detachments are not yet implemented - please detach volume %s from server %s by hand from the vcenter", self.volume_query, self.vc_server_uuid_with_mounted_volume.get(self.volume_query))
+                            vm_handle = self.vc_get_instance_handle(self.vc_server_uuid_with_mounted_volume.get(self.volume_query))
+                            if vm_handle:
+                                log.info("- detaching volume %s from server %s in the vcenter as requested", self.volume_query, self.nova_os_servers_with_attached_volume.get(self.volume_query))
+                                self.vc_detach_volume_instance(vm_handle, self.volume_query)
                         log.info("- setting the state of the volume %s will be set to available / detached as requested", self.volume_query)
                         self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
                     else:
