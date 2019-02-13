@@ -28,6 +28,7 @@ import datetime
 
 from pyVim.connect import SmartConnect, Disconnect
 from pyVmomi import vim, vmodl
+from pyVim.task import WaitForTask, WaitForTasks
 
 from openstack import connection, exceptions
 
@@ -96,6 +97,7 @@ class ConsistencyCheck:
         self.vc_data = None
         self.os_conn = None
         self.vcenter_name = None
+        #self.vm_handle = None
         self.volume_query = None
         # some db related stuff
         self.cinder_engine = None
@@ -197,6 +199,58 @@ class ConsistencyCheck:
             return False
 
         return True
+
+    def vc_instance_handle(self,instance_uuid):
+
+        try:
+            search_index = self.vc_service_instance.content.searchIndex
+            vm_handle = search_index.FindByUuid(None,instance_uuid, True, True)
+
+        except Exception as e:
+            log.warn("Problem getting instance search in vcenter %s", str(e))
+            return False
+
+        return vm_handle
+
+    def vc_detach_volume_instance(self,vm_handle,volume_uuid):
+
+        # TODO proper exception handling
+        #finding volume_handle here
+        volume_to_detach = None
+        for dev in vm_handle.config.hardware.device:
+            if isinstance(dev, vim.vm.device.VirtualDisk) \
+                    and dev.backing.uuid == volume_uuid:
+                volume_to_detach = dev
+
+        if not volume_to_detach:
+            log.warn(
+                "- PLEASE CHECK MANUALLY - the volume to be detached with uuid %s on instance %s does not seem to exist", volume_uuid, vm_handle.config.instanceUuid)
+        if self.dry_run:
+            log.info("- dry-run: detaching ghost volume with uuid %s from instance %s [%s]", volume_uuid, vm_handle.config.instanceUuid, vm_handle.config.name)
+            return True
+
+        else:
+            log.info("- action: detaching ghost volume with uuid %s from instance %s [%s]", volume_uuid, vm_handle.config.instanceUuid, vm_handle.config.name)
+            volume_to_detach_spec = vim.vm.device.VirtualDeviceSpec()
+            volume_to_detach_spec.operation = \
+                vim.vm.device.VirtualDeviceSpec.Operation.remove
+            volume_to_detach_spec.device = volume_to_detach
+
+            spec = vim.vm.ConfigSpec()
+            spec.deviceChange = [volume_to_detach_spec]
+            task = vm_handle.ReconfigVM_Task(spec=spec)
+            try:
+                WaitForTask(task, si=self.vc_service_instance)
+            except vmodl.fault.HostNotConnected:
+                log.warn("- PLEASE CHECK MANUALLY - cannot detach volume from instance %s - the esx host it is running on is disconnected", vm_handle.config.instanceUuid)
+                return False
+            except vim.fault.InvalidPowerState as e:
+                log.warn("- PLEASE CHECK MANUALLY - cannot detach volume from instance %s - %s", vm_handle.config.instanceUuid, str(e.msg))
+                return False
+            except vim.fault.GenericVmConfigFault as e:
+                log.warn("- PLEASE CHECK MANUALLY - cannot detach volume from instance %s - %s", vm_handle.config.instanceUuid, str(e.msg))
+                return False
+            return True
 
 
     # Shamelessly borrowed from:
@@ -583,6 +637,14 @@ class ConsistencyCheck:
                 log.error("there was a problem with your input: %s",  str(e))
                 sys.exit(1)
             self.print_volume_information()
+            if self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
+                vm_handle = self.vc_instance_handle(self.vc_server_uuid_with_mounted_volume.get(self.volume_query))
+                if vm_handle:
+                    log.info("detaching volume from instance")
+                    self.vc_detach_volume_instance(vm_handle, self.volume_query)
+                else:
+                    log.warn("instance not found")
+
             if self.cinderpassword and self.novapassword:
                 self.offer_problem_fixes()
 
@@ -755,6 +817,7 @@ class ConsistencyCheck:
         if is_attached_in_nova is False:
                 log.info("os server with this volume attached (nova): None")
         log.info("vc server with this volume attached (uuid/name): %s / %s", self.vc_server_uuid_with_mounted_volume.get(self.volume_query), self.vc_server_name_with_mounted_volume.get(self.volume_query))
+
 
     def reset_gauge_values(self):
         # this is ugly, but for now should at least give us reliable prometheus metrics, i.e.
