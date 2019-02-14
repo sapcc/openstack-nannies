@@ -255,6 +255,30 @@ def fix_missing_deleted_at(meta, table_names):
             deleted_at=now)
         a_table_set_deleted_at_q.execute()
 
+# get all the rows with a volume_admin_metadata still defined where the corresponding volume is already deleted
+def get_deleted_services_still_used_in_volumes(meta):
+
+    deleted_services_still_used_in_volumes = {}
+    services_t = Table('services', meta, autoload=True)
+    volumes_t = Table('volumes', meta, autoload=True)
+    services_volumes_join = services_t.join(volumes_t,services_t.c.uuid == volumes_t.c.service_uuid)
+    deleted_services_still_used_in_volumes_q = select(columns=[services_t.c.uuid,services_t.c.deleted,volumes_t.c.id,volumes_t.c.deleted]).select_from(services_volumes_join).where(and_(volumes_t.c.deleted == "false",services_t.c.deleted == "true"))
+
+    # return a dict indexed by service_uuid and with the value volume_id for deleted but still referenced services
+    for (service_uuid, service_deleted, volume_id, volume_deleted) in deleted_services_still_used_in_volumes_q.execute():
+        deleted_services_still_used_in_volumes[service_uuid] = volume_id
+    return deleted_services_still_used_in_volumes
+
+# delete volume_admin_metadata still defined where the corresponding volume is already deleted
+def fix_deleted_services_still_used_in_volumes(meta, deleted_services_still_used_in_volumes):
+
+    services_t = Table('services', meta, autoload=True)
+
+    for deleted_services_still_used_in_volumes_id in deleted_services_still_used_in_volumes:
+        log.info("-- action: undeleting service uuid: %s", deleted_services_still_used_in_volumes_id)
+        undelete_services_q = services_t.update().where(services_t.c.uuid == deleted_services_still_used_in_volumes_id).values(deleted=False,deleted_at=None)
+        undelete_services_q.execute()
+
 # establish an openstack connection
 def makeOsConnection():
     try:
@@ -416,6 +440,18 @@ def main():
             fix_missing_deleted_at(cinder_metadata, table_names)
     else:
         log.info("- no missing deleted_at values")
+
+    deleted_services_still_used_in_volumes = get_deleted_services_still_used_in_volumes(cinder_metadata)
+    if len(deleted_services_still_used_in_volumes) != 0:
+        log.info("- deleted services still used in volumes found:")
+        # print out what we would delete
+        for deleted_services_still_used_in_volumes_id in deleted_services_still_used_in_volumes:
+            log.info("--- deleted service uuid %s still used in volumes table entry %s", deleted_services_still_used_in_volumes_id, deleted_services_still_used_in_volumes[deleted_services_still_used_in_volumes_id])
+        if not args.dry_run:
+            log.info("- undeleting service uuid still used in volumes table")
+            fix_deleted_services_still_used_in_volumes(cinder_metadata, deleted_services_still_used_in_volumes)
+    else:
+        log.info("- deleted services still used in volumes")
 
 if __name__ == "__main__":
     main()
