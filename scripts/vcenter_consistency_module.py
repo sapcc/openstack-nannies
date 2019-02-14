@@ -114,25 +114,41 @@ class ConsistencyCheck:
         # flag if the prometheus exporter is enabled
         self.prometheus_exporter_enabled = True
 
+        # self.gauge_cinder_volume_attaching_for_too_long = Gauge('vcenter_nanny_consistency_cinder_volume_attaching_for_too_long',
+        #                                           'how many volumes are in the state attaching for too long', ["volume_uuid", 'project_id'])
+        # self.gauge_cinder_volume_detaching_for_too_long = Gauge('vcenter_nanny_consistency_cinder_volume_detaching_for_too_long',
+        #                                           'how many volumes are in the state detaching for too long', ["volume_uuid", 'project_id'])
+        # self.gauge_cinder_volume_is_in_state_reserved = Gauge('vcenter_nanny_consistency_cinder_volume_is_in_state_reserved',
+        #                                           'how many volumes are in the state reserved for too long', ["volume_uuid", 'project_id'])
+        # self.gauge_cinder_volume_available_with_attachments = Gauge('vcenter_nanny_consistency_cinder_volume_available_with_attachments',
+        #                                           'how many volumes are available with attachments for too long', ["volume_uuid", 'project_id'])
+        # SIMPLEGAUGES
         self.gauge_cinder_volume_attaching_for_too_long = Gauge('vcenter_nanny_consistency_cinder_volume_attaching_for_too_long',
-                                                  'how many volumes are in the state attaching for too long', ["volume_uuid", 'project_id'])
+                                                  'how many volumes are in the state attaching for too long')
         self.gauge_cinder_volume_detaching_for_too_long = Gauge('vcenter_nanny_consistency_cinder_volume_detaching_for_too_long',
-                                                  'how many volumes are in the state detaching for too long', ["volume_uuid", 'project_id'])
+                                                  'how many volumes are in the state detaching for too long')
         self.gauge_cinder_volume_is_in_state_reserved = Gauge('vcenter_nanny_consistency_cinder_volume_is_in_state_reserved',
-                                                  'how many volumes are in the state reserved for too long', ["volume_uuid", 'project_id'])
+                                                  'how many volumes are in the state reserved for too long')
         self.gauge_cinder_volume_available_with_attachments = Gauge('vcenter_nanny_consistency_cinder_volume_available_with_attachments',
-                                                  'how many volumes are available with attachments for too long', ["volume_uuid", 'project_id'])
+                                                  'how many volumes are available with attachments for too long')
 
-        # actual values we want to send to the prometheus exporter, it is a list of the value and the project id
-        self.gauge_value_cinder_volume_attaching_for_too_long = dict()
-        self.gauge_value_cinder_volume_detaching_for_too_long = dict()
-        self.gauge_value_cinder_volume_is_in_state_reserved = dict()
-        self.gauge_value_cinder_volume_available_with_attachments = dict()
-        # initialize a value without project_id, so that the mtric always exists, even if there is no problem
-        self.gauge_value_cinder_volume_attaching_for_too_long['NOVOLUME_DUMMY'] = 0
-        self.gauge_value_cinder_volume_detaching_for_too_long['NOVOLUME_DUMMY'] = 0
-        self.gauge_value_cinder_volume_is_in_state_reserved['NOVOLUME_DUMMY'] = 0
-        self.gauge_value_cinder_volume_available_with_attachments['NOVOLUME_DUMMY'] = 0
+
+        # # actual values we want to send to the prometheus exporter, it is a list of the value and the project id
+        # self.gauge_value_cinder_volume_attaching_for_too_long = dict()
+        # self.gauge_value_cinder_volume_detaching_for_too_long = dict()
+        # self.gauge_value_cinder_volume_is_in_state_reserved = dict()
+        # self.gauge_value_cinder_volume_available_with_attachments = dict()
+        # # initialize a value without project_id, so that the mtric always exists, even if there is no problem
+        # self.gauge_value_cinder_volume_attaching_for_too_long['NOVOLUME_DUMMY'] = 0
+        # self.gauge_value_cinder_volume_detaching_for_too_long['NOVOLUME_DUMMY'] = 0
+        # self.gauge_value_cinder_volume_is_in_state_reserved['NOVOLUME_DUMMY'] = 0
+        # self.gauge_value_cinder_volume_available_with_attachments['NOVOLUME_DUMMY'] = 0
+        # SIMPLEGAUGES
+        self.gauge_value_cinder_volume_attaching_for_too_long = 0
+        self.gauge_value_cinder_volume_detaching_for_too_long = 0
+        self.gauge_value_cinder_volume_is_in_state_reserved = 0
+        self.gauge_value_cinder_volume_available_with_attachments = 0
+
 
     # start prometheus exporter if needed
     def start_prometheus_exporter(self):
@@ -819,14 +835,20 @@ class ConsistencyCheck:
     def reset_gauge_values(self):
         # this is ugly, but for now should at least give us reliable prometheus metrics, i.e.
         # metrics, which also go back to 0 in case a problem or volume disappears ...
-        for i in self.gauge_value_cinder_volume_attaching_for_too_long:
-            self.gauge_value_cinder_volume_attaching_for_too_long[i] = 0
-        for i in self.gauge_value_cinder_volume_detaching_for_too_long:
-            self.gauge_value_cinder_volume_detaching_for_too_long[i] = 0
-        for i in self.gauge_value_cinder_volume_is_in_state_reserved:
-            self.gauge_value_cinder_volume_is_in_state_reserved[i] = 0
-        for i in self.gauge_value_cinder_volume_available_with_attachments:
-            self.gauge_value_cinder_volume_available_with_attachments[i] = 0
+        # for i in self.gauge_value_cinder_volume_attaching_for_too_long:
+        #     self.gauge_value_cinder_volume_attaching_for_too_long[i] = 0
+        # for i in self.gauge_value_cinder_volume_detaching_for_too_long:
+        #     self.gauge_value_cinder_volume_detaching_for_too_long[i] = 0
+        # for i in self.gauge_value_cinder_volume_is_in_state_reserved:
+        #     self.gauge_value_cinder_volume_is_in_state_reserved[i] = 0
+        # for i in self.gauge_value_cinder_volume_available_with_attachments:
+        #     self.gauge_value_cinder_volume_available_with_attachments[i] = 0
+        # SIMPLEGAUGES
+        self.gauge_value_cinder_volume_attaching_for_too_long = 0
+        self.gauge_value_cinder_volume_detaching_for_too_long = 0
+        self.gauge_value_cinder_volume_is_in_state_reserved = 0
+        self.gauge_value_cinder_volume_available_with_attachments = 0
+
 
     def discover_problems(self, iterations):
         self.discover_cinder_volume_attaching_for_too_long(iterations)
@@ -846,10 +868,12 @@ class ConsistencyCheck:
                 elif self.cinder_volume_attaching_for_too_long.get(volume_uuid) < iterations:
                     self.cinder_volume_attaching_for_too_long[volume_uuid] += 1
                 else:
-                    if not self.gauge_value_cinder_volume_attaching_for_too_long.get(volume_uuid):
-                        self.gauge_value_cinder_volume_attaching_for_too_long[volume_uuid] = 1
-                    else:
-                        self.gauge_value_cinder_volume_attaching_for_too_long[volume_uuid] += 1
+                    # if not self.gauge_value_cinder_volume_attaching_for_too_long.get(volume_uuid):
+                    #     self.gauge_value_cinder_volume_attaching_for_too_long[volume_uuid] = 1
+                    # else:
+                    #     self.gauge_value_cinder_volume_attaching_for_too_long[volume_uuid] += 1
+                    # SIMPLEGAUGES
+                    self.gauge_value_cinder_volume_attaching_for_too_long += 1
                     log.warn("- PLEASE CHECK MANUALLY - volume %s in project %s is in state 'attaching' for too long", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid))
             else:
                 self.cinder_volume_attaching_for_too_long[volume_uuid] = 0
@@ -862,10 +886,12 @@ class ConsistencyCheck:
                 elif self.cinder_volume_detaching_for_too_long.get(volume_uuid) < iterations:
                     self.cinder_volume_detaching_for_too_long[volume_uuid] += 1
                 else:
-                    if not self.gauge_value_cinder_volume_detaching_for_too_long.get(volume_uuid):
-                        self.gauge_value_cinder_volume_detaching_for_too_long[volume_uuid] = 1
-                    else:
-                        self.gauge_value_cinder_volume_detaching_for_too_long[volume_uuid] += 1
+                    # if not self.gauge_value_cinder_volume_detaching_for_too_long.get(volume_uuid):
+                    #     self.gauge_value_cinder_volume_detaching_for_too_long[volume_uuid] = 1
+                    # else:
+                    #     self.gauge_value_cinder_volume_detaching_for_too_long[volume_uuid] += 1
+                    # SIMPLEGAUGES
+                    self.gauge_value_cinder_volume_detaching_for_too_long += 1
                     log.warn("- PLEASE CHECK MANUALLY - volume %s in project %s is in state 'detaching' for too long", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid))
             else:
                 self.cinder_volume_detaching_for_too_long[volume_uuid] = 0
@@ -878,10 +904,12 @@ class ConsistencyCheck:
                 elif self.cinder_volume_is_in_state_reserved.get(volume_uuid) < iterations:
                     self.cinder_volume_is_in_state_reserved[volume_uuid] += 1
                 else:
-                    if not self.gauge_value_cinder_volume_is_in_state_reserved.get(volume_uuid):
-                        self.gauge_value_cinder_volume_is_in_state_reserved[volume_uuid] = 1
-                    else:
-                        self.gauge_value_cinder_volume_is_in_state_reserved[volume_uuid] += 1
+                    # if not self.gauge_value_cinder_volume_is_in_state_reserved.get(volume_uuid):
+                    #     self.gauge_value_cinder_volume_is_in_state_reserved[volume_uuid] = 1
+                    # else:
+                    #     self.gauge_value_cinder_volume_is_in_state_reserved[volume_uuid] += 1
+                    # SIMPLEGAUGES
+                    self.gauge_value_cinder_volume_is_in_state_reserved += 1
                     log.warn("- PLEASE CHECK MANUALLY - volume %s in project %s is in state 'reserved' for too long", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid))
             else:
                 self.cinder_volume_is_in_state_reserved[volume_uuid] = 0
@@ -895,10 +923,12 @@ class ConsistencyCheck:
                     elif self.cinder_volume_available_with_attachments.get(volume_uuid) < iterations:
                         self.cinder_volume_available_with_attachments[volume_uuid] += 1
                     else:
-                        if not self.gauge_value_cinder_volume_available_with_attachments.get(volume_uuid):
-                            self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] = 1
-                        else:
-                            self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] += 1
+                        # if not self.gauge_value_cinder_volume_available_with_attachments.get(volume_uuid):
+                        #     self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] = 1
+                        # else:
+                        #     self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] += 1
+                        # SIMPLEGAUGES
+                        self.gauge_value_cinder_volume_available_with_attachments += 1
                         log.warn("- PLEASE CHECK MANUALLY - volume %s in project %s is in state 'available' with attachments for too long", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid))
                     continue
                 if self.nova_os_servers_with_attached_volume.get(volume_uuid):
@@ -907,10 +937,12 @@ class ConsistencyCheck:
                     elif self.cinder_volume_available_with_attachments.get(volume_uuid) < iterations:
                         self.cinder_volume_available_with_attachments[volume_uuid] += 1
                     else:
-                        if not self.gauge_value_cinder_volume_available_with_attachments.get(volume_uuid):
-                            self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] = 1
-                        else:
-                            self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] += 1
+                        # if not self.gauge_value_cinder_volume_available_with_attachments.get(volume_uuid):
+                        #     self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] = 1
+                        # else:
+                        #     self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] += 1
+                        # SIMPLEGAUGES
+                        self.gauge_value_cinder_volume_available_with_attachments += 1
                         log.warn("- PLEASE CHECK MANUALLY - volume %s in project %s is in state 'available' with attachments for too long", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid))
                     continue
                 if self.vc_server_name_with_mounted_volume.get(volume_uuid):
@@ -919,10 +951,12 @@ class ConsistencyCheck:
                     elif self.cinder_volume_available_with_attachments.get(volume_uuid) < iterations:
                         self.cinder_volume_available_with_attachments[volume_uuid] += 1
                     else:
-                        if not self.gauge_value_cinder_volume_available_with_attachments.get(volume_uuid):
-                            self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] = 1
-                        else:
-                            self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] += 1
+                        # if not self.gauge_value_cinder_volume_available_with_attachments.get(volume_uuid):
+                        #     self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] = 1
+                        # else:
+                        #     self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] += 1
+                        # SIMPLEGAUGES
+                        self.gauge_value_cinder_volume_available_with_attachments += 1
                         log.warn("- PLEASE CHECK MANUALLY - volume %s in project %s is in state 'available' with attachments for too long", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid))
                     continue
                 self.cinder_volume_available_with_attachments[volume_uuid] = 0
@@ -930,14 +964,19 @@ class ConsistencyCheck:
                 self.cinder_volume_available_with_attachments[volume_uuid] = 0
 
     def send_gauge_values(self):
-        for i in self.gauge_value_cinder_volume_attaching_for_too_long:
-            self.gauge_cinder_volume_attaching_for_too_long.labels(i, self.cinder_os_volume_project_id.get(i)).set(self.gauge_value_cinder_volume_attaching_for_too_long[i])
-        for i in self.gauge_value_cinder_volume_detaching_for_too_long:
-            self.gauge_cinder_volume_detaching_for_too_long.labels(i, self.cinder_os_volume_project_id.get(i)).set(self.gauge_value_cinder_volume_detaching_for_too_long[i])
-        for i in self.gauge_value_cinder_volume_is_in_state_reserved:
-            self.gauge_cinder_volume_is_in_state_reserved.labels(i, self.cinder_os_volume_project_id.get(i)).set(self.gauge_value_cinder_volume_is_in_state_reserved[i])
-        for i in self.gauge_value_cinder_volume_available_with_attachments:
-            self.gauge_cinder_volume_available_with_attachments.labels(i, self.cinder_os_volume_project_id.get(i)).set(self.gauge_value_cinder_volume_available_with_attachments[i])
+        # for i in self.gauge_value_cinder_volume_attaching_for_too_long:
+        #     self.gauge_cinder_volume_attaching_for_too_long.labels(i, self.cinder_os_volume_project_id.get(i)).set(self.gauge_value_cinder_volume_attaching_for_too_long[i])
+        # for i in self.gauge_value_cinder_volume_detaching_for_too_long:
+        #     self.gauge_cinder_volume_detaching_for_too_long.labels(i, self.cinder_os_volume_project_id.get(i)).set(self.gauge_value_cinder_volume_detaching_for_too_long[i])
+        # for i in self.gauge_value_cinder_volume_is_in_state_reserved:
+        #     self.gauge_cinder_volume_is_in_state_reserved.labels(i, self.cinder_os_volume_project_id.get(i)).set(self.gauge_value_cinder_volume_is_in_state_reserved[i])
+        # for i in self.gauge_value_cinder_volume_available_with_attachments:
+        #     self.gauge_cinder_volume_available_with_attachments.labels(i, self.cinder_os_volume_project_id.get(i)).set(self.gauge_value_cinder_volume_available_with_attachments[i])
+        # SIMPLEGAUGES
+        self.gauge_cinder_volume_attaching_for_too_long.set(self.gauge_value_cinder_volume_attaching_for_too_long)
+        self.gauge_cinder_volume_detaching_for_too_long.set(self.gauge_value_cinder_volume_detaching_for_too_long)
+        self.gauge_cinder_volume_is_in_state_reserved.set(self.gauge_value_cinder_volume_is_in_state_reserved)
+        self.gauge_cinder_volume_available_with_attachments.set(self.gauge_value_cinder_volume_available_with_attachments)
 
     def run_tool(self):
         if self.dry_run:
