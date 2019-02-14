@@ -750,7 +750,7 @@ class ConsistencyCheck:
                         if self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
                             vm_handle = self.vc_get_instance_handle(self.vc_server_uuid_with_mounted_volume.get(self.volume_query))
                             if vm_handle:
-                                log.info("- detaching volume %s from server %s in the vcenter as requested", self.volume_query, self.nova_os_servers_with_attached_volume.get(self.volume_query))
+                                log.info("- detaching volume %s from server %s in the vcenter as requested", self.volume_query, self.vc_server_uuid_with_mounted_volume.get(self.volume_query))
                                 self.vc_detach_volume_instance(vm_handle, self.volume_query)
                         log.info("- setting the state of the volume %s will be set to available / detached as requested", self.volume_query)
                         self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
