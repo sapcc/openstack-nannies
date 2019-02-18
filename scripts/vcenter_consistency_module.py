@@ -65,6 +65,7 @@ class ConsistencyCheck:
         self.dry_run = dry_run
         self.prometheus_port = prometheus_port
         self.interactive = interactive
+        self.max_automatic_fix = 10
 
         self.nova_os_all_servers = []
         self.cinder_os_all_volumes = []
@@ -84,6 +85,7 @@ class ConsistencyCheck:
         self.cinder_os_volume_project_id = dict()
         self.cinder_db_volume_attach_status = dict()
         self.cinder_db_volume_attachment_attach_status = dict()
+        self.volume_attachment_fix_candidates = dict()
 
         # this one has the instance uuid as key
         self.nova_os_volumes_attached_at_server = dict()
@@ -686,12 +688,13 @@ class ConsistencyCheck:
             if self.interactive:
                 log.info("the state of the volume %s should be set to available / detached to fix the problem", self.volume_query)
                 if self.ask_user_yes_no():
-                    log.info("- setting the state of the volume %s will be set to available / detached as requested", self.volume_query)
+                    log.info("- setting the state of the volume %s to available / detached as requested", self.volume_query)
                     self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
                 else:
                     log.info("- not fixing the problem as requested")
             else:
-                print("non interactive mode not yet implemented")
+                log.info("- action: setting the state of the volume %s to available / detached", self.volume_query)
+                self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
 
             return True
         else:
@@ -713,10 +716,11 @@ class ConsistencyCheck:
             if self.interactive:
                 log.info("the state of the volume %s should be set to in-use / attached to fix the problem", self.volume_query)
                 if self.ask_user_yes_no():
-                    log.info("- setting the state of the volume %s will be set to in-use / attached as requested", self.volume_query)
+                    log.info("- setting the state of the volume %s to in-use / attached as requested", self.volume_query)
                     self.cinder_db_update_volume_status(self.volume_query, 'in-use', 'attached')
                 else:
-                    log.info("- not fixing the problem as requested")
+                    log.info("- action: setting the state of the volume %s to in-use", self.volume_query)
+                    self.cinder_db_update_volume_status(self.volume_query, 'in-use', 'attached')
             else:
                 print("non interactive mode not yet implemented")
 
@@ -745,8 +749,8 @@ class ConsistencyCheck:
                 something_not_attached = True
             if not self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
                 something_not_attached = True
-            if self.interactive:
-                if something_attached and something_not_attached:
+            if something_attached and something_not_attached:
+                if self.interactive:
                     if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
                         # below the self.cinder_os_servers_with_attached_volume.get(self.volume_query)[0] should maybe be replaced with proper handling of the corresponding list
                         log.info("the volume %s should be detached from server %s in cinder to fix the problem", self.volume_query, self.cinder_os_servers_with_attached_volume.get(self.volume_query)[0])
@@ -768,15 +772,27 @@ class ConsistencyCheck:
                             if vm_handle:
                                 log.info("- detaching volume %s from server %s in the vcenter as requested", self.volume_query, self.vc_server_uuid_with_mounted_volume.get(self.volume_query))
                                 self.vc_detach_volume_instance(vm_handle, self.volume_query)
-                        log.info("- setting the state of the volume %s will be set to available / detached as requested", self.volume_query)
+                        log.info("- setting the state of the volume %s to available / detached as requested", self.volume_query)
                         self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
                     else:
                         log.info("- not fixing the problem as requested")
                 else:
-                    log.debug("offer_problem_fix_only_partially_attached does not apply")
-                    return False
+                    if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
+                        log.info("- action: detaching the volume %s from server %s in cinder", self.volume_query, self.cinder_os_servers_with_attached_volume.get(self.volume_query)[0])
+                        self.cinder_db_delete_volume_attachement(self.volume_query)
+                    if self.nova_os_servers_with_attached_volume.get(self.volume_query):
+                        log.info("- action: detaching the volume %s from server %s in nova", self.volume_query, self.nova_os_servers_with_attached_volume.get(self.volume_query))
+                        self.nova_db_delete_block_device_mapping(self.volume_query)
+                    if self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
+                        vm_handle = self.vc_get_instance_handle(self.vc_server_uuid_with_mounted_volume.get(self.volume_query))
+                        if vm_handle:
+                            log.info("- action: detaching volume %s from server %s in the vcenter", self.volume_query, self.vc_server_uuid_with_mounted_volume.get(self.volume_query))
+                            self.vc_detach_volume_instance(vm_handle, self.volume_query)
+                        log.info("- action: setting the state of the volume %s to available / detached", self.volume_query)
+                        self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
             else:
-                print("non interactive mode not yet implemented")
+                log.debug("offer_problem_fix_only_partially_attached does not apply")
+                return False
 
             return True
 
@@ -874,6 +890,8 @@ class ConsistencyCheck:
                     #     self.gauge_value_cinder_volume_attaching_for_too_long[volume_uuid] += 1
                     # SIMPLEGAUGES
                     self.gauge_value_cinder_volume_attaching_for_too_long += 1
+                    # record this as a candidate for automatic fixing, not sure yet if we will need the value later at all ...
+                    self.volume_attachment_fix_candidates[volume_uuid] = 'attaching'
                     log.warn("- PLEASE CHECK MANUALLY - volume %s in project %s is in state 'attaching' for too long", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid))
             else:
                 self.cinder_volume_attaching_for_too_long[volume_uuid] = 0
@@ -892,6 +910,7 @@ class ConsistencyCheck:
                     #     self.gauge_value_cinder_volume_detaching_for_too_long[volume_uuid] += 1
                     # SIMPLEGAUGES
                     self.gauge_value_cinder_volume_detaching_for_too_long += 1
+                    self.volume_attachment_fix_candidates[volume_uuid] = 'detaching'
                     log.warn("- PLEASE CHECK MANUALLY - volume %s in project %s is in state 'detaching' for too long", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid))
             else:
                 self.cinder_volume_detaching_for_too_long[volume_uuid] = 0
@@ -910,6 +929,7 @@ class ConsistencyCheck:
                     #     self.gauge_value_cinder_volume_is_in_state_reserved[volume_uuid] += 1
                     # SIMPLEGAUGES
                     self.gauge_value_cinder_volume_is_in_state_reserved += 1
+                    self.volume_attachment_fix_candidates[volume_uuid] = 'reserved'
                     log.warn("- PLEASE CHECK MANUALLY - volume %s in project %s is in state 'reserved' for too long", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid))
             else:
                 self.cinder_volume_is_in_state_reserved[volume_uuid] = 0
@@ -929,6 +949,7 @@ class ConsistencyCheck:
                         #     self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] += 1
                         # SIMPLEGAUGES
                         self.gauge_value_cinder_volume_available_with_attachments += 1
+                        self.volume_attachment_fix_candidates[volume_uuid] = 'available with attachments'
                         log.warn("- PLEASE CHECK MANUALLY - volume %s in project %s is in state 'available' with attachments for too long", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid))
                     continue
                 if self.nova_os_servers_with_attached_volume.get(volume_uuid):
@@ -943,6 +964,7 @@ class ConsistencyCheck:
                         #     self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] += 1
                         # SIMPLEGAUGES
                         self.gauge_value_cinder_volume_available_with_attachments += 1
+                        self.volume_attachment_fix_candidates[volume_uuid] = 'available with attachments'
                         log.warn("- PLEASE CHECK MANUALLY - volume %s in project %s is in state 'available' with attachments for too long", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid))
                     continue
                 if self.vc_server_name_with_mounted_volume.get(volume_uuid):
@@ -957,6 +979,7 @@ class ConsistencyCheck:
                         #     self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] += 1
                         # SIMPLEGAUGES
                         self.gauge_value_cinder_volume_available_with_attachments += 1
+                        self.volume_attachment_fix_candidates[volume_uuid] = 'available with attachments'
                         log.warn("- PLEASE CHECK MANUALLY - volume %s in project %s is in state 'available' with attachments for too long", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid))
                     continue
                 self.cinder_volume_available_with_attachments[volume_uuid] = 0
@@ -1084,8 +1107,26 @@ class ConsistencyCheck:
         self.os_disconnect()
         log.info("- INFO - checking for inconsistencies")
         self.reset_gauge_values()
+        # clean the list of canditate volume uuids which are supposed to be fixed automatically
+        self.volume_attachment_fix_candidates.clear()
+        # this will check for and log the inconsistent volume attachments and build a dict of affected volume uuids
         self.discover_problems(iterations)
+        # send the metrics how many inconsistencies we have found
         self.send_gauge_values()
+        # if the dict is lower than a certain threshold (to avoid too big accidental damage), fix them automatically
+        if len(self.volume_attachment_fix_candidates) <= self.max_automatic_fix:
+            # TODO this is ugly - maybe better replace the self.volume_query in all the offer_
+            # functions with a regular (non self) paramater
+            for self.volume_query in self.volume_attachment_fix_candidates:
+                if self.dry_run:
+                    log.info("excuting self.offer_problem_fixes() for volume uuid %s", self.volume_query)
+                else:
+                    # only dry-run mode for now :)
+                    log.info("excuting self.offer_problem_fixes() for volume uuid %s", self.volume_query)
+                    # self.offer_problem_fixes()
+        else:
+            # TODO create a metric for this case we may alert on
+            log.warn("- PLEASE CHECK MANUALLY - too many (more than %s) volume attachment inconsistencies - deniying to fix them automatically", str(self.max_automatic_fix))
 
     def run_check(self, interval, iterations):
         self.start_prometheus_exporter()
