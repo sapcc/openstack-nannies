@@ -42,12 +42,14 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 @click.option('--dry-run', is_flag=True)
 # port to use for prometheus exporter, otherwise we use 9456 as default
 @click.option('--prometheus-port')
-def get_args_and_run(vchost, vcusername, vcpassword, cinderpassword, novapassword, region, dry_run, interval, iterations, prometheus_port):
+# maximum number of inconsistencies to fix automatically - if there are more, automatic fixing is denied
+@click.option('--fix-limit')
+def get_args_and_run(vchost, vcusername, vcpassword, cinderpassword, novapassword, region, dry_run, interval, iterations, prometheus_port, fix_limit):
     # check if the prometheus port is set and if not set it to the default value
     if not prometheus_port:
         prometheus_port = 9456
     # the "None" below is for the interactive mode we are not using here
-    c = vcenter_consistency_module.ConsistencyCheck(vchost, vcusername, vcpassword, cinderpassword, novapassword, region, dry_run, int(prometheus_port), False)
+    c = vcenter_consistency_module.ConsistencyCheck(vchost, vcusername, vcpassword, cinderpassword, novapassword, region, dry_run, int(prometheus_port), fix_limit, False)
     c.run_check(interval, iterations)
     
 if __name__ == '__main__':
