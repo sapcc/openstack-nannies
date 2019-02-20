@@ -682,7 +682,6 @@ class ConsistencyCheck:
 
         # TODO maybe even consider checking and setting the cinder_db_volume_attach_status
         # TODO maybe rethink if the in-use state should be ommited below
-
         if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'attaching', 'detaching', 'creating', 'deleting', 'reserved']):
             if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
                 return False
@@ -713,7 +712,6 @@ class ConsistencyCheck:
 
         # TODO maybe even consider checking and setting the cinder_db_volume_attach_status
         # TODO maybe rethink if the available state should be ommited below
-
         if (self.cinder_os_volume_status.get(self.volume_query) in ['available', 'attaching', 'detaching', 'creating', 'deleting', 'reserved']):
             if not self.cinder_os_servers_with_attached_volume.get(self.volume_query):
                 return False
@@ -743,8 +741,7 @@ class ConsistencyCheck:
     def problem_fix_only_partially_attached(self):
 
         # TODO maybe even consider checking and setting the cinder_db_volume_attach_status
-        # TODO maybe add 'creating', 'deleting' here too (should be chacked carefully beforehand)
-        if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'available', 'attaching', 'detaching', 'reserved']):
+        if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'available', 'attaching', 'detaching', 'creating', 'deleting', 'reserved']):
             something_attached = False
             something_not_attached = False
             if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
