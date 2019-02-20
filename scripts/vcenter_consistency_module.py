@@ -121,15 +121,6 @@ class ConsistencyCheck:
         # flag if the prometheus exporter is enabled
         self.prometheus_exporter_enabled = True
 
-        # self.gauge_cinder_volume_attaching_for_too_long = Gauge('vcenter_nanny_consistency_cinder_volume_attaching_for_too_long',
-        #                                           'how many volumes are in the state attaching for too long', ["volume_uuid", 'project_id'])
-        # self.gauge_cinder_volume_detaching_for_too_long = Gauge('vcenter_nanny_consistency_cinder_volume_detaching_for_too_long',
-        #                                           'how many volumes are in the state detaching for too long', ["volume_uuid", 'project_id'])
-        # self.gauge_cinder_volume_is_in_state_reserved = Gauge('vcenter_nanny_consistency_cinder_volume_is_in_state_reserved',
-        #                                           'how many volumes are in the state reserved for too long', ["volume_uuid", 'project_id'])
-        # self.gauge_cinder_volume_available_with_attachments = Gauge('vcenter_nanny_consistency_cinder_volume_available_with_attachments',
-        #                                           'how many volumes are available with attachments for too long', ["volume_uuid", 'project_id'])
-        # SIMPLEGAUGES
         self.gauge_cinder_volume_attaching_for_too_long = Gauge('vcenter_nanny_consistency_cinder_volume_attaching_for_too_long',
                                                   'how many volumes are in the state attaching for too long')
         self.gauge_cinder_volume_detaching_for_too_long = Gauge('vcenter_nanny_consistency_cinder_volume_detaching_for_too_long',
@@ -147,18 +138,6 @@ class ConsistencyCheck:
         self.gauge_cinder_volume_attachment_max_fix_count = Gauge('vcenter_nanny_consistency_cinder_volume_attachment_max_fix_count',
                                                   'volumes attachment fixing is denied if there are more than this many attachments to fix')
 
-
-        # # actual values we want to send to the prometheus exporter, it is a list of the value and the project id
-        # self.gauge_value_cinder_volume_attaching_for_too_long = dict()
-        # self.gauge_value_cinder_volume_detaching_for_too_long = dict()
-        # self.gauge_value_cinder_volume_is_in_state_reserved = dict()
-        # self.gauge_value_cinder_volume_available_with_attachments = dict()
-        # # initialize a value without project_id, so that the mtric always exists, even if there is no problem
-        # self.gauge_value_cinder_volume_attaching_for_too_long['NOVOLUME_DUMMY'] = 0
-        # self.gauge_value_cinder_volume_detaching_for_too_long['NOVOLUME_DUMMY'] = 0
-        # self.gauge_value_cinder_volume_is_in_state_reserved['NOVOLUME_DUMMY'] = 0
-        # self.gauge_value_cinder_volume_available_with_attachments['NOVOLUME_DUMMY'] = 0
-        # SIMPLEGAUGES
         self.gauge_value_cinder_volume_attaching_for_too_long = 0
         self.gauge_value_cinder_volume_detaching_for_too_long = 0
         self.gauge_value_cinder_volume_creating_for_too_long = 0
@@ -397,14 +376,7 @@ class ConsistencyCheck:
             if k.get('config.instanceUuid') and openstack_re.match(k.get('config.annotation')) and not k.get('config.template'):
                 # build a list of all openstack volumes in the vcenter to later compare it to the volumes in openstack
                 self.vc_all_servers.append(k['config.instanceUuid'])
-                # debug code
-                # log.info("%s - %s", k.get('config.instanceUuid'), k.get('config.name'))
-                # # check if this instance is a vcenter template
-                # if k.get('config.template'):
-                #     template[k['config.instanceUuid']] = k['config.template']
-                # log.debug("uuid: %s - template: %s", str(k['config.instanceUuid']), str(k['config.template']))
                 # get the config.hardware.device property out of the data dict and iterate over its elements
-                # for j in k['config.hardware.device']:
                 # this check seems to be required as in one bb i got a key error otherwise - looks like a vm without that property
                 if k.get('config.hardware.device'):
                     for j in k.get('config.hardware.device'):
@@ -684,7 +656,7 @@ class ConsistencyCheck:
     def problem_fix_volume_status_nothing_attached(self):
 
         # TODO maybe even consider checking and setting the cinder_db_volume_attach_status
-        # TODO maybe rethink if the in-use state should be ommited below
+        # TODO maybe rethink if the in-use state should be ommited below, maybe add the error state as well?
         if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'attaching', 'detaching', 'creating', 'deleting', 'reserved']):
             if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
                 return False
@@ -714,7 +686,7 @@ class ConsistencyCheck:
     def problem_fix_volume_status_all_attached(self):
 
         # TODO maybe even consider checking and setting the cinder_db_volume_attach_status
-        # TODO maybe rethink if the available state should be ommited below
+        # TODO maybe rethink if the available state should be ommited below, maybe add the error state as well?
         if (self.cinder_os_volume_status.get(self.volume_query) in ['available', 'attaching', 'detaching', 'creating', 'deleting', 'reserved']):
             if not self.cinder_os_servers_with_attached_volume.get(self.volume_query):
                 return False
@@ -744,6 +716,7 @@ class ConsistencyCheck:
     def problem_fix_only_partially_attached(self):
 
         # TODO maybe even consider checking and setting the cinder_db_volume_attach_status
+        # TODO maybe add the error state as well?
         if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'available', 'attaching', 'detaching', 'creating', 'deleting', 'reserved']):
             something_attached = False
             something_not_attached = False
@@ -871,17 +844,6 @@ class ConsistencyCheck:
 
 
     def reset_gauge_values(self):
-        # this is ugly, but for now should at least give us reliable prometheus metrics, i.e.
-        # metrics, which also go back to 0 in case a problem or volume disappears ...
-        # for i in self.gauge_value_cinder_volume_attaching_for_too_long:
-        #     self.gauge_value_cinder_volume_attaching_for_too_long[i] = 0
-        # for i in self.gauge_value_cinder_volume_detaching_for_too_long:
-        #     self.gauge_value_cinder_volume_detaching_for_too_long[i] = 0
-        # for i in self.gauge_value_cinder_volume_is_in_state_reserved:
-        #     self.gauge_value_cinder_volume_is_in_state_reserved[i] = 0
-        # for i in self.gauge_value_cinder_volume_available_with_attachments:
-        #     self.gauge_value_cinder_volume_available_with_attachments[i] = 0
-        # SIMPLEGAUGES
         self.gauge_value_cinder_volume_attaching_for_too_long = 0
         self.gauge_value_cinder_volume_detaching_for_too_long = 0
         self.gauge_value_cinder_volume_creating_for_too_long = 0
@@ -899,7 +861,7 @@ class ConsistencyCheck:
         self.discover_cinder_volume_available_with_attachments(iterations)
 
     # in the below discover functions we increase a counter for each occurence of the problem per volume uuid
-    # if the counter reaches 'iterations' then the problem is persisting for too long and we log a warning
+    # if the counter reaches 'iterations' then the problem is persisting for too long and we log a warning or fix it
     # as soon as the problem is gone for a volume uuid we reset the counter for it to 0 again, as everything
     # seems to be ok again
     def discover_cinder_volume_attaching_for_too_long(self, iterations):
@@ -912,11 +874,6 @@ class ConsistencyCheck:
                     self.cinder_volume_attaching_for_too_long[volume_uuid] += 1
                     log.info("- plan: fix volume %s in project %s in state 'attaching' for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_attaching_for_too_long[volume_uuid], iterations)
                 else:
-                    # if not self.gauge_value_cinder_volume_attaching_for_too_long.get(volume_uuid):
-                    #     self.gauge_value_cinder_volume_attaching_for_too_long[volume_uuid] = 1
-                    # else:
-                    #     self.gauge_value_cinder_volume_attaching_for_too_long[volume_uuid] += 1
-                    # SIMPLEGAUGES
                     self.gauge_value_cinder_volume_attaching_for_too_long += 1
                     # record this as a candidate for automatic fixing, not sure yet if we will need the value later at all ...
                     self.volume_attachment_fix_candidates[volume_uuid] = 'attaching'
@@ -933,11 +890,6 @@ class ConsistencyCheck:
                     self.cinder_volume_detaching_for_too_long[volume_uuid] += 1
                     log.info("- plan: fix volume %s in project %s in state 'detaching' for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_detaching_for_too_long[volume_uuid], iterations)
                 else:
-                    # if not self.gauge_value_cinder_volume_detaching_for_too_long.get(volume_uuid):
-                    #     self.gauge_value_cinder_volume_detaching_for_too_long[volume_uuid] = 1
-                    # else:
-                    #     self.gauge_value_cinder_volume_detaching_for_too_long[volume_uuid] += 1
-                    # SIMPLEGAUGES
                     self.gauge_value_cinder_volume_detaching_for_too_long += 1
                     self.volume_attachment_fix_candidates[volume_uuid] = 'detaching'
             else:
@@ -953,12 +905,6 @@ class ConsistencyCheck:
                     self.cinder_volume_creating_for_too_long[volume_uuid] += 1
                     log.info("- plan: fix volume %s in project %s in state 'creating' for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_creating_for_too_long[volume_uuid], iterations)
                 else:
-                    # TODO should go
-                    # if not self.gauge_value_cinder_volume_detaching_for_too_long.get(volume_uuid):
-                    #     self.gauge_value_cinder_volume_detaching_for_too_long[volume_uuid] = 1
-                    # else:
-                    #     self.gauge_value_cinder_volume_detaching_for_too_long[volume_uuid] += 1
-                    # SIMPLEGAUGES
                     self.gauge_value_cinder_volume_creating_for_too_long += 1
                     self.volume_attachment_fix_candidates[volume_uuid] = 'creating'
             else:
@@ -974,12 +920,6 @@ class ConsistencyCheck:
                     self.cinder_volume_deleting_for_too_long[volume_uuid] += 1
                     log.info("- plan: fix volume %s in project %s in state 'deleting' for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_deleting_for_too_long[volume_uuid], iterations)
                 else:
-                    # TODO should go
-                    # if not self.gauge_value_cinder_volume_detaching_for_too_long.get(volume_uuid):
-                    #     self.gauge_value_cinder_volume_detaching_for_too_long[volume_uuid] = 1
-                    # else:
-                    #     self.gauge_value_cinder_volume_detaching_for_too_long[volume_uuid] += 1
-                    # SIMPLEGAUGES
                     self.gauge_value_cinder_volume_deleting_for_too_long += 1
                     self.volume_attachment_fix_candidates[volume_uuid] = 'deleting'
             else:
@@ -995,11 +935,6 @@ class ConsistencyCheck:
                     self.cinder_volume_is_in_state_reserved[volume_uuid] += 1
                     log.info("- plan: fix volume %s in project %s in state 'reserved' for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_is_in_state_reserved[volume_uuid], iterations)
                 else:
-                    # if not self.gauge_value_cinder_volume_is_in_state_reserved.get(volume_uuid):
-                    #     self.gauge_value_cinder_volume_is_in_state_reserved[volume_uuid] = 1
-                    # else:
-                    #     self.gauge_value_cinder_volume_is_in_state_reserved[volume_uuid] += 1
-                    # SIMPLEGAUGES
                     self.gauge_value_cinder_volume_is_in_state_reserved += 1
                     self.volume_attachment_fix_candidates[volume_uuid] = 'reserved'
             else:
@@ -1016,11 +951,6 @@ class ConsistencyCheck:
                         self.cinder_volume_available_with_attachments[volume_uuid] += 1
                         log.info("- plan: fix volume %s in project %s in state 'available' with attachments for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_available_with_attachments[volume_uuid], iterations)
                     else:
-                        # if not self.gauge_value_cinder_volume_available_with_attachments.get(volume_uuid):
-                        #     self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] = 1
-                        # else:
-                        #     self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] += 1
-                        # SIMPLEGAUGES
                         self.gauge_value_cinder_volume_available_with_attachments += 1
                         self.volume_attachment_fix_candidates[volume_uuid] = 'available with attachments'
                     continue
@@ -1032,11 +962,6 @@ class ConsistencyCheck:
                         self.cinder_volume_available_with_attachments[volume_uuid] += 1
                         log.info("- plan: fix volume %s in project %s in state 'available' with attachments for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_available_with_attachments[volume_uuid], iterations)
                     else:
-                        # if not self.gauge_value_cinder_volume_available_with_attachments.get(volume_uuid):
-                        #     self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] = 1
-                        # else:
-                        #     self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] += 1
-                        # SIMPLEGAUGES
                         self.gauge_value_cinder_volume_available_with_attachments += 1
                         self.volume_attachment_fix_candidates[volume_uuid] = 'available with attachments'
                     continue
@@ -1048,11 +973,6 @@ class ConsistencyCheck:
                         self.cinder_volume_available_with_attachments[volume_uuid] += 1
                         log.info("- plan: fix volume %s in project %s in state 'available' with attachments for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_available_with_attachments[volume_uuid], iterations)
                     else:
-                        # if not self.gauge_value_cinder_volume_available_with_attachments.get(volume_uuid):
-                        #     self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] = 1
-                        # else:
-                        #     self.gauge_value_cinder_volume_available_with_attachments[volume_uuid] += 1
-                        # SIMPLEGAUGES
                         self.gauge_value_cinder_volume_available_with_attachments += 1
                         self.volume_attachment_fix_candidates[volume_uuid] = 'available with attachments'
                     continue
@@ -1061,15 +981,6 @@ class ConsistencyCheck:
                 self.cinder_volume_available_with_attachments[volume_uuid] = 0
 
     def send_gauge_values(self):
-        # for i in self.gauge_value_cinder_volume_attaching_for_too_long:
-        #     self.gauge_cinder_volume_attaching_for_too_long.labels(i, self.cinder_os_volume_project_id.get(i)).set(self.gauge_value_cinder_volume_attaching_for_too_long[i])
-        # for i in self.gauge_value_cinder_volume_detaching_for_too_long:
-        #     self.gauge_cinder_volume_detaching_for_too_long.labels(i, self.cinder_os_volume_project_id.get(i)).set(self.gauge_value_cinder_volume_detaching_for_too_long[i])
-        # for i in self.gauge_value_cinder_volume_is_in_state_reserved:
-        #     self.gauge_cinder_volume_is_in_state_reserved.labels(i, self.cinder_os_volume_project_id.get(i)).set(self.gauge_value_cinder_volume_is_in_state_reserved[i])
-        # for i in self.gauge_value_cinder_volume_available_with_attachments:
-        #     self.gauge_cinder_volume_available_with_attachments.labels(i, self.cinder_os_volume_project_id.get(i)).set(self.gauge_value_cinder_volume_available_with_attachments[i])
-        # SIMPLEGAUGES
         self.gauge_cinder_volume_attaching_for_too_long.set(self.gauge_value_cinder_volume_attaching_for_too_long)
         self.gauge_cinder_volume_detaching_for_too_long.set(self.gauge_value_cinder_volume_detaching_for_too_long)
         self.gauge_cinder_volume_creating_for_too_long.set(self.gauge_value_cinder_volume_creating_for_too_long)
@@ -1208,9 +1119,6 @@ class ConsistencyCheck:
             # TODO this is ugly - maybe better replace the self.volume_query in all the offer_problem fix
             # functions with a regular (non self) paramater
             for self.volume_query in self.volume_attachment_fix_candidates:
-                # if self.dry_run:
-                #     log.info("- dry-run: excuting self.problem_fixes() for volume uuid %s", self.volume_query)
-                # else:
                 self.problem_fixes()
         else:
             # TODO create a metric for this case we may alert on
