@@ -142,6 +142,10 @@ class ConsistencyCheck:
                                                   'how many volumes are in the state reserved for too long')
         self.gauge_cinder_volume_available_with_attachments = Gauge('vcenter_nanny_consistency_cinder_volume_available_with_attachments',
                                                   'how many volumes are available with attachments for too long')
+        self.gauge_cinder_volume_attachment_fix_count = Gauge('vcenter_nanny_consistency_cinder_volume_attachment_fix_count',
+                                                  'how many volumes attachments need fixing')
+        self.gauge_cinder_volume_attachment_max_fix_count = Gauge('vcenter_nanny_consistency_cinder_volume_attachment_max_fix_count',
+                                                  'volumes attachment fixing is denied if there are more than this many attachments to fix')
 
 
         # # actual values we want to send to the prometheus exporter, it is a list of the value and the project id
@@ -161,7 +165,6 @@ class ConsistencyCheck:
         self.gauge_value_cinder_volume_deleting_for_too_long = 0
         self.gauge_value_cinder_volume_is_in_state_reserved = 0
         self.gauge_value_cinder_volume_available_with_attachments = 0
-
 
     # start prometheus exporter if needed
     def start_prometheus_exporter(self):
@@ -190,7 +193,7 @@ class ConsistencyCheck:
                                             port=443,
                                             sslContext=context)
             except Exception as e:
-                log.warn("problems connecting to vcenter: %s", str(e))
+                log.warn("problems connecting to the vcenter: %s", str(e))
 
             else:
                 atexit.register(Disconnect, self.vc_service_instance)
@@ -1073,11 +1076,13 @@ class ConsistencyCheck:
         self.gauge_cinder_volume_deleting_for_too_long.set(self.gauge_value_cinder_volume_deleting_for_too_long)
         self.gauge_cinder_volume_is_in_state_reserved.set(self.gauge_value_cinder_volume_is_in_state_reserved)
         self.gauge_cinder_volume_available_with_attachments.set(self.gauge_value_cinder_volume_available_with_attachments)
+        self.gauge_cinder_volume_attachment_fix_count.set(len(self.volume_attachment_fix_candidates))
+        self.gauge_cinder_volume_attachment_max_fix_count.set(self.max_automatic_fix)
 
     def run_tool(self):
         if self.dry_run:
             log.info("- INFO - running in dry run mode")
-        log.info("- INFO - connecting to vcenter")
+        log.info("- INFO - connecting to the vcenter")
         self.vc_connect()
         # exit here in case we get problems connecting to the vcenter
         if not self.vc_connection_ok():
