@@ -1176,7 +1176,6 @@ class ConsistencyCheck:
             return
         log.info("- INFO - disconnecting from openstack")
         self.os_disconnect()
-        log.info("- INFO - checking for inconsistencies")
         self.reset_gauge_values()
         # clean the list of canditate volume uuids which are supposed to be fixed automatically
         self.volume_attachment_fix_candidates.clear()
