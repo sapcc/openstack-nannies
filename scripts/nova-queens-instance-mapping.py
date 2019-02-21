@@ -110,3 +110,16 @@ for (instance_uuid,) in unmapped_instances:
 
   # If we reach this point, it's not in any cell?!
   log.info("unmapped instances - instance %s not found in any cell", instance_uuid)
+
+# Go over all build-requests instances
+api_cur.execute("SELECT instance_uuid FROM build_requests")
+
+building_instances = api_cur.fetchall()
+for (instance_uuid,) in building_instances:
+  api_cur.execute("SELECT id FROM instance_mappings WHERE instance_uuid = '%s' AND cell_id IS NOT NULL;", (instance_uuid,))
+  if api_cur.rowcount != 0:
+    log.info("Found build_request of instance that has been already scheduled: %s", instance_uuid)
+    if not args.dry_run:
+      log.info("deleting build_request of %s", instance_uuid)
+      api_cur.execute("DELETE FROM build_requests WHERE instance_uuid = %s", (instance_uuid,))
+      api_conn.commit()
