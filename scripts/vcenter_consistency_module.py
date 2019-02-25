@@ -500,6 +500,17 @@ class ConsistencyCheck:
         except Exception as e:
             log.warn("- WARNING - there was an error deleting the volume_attachment for the volume %s in the cinder db", volume_uuid)
 
+    def cinder_db_delete_volume(self, volume_uuid):
+
+        try:
+            if not self.dry_run:
+                now = datetime.datetime.utcnow()
+                cinder_db_volumes_t = Table('volumes', self.cinder_metadata, autoload=True)
+                cinder_db_delete_volume_q = cinder_db_volumes_t.update().where(and_(cinder_db_volumes_t.c.id == volume_uuid, cinder_db_volumes_t.c.deleted == False)).values(updated_at=now, deleted_at=now, deleted=True)
+                cinder_db_delete_volume_q.execute()
+        except Exception as e:
+            log.warn("- WARNING - there was an error deleting the volume %s in the cinder db", volume_uuid)
+
     # connect to the nova db
     def nova_db_connect(self):
 
@@ -649,16 +660,16 @@ class ConsistencyCheck:
                 return True
             if self.problem_fix_only_partially_attached():
                 return True
-            log.warning("looks like everything is good - otherwise i have no idea how to fix this particualr case, then please check by hand")
+            log.warning("- PLEASE CHECK MANUALLY - looks like everything is good - otherwise i have no idea how to fix this particualr case, then please check by hand")
         else:
-            log.info("the volume %s does not exist in this az, so no fix options offered", self.volume_query)
+            # TODO we should handle his in more detail, as we might have entries for meanwhile no longer existing volumes
+            log.info("- PLEASE CHECK MANUALLY - the volume %s does not exist in this az, so no fix options offered", self.volume_query)
 
     def problem_fix_volume_status_nothing_attached(self):
 
         # TODO maybe even consider checking and setting the cinder_db_volume_attach_status
         # TODO maybe rethink if the in-use state should be ommited below, maybe add the error state as well?
-        # if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'attaching', 'detaching', 'creating', 'deleting', 'reserved']):
-        if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'attaching', 'detaching', 'reserved']):
+        if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'attaching', 'detaching', 'creating', 'deleting', 'reserved']):
             if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
                 return False
             if self.nova_os_servers_with_attached_volume.get(self.volume_query):
@@ -666,18 +677,32 @@ class ConsistencyCheck:
             if self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
                 return False
             if self.interactive:
-                log.info("the state of the volume %s should be set to available / detached to fix the problem", self.volume_query)
+                if self.cinder_os_volume_status.get(self.volume_query) in ['creating', 'deleting']:
+                    log.info("the state of the volume %s should be set to deleted to fix the problem", self.volume_query)
+                else:
+                    log.info("the state of the volume %s should be set to available / detached to fix the problem", self.volume_query)
                 if self.ask_user_yes_no():
-                    log.info("- setting the state of the volume %s to available / detached as requested", self.volume_query)
-                    self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
+                    if self.cinder_os_volume_status.get(self.volume_query) in ['creating', 'deleting']:
+                        log.info("- setting the state of the volume %s to deleted as requested", self.volume_query)
+                        self.cinder_db_delete_volume(self.volume_query)
+                    else:
+                        log.info("- setting the state of the volume %s to available / detached as requested", self.volume_query)
+                        self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
                 else:
                     log.info("- not fixing the problem as requested")
             else:
                 if self.dry_run:
-                    log.info("- dry-run: setting the state of the volume %s to available / detached", self.volume_query)
+                    if self.cinder_os_volume_status.get(self.volume_query) in ['creating', 'deleting']:
+                        log.info("- dry-run: setting the state of the volume %s to deleted", self.volume_query)
+                    else:
+                        log.info("- dry-run: setting the state of the volume %s to available / detached", self.volume_query)
                 else:
-                    log.info("- action: setting the state of the volume %s to available / detached", self.volume_query)
-                    self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
+                    if self.cinder_os_volume_status.get(self.volume_query) in ['creating', 'deleting']:
+                        log.info("- action: setting the state of the volume %s to deleted", self.volume_query)
+                        self.cinder_db_delete_volume(self.volume_query)
+                    else:
+                        log.info("- action: setting the state of the volume %s to available / detached", self.volume_query)
+                        self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
 
             return True
         else:
@@ -688,8 +713,7 @@ class ConsistencyCheck:
 
         # TODO maybe even consider checking and setting the cinder_db_volume_attach_status
         # TODO maybe rethink if the available state should be ommited below, maybe add the error state as well?
-        # if (self.cinder_os_volume_status.get(self.volume_query) in ['available', 'attaching', 'detaching', 'creating', 'deleting', 'reserved']):
-        if (self.cinder_os_volume_status.get(self.volume_query) in ['available', 'attaching', 'detaching', 'reserved']):
+        if (self.cinder_os_volume_status.get(self.volume_query) in ['available', 'attaching', 'detaching', 'creating', 'deleting', 'reserved']):
             if not self.cinder_os_servers_with_attached_volume.get(self.volume_query):
                 return False
             if not self.nova_os_servers_with_attached_volume.get(self.volume_query):
@@ -719,8 +743,7 @@ class ConsistencyCheck:
 
         # TODO maybe even consider checking and setting the cinder_db_volume_attach_status
         # TODO maybe add the error state as well?
-        # if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'available', 'attaching', 'detaching', 'creating', 'deleting', 'reserved']):
-        if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'available', 'attaching', 'detaching', 'reserved']):
+        if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'available', 'attaching', 'detaching', 'creating', 'deleting', 'reserved']):
             something_attached = False
             something_not_attached = False
             if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
@@ -744,7 +767,10 @@ class ConsistencyCheck:
                         log.info("the volume %s should be detached from server %s in nova to fix the problem", self.volume_query, self.nova_os_servers_with_attached_volume.get(self.volume_query))
                     if self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
                         log.info("the volume %s should be detached from server %s in the vcenter to fix the problem", self.volume_query, self.vc_server_uuid_with_mounted_volume.get(self.volume_query))
-                    log.info("the state of the volume %s should be set to available / detached to fix the problem", self.volume_query)
+                    if self.cinder_os_volume_status.get(self.volume_query) in ['creating', 'deleting']:
+                        log.info("the state of the volume %s should be set to deleted to fix the problem", self.volume_query)
+                    else:
+                        log.info("the state of the volume %s should be set to available / detached to fix the problem", self.volume_query)
                     if self.ask_user_yes_no():
                         if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
                             # below the self.cinder_os_servers_with_attached_volume.get(self.volume_query)[0] should maybe be replaced with proper handling of the corresponding list
@@ -758,8 +784,12 @@ class ConsistencyCheck:
                             if vm_handle:
                                 log.info("- detaching volume %s from server %s in the vcenter as requested", self.volume_query, self.vc_server_uuid_with_mounted_volume.get(self.volume_query))
                                 self.vc_detach_volume_instance(vm_handle, self.volume_query)
-                        log.info("- setting the state of the volume %s to available / detached as requested", self.volume_query)
-                        self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
+                        if self.cinder_os_volume_status.get(self.volume_query) in ['creating', 'deleting']:
+                            log.info("- setting the state of the volume %s to deleted as requested", self.volume_query)
+                            self.cinder_db_delete_volume(self.volume_query)
+                        else:
+                            log.info("- setting the state of the volume %s to available / detached as requested", self.volume_query)
+                            self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
                     else:
                         log.info("- not fixing the problem as requested")
                 else:
@@ -784,10 +814,17 @@ class ConsistencyCheck:
                                 log.info("- action: detaching volume %s from server %s in the vcenter", self.volume_query, self.vc_server_uuid_with_mounted_volume.get(self.volume_query))
                                 self.vc_detach_volume_instance(vm_handle, self.volume_query)
                         if self.dry_run:
-                            log.info("- dry-run: setting the state of the volume %s to available / detached", self.volume_query)
+                            if self.cinder_os_volume_status.get(self.volume_query) in ['creating', 'deleting']:
+                                log.info("- dry-run: setting the state of the volume %s to deleted", self.volume_query)
+                            else:
+                                log.info("- dry-run: setting the state of the volume %s to available / detached", self.volume_query)
                         else:
-                            log.info("- action: setting the state of the volume %s to available / detached", self.volume_query)
-                            self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
+                            if self.cinder_os_volume_status.get(self.volume_query) in ['creating', 'deleting']:
+                                log.info("- action: setting the state of the volume %s to deleted", self.volume_query)
+                                self.cinder_db_delete_volume(self.volume_query)
+                            else:
+                                log.info("- action: setting the state of the volume %s to available / detached", self.volume_query)
+                                self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
             else:
                 log.debug("problem_fix_only_partially_attached does not apply")
                 return False
