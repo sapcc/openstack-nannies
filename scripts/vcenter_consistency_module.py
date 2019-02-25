@@ -657,7 +657,8 @@ class ConsistencyCheck:
 
         # TODO maybe even consider checking and setting the cinder_db_volume_attach_status
         # TODO maybe rethink if the in-use state should be ommited below, maybe add the error state as well?
-        if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'attaching', 'detaching', 'creating', 'deleting', 'reserved']):
+        # if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'attaching', 'detaching', 'creating', 'deleting', 'reserved']):
+        if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'attaching', 'detaching', 'reserved']):
             if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
                 return False
             if self.nova_os_servers_with_attached_volume.get(self.volume_query):
@@ -687,7 +688,8 @@ class ConsistencyCheck:
 
         # TODO maybe even consider checking and setting the cinder_db_volume_attach_status
         # TODO maybe rethink if the available state should be ommited below, maybe add the error state as well?
-        if (self.cinder_os_volume_status.get(self.volume_query) in ['available', 'attaching', 'detaching', 'creating', 'deleting', 'reserved']):
+        # if (self.cinder_os_volume_status.get(self.volume_query) in ['available', 'attaching', 'detaching', 'creating', 'deleting', 'reserved']):
+        if (self.cinder_os_volume_status.get(self.volume_query) in ['available', 'attaching', 'detaching', 'reserved']):
             if not self.cinder_os_servers_with_attached_volume.get(self.volume_query):
                 return False
             if not self.nova_os_servers_with_attached_volume.get(self.volume_query):
@@ -717,7 +719,8 @@ class ConsistencyCheck:
 
         # TODO maybe even consider checking and setting the cinder_db_volume_attach_status
         # TODO maybe add the error state as well?
-        if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'available', 'attaching', 'detaching', 'creating', 'deleting', 'reserved']):
+        # if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'available', 'attaching', 'detaching', 'creating', 'deleting', 'reserved']):
+        if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'available', 'attaching', 'detaching', 'reserved']):
             something_attached = False
             something_not_attached = False
             if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
@@ -906,7 +909,7 @@ class ConsistencyCheck:
                     log.info("- plan: fix volume %s in project %s in state 'creating' for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_creating_for_too_long[volume_uuid], iterations)
                 else:
                     self.gauge_value_cinder_volume_creating_for_too_long += 1
-                    self.volume_attachment_fix_candidates[volume_uuid] = 'creating'
+                    # self.volume_attachment_fix_candidates[volume_uuid] = 'creating'
             else:
                 self.cinder_volume_creating_for_too_long[volume_uuid] = 0
 
@@ -921,7 +924,7 @@ class ConsistencyCheck:
                     log.info("- plan: fix volume %s in project %s in state 'deleting' for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_deleting_for_too_long[volume_uuid], iterations)
                 else:
                     self.gauge_value_cinder_volume_deleting_for_too_long += 1
-                    self.volume_attachment_fix_candidates[volume_uuid] = 'deleting'
+                    # self.volume_attachment_fix_candidates[volume_uuid] = 'deleting'
             else:
                 self.cinder_volume_deleting_for_too_long[volume_uuid] = 0
 
