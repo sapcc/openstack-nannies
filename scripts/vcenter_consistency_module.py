@@ -695,6 +695,7 @@ class ConsistencyCheck:
                 else:
                     if self.cinder_os_volume_status.get(self.volume_query) in ['creating', 'deleting']:
                         log.info("- action: setting the state of the volume %s to deleted", self.volume_query)
+                        # the vcenter nanny will later take care to clean up the remaining volume on the vcenter
                         self.cinder_db_delete_volume(self.volume_query)
                     else:
                         log.info("- action: setting the state of the volume %s to available / detached", self.volume_query)
@@ -817,6 +818,7 @@ class ConsistencyCheck:
                         else:
                             if self.cinder_os_volume_status.get(self.volume_query) in ['creating', 'deleting']:
                                 log.info("- action: setting the state of the volume %s to deleted", self.volume_query)
+                                # the vcenter nanny will later take care to clean up the remaining volume on the vcenter
                                 self.cinder_db_delete_volume(self.volume_query)
                             else:
                                 log.info("- action: setting the state of the volume %s to available / detached", self.volume_query)
