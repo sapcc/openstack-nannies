@@ -18,11 +18,6 @@
 
 echo -n "INFO: checking consistency between vcenter, nova and cinder - "
 date
-if [ "$VCENTER_CONSISTENCY_DRY_RUN" = "False" ] || [ "$VCENTER_CONSISTENCY_DRY_RUN" = "false" ]; then
-    DRY_RUN=""
-else
-    DRY_RUN="--dry-run"
-fi
 
 if [ "$CINDER_POSTGRESQL_PW" != "" ]; then
     CINDER_PW="--cinderpassword $CINDER_POSTGRESQL_PW"
@@ -49,4 +44,4 @@ export OS_AUTH_URL
 export OS_USERNAME
 export OS_PROJECT_DOMAIN_NAME
 
-/var/lib/kolla/venv/bin/python /scripts/vcenter_consistency_tool.py $DRY_RUN --vchost $VCENTER_CONSISTENCY_HOST --vcusername $VCENTER_CONSISTENCY_USER --vcpassword $VCENTER_CONSISTENCY_PASSWORD $CINDER_PW $NOVA_PW $CURRENT_REGION
+/var/lib/kolla/venv/bin/python /scripts/vcenter_consistency_tool.py --vchost $VCENTER_CONSISTENCY_HOST --vcusername $VCENTER_CONSISTENCY_USER --vcpassword $VCENTER_CONSISTENCY_PASSWORD $CINDER_PW $NOVA_PW $CURRENT_REGION

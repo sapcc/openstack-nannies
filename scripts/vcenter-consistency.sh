@@ -42,6 +42,12 @@ else
     CURRENT_REGION=""
 fi
 
+if [ "$VCENTER_CONSISTENCY_FIX_LIMIT" != "" ]; then
+    FIX_LIMIT="--fix-limit $VCENTER_CONSISTENCY_FIX_LIMIT"
+else
+    FIX_LIMIT=""
+fi
+
 export OS_USER_DOMAIN_NAME
 export OS_PROJECT_NAME
 export OS_PASSWORD
@@ -49,4 +55,4 @@ export OS_AUTH_URL
 export OS_USERNAME
 export OS_PROJECT_DOMAIN_NAME
 
-/var/lib/kolla/venv/bin/python /scripts/vcenter_consistency_check.py $DRY_RUN --vchost $VCENTER_CONSISTENCY_HOST --vcusername $VCENTER_CONSISTENCY_USER --vcpassword $VCENTER_CONSISTENCY_PASSWORD --iterations $VCENTER_CONSISTENCY_ITERATIONS --interval $VCENTER_CONSISTENCY_INTERVAL $CINDER_PW $NOVA_PW $CURRENT_REGION
+/var/lib/kolla/venv/bin/python /scripts/vcenter_consistency_check.py $DRY_RUN --vchost $VCENTER_CONSISTENCY_HOST --vcusername $VCENTER_CONSISTENCY_USER --vcpassword $VCENTER_CONSISTENCY_PASSWORD --iterations $VCENTER_CONSISTENCY_ITERATIONS --interval $VCENTER_CONSISTENCY_INTERVAL $CINDER_PW $NOVA_PW $CURRENT_REGION $FIX_LIMIT

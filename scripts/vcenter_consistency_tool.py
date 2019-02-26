@@ -36,11 +36,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 @click.option('--cinderpassword')
 @click.option('--novapassword')
 @click.option('--region')
-# dry run option not doing anything harmful
-@click.option('--dry-run', is_flag=True)
-def get_args_and_run(vchost, vcusername, vcpassword, cinderpassword, novapassword, region, dry_run):
+def get_args_and_run(vchost, vcusername, vcpassword, cinderpassword, novapassword, region):
     # the "None" below is for the prometheus_port we are not using here
-    c = vcenter_consistency_module.ConsistencyCheck(vchost, vcusername, vcpassword, cinderpassword, novapassword, region, dry_run, None, None, True)
+    c = vcenter_consistency_module.ConsistencyCheck(vchost, vcusername, vcpassword, cinderpassword, novapassword, region, False, None, None, True)
     c.run_tool()
     
 if __name__ == '__main__':

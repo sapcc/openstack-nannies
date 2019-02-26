@@ -481,33 +481,30 @@ class ConsistencyCheck:
     def cinder_db_update_volume_status(self, volume_uuid, new_status, new_attach_status):
 
         try:
-            if not self.dry_run:
-                now = datetime.datetime.utcnow()
-                cinder_db_volumes_t = Table('volumes', self.cinder_metadata, autoload=True)
-                cinder_db_update_volume_attach_status_q = cinder_db_volumes_t.update().where(and_(cinder_db_volumes_t.c.id == volume_uuid, cinder_db_volumes_t.c.deleted == False)).values(updated_at=now, status=new_status, attach_status=new_attach_status)
-                cinder_db_update_volume_attach_status_q.execute()
+            now = datetime.datetime.utcnow()
+            cinder_db_volumes_t = Table('volumes', self.cinder_metadata, autoload=True)
+            cinder_db_update_volume_attach_status_q = cinder_db_volumes_t.update().where(and_(cinder_db_volumes_t.c.id == volume_uuid, cinder_db_volumes_t.c.deleted == False)).values(updated_at=now, status=new_status, attach_status=new_attach_status)
+            cinder_db_update_volume_attach_status_q.execute()
         except Exception as e:
             log.warn("- WARNING - there was an error setting the status / attach_status of volume %s to %s / %s in the cinder db - %s", volume_uuid, new_status, new_attach_status, str(e))
 
     def cinder_db_delete_volume_attachement(self, volume_uuid):
 
         try:
-            if not self.dry_run:
-                now = datetime.datetime.utcnow()
-                cinder_db_volume_attachment_t = Table('volume_attachment', self.cinder_metadata, autoload=True)
-                cinder_db_delete_volume_attachment_q = cinder_db_volume_attachment_t.update().where(and_(cinder_db_volume_attachment_t.c.volume_id == volume_uuid, cinder_db_volume_attachment_t.c.deleted == False)).values(updated_at=now, deleted_at=now, deleted=True)
-                cinder_db_delete_volume_attachment_q.execute()
+            now = datetime.datetime.utcnow()
+            cinder_db_volume_attachment_t = Table('volume_attachment', self.cinder_metadata, autoload=True)
+            cinder_db_delete_volume_attachment_q = cinder_db_volume_attachment_t.update().where(and_(cinder_db_volume_attachment_t.c.volume_id == volume_uuid, cinder_db_volume_attachment_t.c.deleted == False)).values(updated_at=now, deleted_at=now, deleted=True)
+            cinder_db_delete_volume_attachment_q.execute()
         except Exception as e:
             log.warn("- WARNING - there was an error deleting the volume_attachment for the volume %s in the cinder db", volume_uuid)
 
     def cinder_db_delete_volume(self, volume_uuid):
 
         try:
-            if not self.dry_run:
-                now = datetime.datetime.utcnow()
-                cinder_db_volumes_t = Table('volumes', self.cinder_metadata, autoload=True)
-                cinder_db_delete_volume_q = cinder_db_volumes_t.update().where(and_(cinder_db_volumes_t.c.id == volume_uuid, cinder_db_volumes_t.c.deleted == False)).values(updated_at=now, deleted_at=now, deleted=True)
-                cinder_db_delete_volume_q.execute()
+            now = datetime.datetime.utcnow()
+            cinder_db_volumes_t = Table('volumes', self.cinder_metadata, autoload=True)
+            cinder_db_delete_volume_q = cinder_db_volumes_t.update().where(and_(cinder_db_volumes_t.c.id == volume_uuid, cinder_db_volumes_t.c.deleted == False)).values(updated_at=now, deleted_at=now, deleted=True)
+            cinder_db_delete_volume_q.execute()
         except Exception as e:
             log.warn("- WARNING - there was an error deleting the volume %s in the cinder db", volume_uuid)
 
@@ -550,11 +547,10 @@ class ConsistencyCheck:
     def nova_db_delete_block_device_mapping(self, volume_uuid):
 
         try:
-            if not self.dry_run:
-                now = datetime.datetime.utcnow()
-                nova_db_block_device_mapping_t = Table('block_device_mapping', self.nova_metadata, autoload=True)
-                nova_db_delete_block_device_mapping_q = nova_db_block_device_mapping_t.update().where(and_(nova_db_block_device_mapping_t.c.volume_id == volume_uuid, nova_db_block_device_mapping_t.c.deleted == 0)).values(updated_at=now, deleted_at=now, deleted=nova_db_block_device_mapping_t.c.id)
-                nova_db_delete_block_device_mapping_q.execute()
+            now = datetime.datetime.utcnow()
+            nova_db_block_device_mapping_t = Table('block_device_mapping', self.nova_metadata, autoload=True)
+            nova_db_delete_block_device_mapping_q = nova_db_block_device_mapping_t.update().where(and_(nova_db_block_device_mapping_t.c.volume_id == volume_uuid, nova_db_block_device_mapping_t.c.deleted == 0)).values(updated_at=now, deleted_at=now, deleted=nova_db_block_device_mapping_t.c.id)
+            nova_db_delete_block_device_mapping_q.execute()
         except Exception as e:
             log.warn("- WARNING - there was an error deleting the block device mapping for the volume %s in the nova db - %s", volume_uuid, str(e))
 
