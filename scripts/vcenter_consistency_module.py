@@ -944,7 +944,7 @@ class ConsistencyCheck:
                     log.info("- plan: fix volume %s in project %s in state 'creating' for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_creating_for_too_long[volume_uuid], iterations)
                 else:
                     self.gauge_value_cinder_volume_creating_for_too_long += 1
-                    # self.volume_attachment_fix_candidates[volume_uuid] = 'creating'
+                    self.volume_attachment_fix_candidates[volume_uuid] = 'creating'
             else:
                 self.cinder_volume_creating_for_too_long[volume_uuid] = 0
 
@@ -959,7 +959,7 @@ class ConsistencyCheck:
                     log.info("- plan: fix volume %s in project %s in state 'deleting' for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_deleting_for_too_long[volume_uuid], iterations)
                 else:
                     self.gauge_value_cinder_volume_deleting_for_too_long += 1
-                    # self.volume_attachment_fix_candidates[volume_uuid] = 'deleting'
+                    self.volume_attachment_fix_candidates[volume_uuid] = 'deleting'
             else:
                 self.cinder_volume_deleting_for_too_long[volume_uuid] = 0
 
