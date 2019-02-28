@@ -519,8 +519,12 @@ class ConsistencyCheck:
     # connect to the nova db
     def nova_db_connect(self):
 
+        novadbstring = ''
+        if self.novadbname != 'nova':
+            novadbstring = self.novadbname + '-'
+
         try:
-            db_url = 'postgresql+psycopg2://' + self.novadbuser + ':' + self.novapassword + '@nova-postgresql.monsoon3.svc.kubernetes.' + self.region + '.cloud.sap:5432/' + self.novadbname + '?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
+            db_url = 'postgresql+psycopg2://' + self.novadbuser + ':' + self.novapassword + '@nova-' + novadbstring + 'postgresql.monsoon3.svc.kubernetes.' + self.region + '.cloud.sap:5432/' + self.novadbname + '?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
             # for debugging
             # db_url = 'postgresql+psycopg2://' + self.novadbuser + ':' + self.novapassword + '@localhost:15432/' + self.novadbname + '?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
 
