@@ -54,7 +54,7 @@ log = logging.getLogger('vcenter_consistency_module')
 openstack_re = re.compile("^name")
 
 class ConsistencyCheck:
-    def __init__(self, vchost, vcusername, vcpassword, cinderpassword, novapassword, region, dry_run, prometheus_port, fix_limit, interactive):
+    def __init__(self, vchost, vcusername, vcpassword, cinderpassword, novapassword, region, novadbname, novadbuser, dry_run, prometheus_port, fix_limit, interactive):
 
         self.vchost = vchost
         self.vcusername = vcusername
@@ -62,6 +62,14 @@ class ConsistencyCheck:
         self.cinderpassword = cinderpassword
         self.novapassword = novapassword
         self.region = region
+        if novadbname:
+            self.novadbname = novadbname
+        else:
+            self.novadbname = 'nova'
+        if novadbuser:
+            self.novadbuser = novadbuser
+        else:
+            self.novadbuser = 'nova'
         self.dry_run = dry_run
         self.prometheus_port = prometheus_port
         self.interactive = interactive
@@ -512,9 +520,9 @@ class ConsistencyCheck:
     def nova_db_connect(self):
 
         try:
-            db_url = 'postgresql+psycopg2://nova:' + self.novapassword + '@nova-postgresql.monsoon3.svc.kubernetes.' + self.region + '.cloud.sap:5432/nova?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
+            db_url = 'postgresql+psycopg2://' + self.novadbuser + ':' + self.novapassword + '@nova-postgresql.monsoon3.svc.kubernetes.' + self.region + '.cloud.sap:5432/' + self.novadbname + '?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
             # for debugging
-            # db_url = 'postgresql+psycopg2://nova:' + self.novapassword + '@localhost:15432/nova?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
+            # db_url = 'postgresql+psycopg2://' + self.novadbuser + ':' + self.novapassword + '@localhost:15432/' + self.novadbname + '?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
 
 
             self.nova_engine = create_engine(db_url)
