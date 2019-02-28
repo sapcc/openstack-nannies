@@ -48,6 +48,14 @@ else
     FIX_LIMIT=""
 fi
 
+if { [ "$NOVA_CELL2_ENABLED" = "True" ] || [ "$NOVA_CELL2_ENABLED" = "true" ]; } && \
+  if [ "$NOVA_CELL2_DB_NAME" != "" ] && [ "$NOVA_CELL2_DB_USER" != "" ] && \
+  [ "$NOVA_CELL2_AZ" = "$VCENTER_CONSISTENCY_HOST" ]; then
+    CELL2_PARAMETERS="--novadbname $NOVA_CELL2_DB_NAME --novadbuser $NOVA_CELL2_DB_USER"
+else
+    CELL2_PARAMETERS=""
+fi
+
 export OS_USER_DOMAIN_NAME
 export OS_PROJECT_NAME
 export OS_PASSWORD
@@ -55,4 +63,4 @@ export OS_AUTH_URL
 export OS_USERNAME
 export OS_PROJECT_DOMAIN_NAME
 
-/var/lib/kolla/venv/bin/python /scripts/vcenter_consistency_check.py $DRY_RUN --vchost $VCENTER_CONSISTENCY_HOST --vcusername $VCENTER_CONSISTENCY_USER --vcpassword $VCENTER_CONSISTENCY_PASSWORD --iterations $VCENTER_CONSISTENCY_ITERATIONS --interval $VCENTER_CONSISTENCY_INTERVAL $CINDER_PW $NOVA_PW $CURRENT_REGION $FIX_LIMIT
+/var/lib/kolla/venv/bin/python /scripts/vcenter_consistency_check.py $DRY_RUN --vchost $VCENTER_CONSISTENCY_HOST --vcusername $VCENTER_CONSISTENCY_USER --vcpassword $VCENTER_CONSISTENCY_PASSWORD --iterations $VCENTER_CONSISTENCY_ITERATIONS --interval $VCENTER_CONSISTENCY_INTERVAL $CINDER_PW $NOVA_PW $CURRENT_REGION $FIX_LIMIT $CELL2_PARAMETERS
