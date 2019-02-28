@@ -94,6 +94,19 @@ class NovaInstanceInfoCacheSync:
             log.error("ERROR: Check Nova configuration file.")
             sys.exit(2)
 
+    # # get a list of instances from the nova db (only non deleted ones)
+    # def get_instance_list(self):
+
+    #     instance_list = []
+
+    #     instances_t = Table('instances', self.metadata, autoload=True)
+    #     instance_list_q = select(columns=[instances_t.c.uuid], whereclause=(instances_t.c.deleted == 0))
+
+    #     for instance_uuid in instance_list_q.execute():
+    #         instance_list.append(instance_uuid[0])
+
+    #     return instance_list
+
     # get the neutron instance info cache entry for one instance from the nova db
     def get_instance_info_cache_entry_for_instance(self, instance):
 
