@@ -49,7 +49,7 @@ else
 fi
 
 if { [ "$NOVA_CELL2_ENABLED" = "True" ] || [ "$NOVA_CELL2_ENABLED" = "true" ]; } && \
-  if [ "$NOVA_CELL2_DB_NAME" != "" ] && [ "$NOVA_CELL2_DB_USER" != "" ] && \
+  [ "$NOVA_CELL2_DB_NAME" != "" ] && [ "$NOVA_CELL2_DB_USER" != "" ] && \
   [ "$NOVA_CELL2_AZ" = "$VCENTER_CONSISTENCY_HOST" ]; then
     CELL2_PARAMETERS="--novadbname $NOVA_CELL2_DB_NAME --novadbuser $NOVA_CELL2_DB_USER"
 else
