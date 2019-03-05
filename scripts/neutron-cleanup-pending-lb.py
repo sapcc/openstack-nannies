@@ -121,7 +121,9 @@ class NeutronLbaasCleanupPending:
                     log.info("- PLEASE CHECK MANUALLY - action: setting the provisioning_status for loadbalancer %s from PENDING_* to ERROR", lbaas_loadbalancer_id)
                     # do something here ...
             else:
-                log.info("- PLEASE CHECK MANUALLY - plan: to set the provisioning_status for loadbalancer %s from PENDING_* to ERROR (%s/%s)", lbaas_loadbalancer_id, str(self.to_be_dict.get(lbaas_loadbalancer_id, default) + 1), str(self.args.iterations))
+                # avoid logging it if we have it the first ime on out list to reduce log spam
+                if self.to_be_dict.get(lbaas_loadbalancer_id, default) > 0:
+                    log.info("- PLEASE CHECK MANUALLY - plan: to set the provisioning_status for loadbalancer %s from PENDING_* to ERROR (%s/%s)", lbaas_loadbalancer_id, str(self.to_be_dict.get(lbaas_loadbalancer_id, default) + 1), str(self.args.iterations))
             self.to_be_dict[lbaas_loadbalancer_id] = self.to_be_dict.get(lbaas_loadbalancer_id, default) + 1
         else:
             log.debug("dry-run: ignoring this one - it should only happen in dry-run mode")
