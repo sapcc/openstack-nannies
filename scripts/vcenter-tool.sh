@@ -20,7 +20,7 @@ echo -n "INFO: checking consistency between vcenter, nova and cinder - "
 date
 
 if { [ "$NOVA_CELL2_ENABLED" = "True" ] || [ "$NOVA_CELL2_ENABLED" = "true" ]; } && \
-  [ "$NOVA_CELL2_AZ" = "$VCENTER_CONSISTENCY_HOST" ]; then
+  [ "$NOVA_CELL2_VC" = "$VCENTER_CONSISTENCY_HOST" ]; then
     NOVACONFIG=/nova-etc/nova-cell2.conf
 else
     NOVACONFIG=/nova-etc/nova.conf
