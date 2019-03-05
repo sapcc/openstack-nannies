@@ -29,16 +29,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 @click.option('--vchost', prompt='vc host to connect to')
 @click.option('--vcusername', prompt='vc username to connect with')
 @click.option('--vcpassword', prompt='vc password to connect with')
-# @click.option('--cinderpassword', prompt='cinder db password to connect with')
-# @click.option('--novapassword', prompt='nova db password to connect with')
-# @click.option('--region', prompt='region we are running in')
-# make the above optional for now
-@click.option('--cinderpassword')
-@click.option('--novapassword')
-@click.option('--region')
-# needed for the cell2 case
-@click.option('--novadbname')
-@click.option('--novadbuser')
+@click.option('--novaconfig', prompt='nova config file')
+@click.option('--cinderconfig', prompt='cinder config file')
 @click.option('--interval', prompt='how long to wait between loop runs')
 @click.option('--iterations', prompt='how often a problem can occur before it is creating a warniing')
 # dry run option not doing anything harmful
@@ -47,12 +39,12 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 @click.option('--prometheus-port')
 # maximum number of inconsistencies to fix automatically - if there are more, automatic fixing is denied
 @click.option('--fix-limit')
-def get_args_and_run(vchost, vcusername, vcpassword, cinderpassword, novapassword, region, novadbname, novadbuser, dry_run, interval, iterations, prometheus_port, fix_limit):
+def get_args_and_run(vchost, vcusername, vcpassword, novaconfig, cinderconfig, dry_run, interval, iterations, prometheus_port, fix_limit):
     # check if the prometheus port is set and if not set it to the default value
     if not prometheus_port:
         prometheus_port = 9456
     # the "None" below is for the interactive mode we are not using here
-    c = vcenter_consistency_module.ConsistencyCheck(vchost, vcusername, vcpassword, cinderpassword, novapassword, region, novadbname, novadbuser, dry_run, int(prometheus_port), fix_limit, False)
+    c = vcenter_consistency_module.ConsistencyCheck(vchost, vcusername, vcpassword, novaconfig, cinderconfig, dry_run, int(prometheus_port), fix_limit, False)
     c.run_check(interval, iterations)
     
 if __name__ == '__main__':

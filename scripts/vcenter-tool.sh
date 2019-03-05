@@ -19,31 +19,14 @@
 echo -n "INFO: checking consistency between vcenter, nova and cinder - "
 date
 
-if [ "$CINDER_POSTGRESQL_PW" != "" ]; then
-    CINDER_PW="--cinderpassword $CINDER_POSTGRESQL_PW"
-else
-    CINDER_PW=""
-fi
-
-if [ "$NOVA_POSTGRESQL_PW" != "" ]; then
-    NOVA_PW="--novapassword $NOVA_POSTGRESQL_PW"
-else
-    NOVA_PW=""
-fi
-
-if [ "$REGION" != "" ]; then
-    CURRENT_REGION="--region $REGION"
-else
-    CURRENT_REGION=""
-fi
-
 if { [ "$NOVA_CELL2_ENABLED" = "True" ] || [ "$NOVA_CELL2_ENABLED" = "true" ]; } && \
-  [ "$NOVA_CELL2_DB_NAME" != "" ] && [ "$NOVA_CELL2_DB_USER" != "" ] && \
   [ "$NOVA_CELL2_AZ" = "$VCENTER_CONSISTENCY_HOST" ]; then
-    CELL2_PARAMETERS="--novadbname $NOVA_CELL2_DB_NAME --novadbuser $NOVA_CELL2_DB_USER"
+    NOVACONFIG=/nova-etc/nova-cell2.conf
 else
-    CELL2_PARAMETERS=""
+    NOVACONFIG=/nova-etc/nova.conf
 fi
+
+CINDERCONFIG=/cinder-etc/cinder.conf
 
 export OS_USER_DOMAIN_NAME
 export OS_PROJECT_NAME
@@ -52,4 +35,4 @@ export OS_AUTH_URL
 export OS_USERNAME
 export OS_PROJECT_DOMAIN_NAME
 
-/var/lib/kolla/venv/bin/python /scripts/vcenter_consistency_tool.py --vchost $VCENTER_CONSISTENCY_HOST --vcusername $VCENTER_CONSISTENCY_USER --vcpassword $VCENTER_CONSISTENCY_PASSWORD $CINDER_PW $NOVA_PW $CURRENT_REGION $CELL2_PARAMETERS
+/var/lib/kolla/venv/bin/python /scripts/vcenter_consistency_tool.py --vchost $VCENTER_CONSISTENCY_HOST --vcusername $VCENTER_CONSISTENCY_USER --vcpassword $VCENTER_CONSISTENCY_PASSWORD --cinderconfig $CINDERCONFIG --novaconfig $NOVACONFIG

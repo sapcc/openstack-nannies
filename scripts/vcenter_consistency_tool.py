@@ -29,19 +29,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 @click.option('--vchost', prompt='vc host to connect to')
 @click.option('--vcusername', prompt='vc username to connect with')
 @click.option('--vcpassword', prompt='vc password to connect with')
-# @click.option('--cinderpassword', prompt='cinder db password to connect with')
-# @click.option('--novapassword', prompt='nova db password to connect with')
-# @click.option('--region', prompt='region we are running in')
-# make the above optional for now
-@click.option('--cinderpassword')
-@click.option('--novapassword')
-@click.option('--region')
-# needed for the cell2 case
-@click.option('--novadbname')
-@click.option('--novadbuser')
-def get_args_and_run(vchost, vcusername, vcpassword, cinderpassword, novapassword, region, novadbname, novadbuser):
+@click.option('--novaconfig', prompt='nova config file')
+@click.option('--cinderconfig', prompt='cinder config file')
+def get_args_and_run(vchost, vcusername, vcpassword, novaconfig, cinderconfig):
     # the "None" below is for the prometheus_port we are not using here
-    c = vcenter_consistency_module.ConsistencyCheck(vchost, vcusername, vcpassword, cinderpassword, novapassword, region, novadbname, novadbuser, False, None, None, True)
+    c = vcenter_consistency_module.ConsistencyCheck(vchost, vcusername, vcpassword, novaconfig, cinderconfig, False, None, None, True)
     c.run_tool()
     
 if __name__ == '__main__':

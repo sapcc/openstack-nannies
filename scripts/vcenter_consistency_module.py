@@ -25,6 +25,7 @@ import ssl
 import time
 import sys
 import datetime
+import ConfigParser
 
 from pyVim.connect import SmartConnect, Disconnect
 from pyVmomi import vim, vmodl
@@ -54,22 +55,13 @@ log = logging.getLogger('vcenter_consistency_module')
 openstack_re = re.compile("^name")
 
 class ConsistencyCheck:
-    def __init__(self, vchost, vcusername, vcpassword, cinderpassword, novapassword, region, novadbname, novadbuser, dry_run, prometheus_port, fix_limit, interactive):
+    def __init__(self, vchost, vcusername, vcpassword, novaconfig, cinderconfig, dry_run, prometheus_port, fix_limit, interactive):
 
         self.vchost = vchost
         self.vcusername = vcusername
         self.vcpassword = vcpassword
-        self.cinderpassword = cinderpassword
-        self.novapassword = novapassword
-        self.region = region
-        if novadbname:
-            self.novadbname = novadbname
-        else:
-            self.novadbname = 'nova'
-        if novadbuser:
-            self.novadbuser = novadbuser
-        else:
-            self.novadbuser = 'nova'
+        self.novaconfig = novaconfig
+        self.cinderconfig = cinderconfig
         self.dry_run = dry_run
         self.prometheus_port = prometheus_port
         self.interactive = interactive
@@ -427,14 +419,23 @@ class ConsistencyCheck:
 
         return True
 
+    # return the database connection string from the config file
+    def get_db_url(self, config_file):
+
+        parser = ConfigParser.SafeConfigParser()
+        try:
+            parser.read(config_file)
+            db_url = parser.get('database', 'connection', raw=True)
+        except:
+            log.info("ERROR: check configuration file %s", str(config_file))
+            sys.exit(2)
+        return db_url
+
     # connect to the cinder db
     def cinder_db_connect(self):
 
         try:
-            db_url = 'postgresql+psycopg2://cinder:' + self.cinderpassword + '@cinder-postgresql.monsoon3.svc.kubernetes.' + self.region + '.cloud.sap:5432/cinder?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
-            # for debugging
-            # db_url = 'postgresql+psycopg2://cinder:' + self.cinderpassword + '@localhost:5432/cinder?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
-
+            db_url = self.get_db_url(self.cinderconfig)
 
             self.cinder_engine = create_engine(db_url)
             self.cinder_connection = self.cinder_engine.connect()
@@ -519,16 +520,13 @@ class ConsistencyCheck:
     # connect to the nova db
     def nova_db_connect(self):
 
-        novadbstring = ''
-        if self.novadbname != 'nova-postgresql':
-            novadbstring = self.novadbname.replace('_','-')
+        # novadbstring = ''
+        # if self.novadbname != 'nova-postgresql':
+        #     novadbstring = self.novadbname.replace('_','-') + '-postgresql'
 
         try:
-            db_url = 'postgresql+psycopg2://' + self.novadbuser + ':' + self.novapassword + '@' + novadbstring + '.monsoon3.svc.kubernetes.' + self.region + '.cloud.sap:5432/' + self.novadbname + '?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
-            # for debugging
-            # db_url = 'postgresql+psycopg2://' + self.novadbuser + ':' + self.novapassword + '@localhost:15432/' + self.novadbname + '?connect_timeout=10&keepalives_idle=5&keepalives_interval=5&keepalives_count=10'
-
-
+            db_url = self.get_db_url(self.novaconfig)
+            
             self.nova_engine = create_engine(db_url)
             self.nova_connection = self.nova_engine.connect()
             Session = sessionmaker(bind=self.nova_engine)
@@ -656,8 +654,7 @@ class ConsistencyCheck:
                 log.error("there was a problem with your input: %s",  str(e))
                 sys.exit(1)
             self.print_volume_information()
-            if self.cinderpassword and self.novapassword:
-                self.problem_fixes()
+            self.problem_fixes()
 
     def problem_fixes(self):
         # only offer fixes if the volume uuid entered is in the az this code is running against
@@ -861,9 +858,7 @@ class ConsistencyCheck:
             log.info("- this volume exists in cinder (for this az): Yes")
             log.info("- project id: %s", self.cinder_os_volume_project_id.get(self.volume_query))
             log.info("- volume status in cinder: %s", self.cinder_os_volume_status.get(self.volume_query))
-            # until this is fully implmented ...
-            if self.cinderpassword:
-                log.info("- volume attach_status in cinder db: %s", self.cinder_db_volume_attach_status.get(self.volume_query))
+            log.info("- volume attach_status in cinder db: %s", self.cinder_db_volume_attach_status.get(self.volume_query))
         else:
             log.info("- this volume exists in cinder (for this az): No")
         if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
@@ -873,9 +868,7 @@ class ConsistencyCheck:
                     log.info("- this instance exists in nova: Yes")
                 else:
                     log.info("- this instance exists in nova: No")
-                # until this is fully implmented ...
-                if self.cinderpassword:
-                    log.info("- volume_attachment attach_status in cinder db: %s", self.cinder_db_volume_attachment_attach_status.get(self.volume_query))
+                log.info("- volume_attachment attach_status in cinder db: %s", self.cinder_db_volume_attachment_attach_status.get(self.volume_query))
         else:
             log.info("os server with this volume attached (cinder): None")
         is_attached_in_nova = False
@@ -1075,35 +1068,27 @@ class ConsistencyCheck:
             log.info("- INFO - disconnecting from openstack")
             self.os_disconnect()
             sys.exit(1)
-        # until this is fully implmented ...
-        if self.cinderpassword:
-            log.info("- INFO - connecting to the cinder db")
-            self.cinder_db_connect()
-            if not self.cinder_db_connection_ok():
-                log.error("problems connecting to the cinder db")
-                sys.exit(1)
-            log.info("- INFO - getting information from the cinder db")
-            self.cinder_db_get_info()
-        # until this is fully implmented ...
-        if self.novapassword:
-            log.info("- INFO - connecting to the nova db")
-            self.nova_db_connect()
-            if not self.nova_db_connection_ok():
-                log.error("problems connecting to the nova db")
-                sys.exit(1)
+        log.info("- INFO - connecting to the cinder db")
+        self.cinder_db_connect()
+        if not self.cinder_db_connection_ok():
+            log.error("problems connecting to the cinder db")
+            sys.exit(1)
+        log.info("- INFO - getting information from the cinder db")
+        self.cinder_db_get_info()
+        log.info("- INFO - connecting to the nova db")
+        self.nova_db_connect()
+        if not self.nova_db_connection_ok():
+            log.error("problems connecting to the nova db")
+            sys.exit(1)
         self.volume_uuid_query_loop()
         log.info("- INFO - disconnecting from the vcenter")
         self.vc_disconnect()
         log.info("- INFO - disconnecting from openstack")
         self.os_disconnect()
-        # until this is fully implmented ...
-        if self.cinderpassword:
-            log.info("- INFO - disconnecting from the cinder db")
-            self.cinder_db_disconnect()
-        # until this is fully implmented ...
-        if self.novapassword:
-            log.info("- INFO - disconnecting from the nova db")
-            self.nova_db_disconnect()
+        log.info("- INFO - disconnecting from the cinder db")
+        self.cinder_db_disconnect()
+        log.info("- INFO - disconnecting from the nova db")
+        self.nova_db_disconnect()
 
     def run_check_loop(self, iterations):
         if self.dry_run:
@@ -1145,20 +1130,16 @@ class ConsistencyCheck:
         self.reset_gauge_values()
         # clean the list of canditate volume uuids which are supposed to be fixed automatically
         self.volume_attachment_fix_candidates.clear()
-        # until this is fully implmented ...
-        if self.cinderpassword:
-            log.info("- INFO - connecting to the cinder db")
-            self.cinder_db_connect()
-            if not self.cinder_db_connection_ok():
-                log.error("- PLEASE CHECK MANUALLY - problems connecting to the cinder db - retrying in next loop run")
-                return
-        # until this is fully implmented ...
-        if self.novapassword:
-            log.info("- INFO - connecting to the nova db")
-            self.nova_db_connect()
-            if not self.nova_db_connection_ok():
-                log.error("- PLEASE CHECK MANUALLY - problems connecting to the nova db - retrying in next loop run")
-                return
+        log.info("- INFO - connecting to the cinder db")
+        self.cinder_db_connect()
+        if not self.cinder_db_connection_ok():
+            log.error("- PLEASE CHECK MANUALLY - problems connecting to the cinder db - retrying in next loop run")
+            return
+        log.info("- INFO - connecting to the nova db")
+        self.nova_db_connect()
+        if not self.nova_db_connection_ok():
+            log.error("- PLEASE CHECK MANUALLY - problems connecting to the nova db - retrying in next loop run")
+            return
         # this will check for and log the inconsistent volume attachments and build a dict of affected volume uuids
         log.info("- INFO - checking for inconsistencies")
         self.discover_problems(iterations)
@@ -1173,14 +1154,10 @@ class ConsistencyCheck:
         else:
             # TODO create a metric for this case we may alert on
             log.warn("- PLEASE CHECK MANUALLY - too many (more than %s) volume attachment inconsistencies - deniying to fix them automatically", str(self.max_automatic_fix))
-        # until this is fully implmented ...
-        if self.cinderpassword:
-            log.info("- INFO - disconnecting from the cinder db")
-            self.cinder_db_disconnect()
-        # until this is fully implmented ...
-        if self.novapassword:
-            log.info("- INFO - disconnecting from the nova db")
-            self.nova_db_disconnect()
+        log.info("- INFO - disconnecting from the cinder db")
+        self.cinder_db_disconnect()
+        log.info("- INFO - disconnecting from the nova db")
+        self.nova_db_disconnect()
         log.info("- INFO - disconnecting from the vcenter")
         self.vc_disconnect()
 
