@@ -25,6 +25,16 @@ cp -v /nova-etc/* /etc/nova
 # this is a temporary hack to avoid annoying raven warnings - we do not need sentry for this nanny for now
 sed -i 's,raven\.handlers\.logging\.SentryHandler,logging.NullHandler,g' /etc/nova/logging.ini
 
+# this is to handle the case of having a second cell db for nova
+if [ "$NOVA_CELL2_ENABLED" = "True" ] || [ "$NOVA_CELL2_ENABLED" = "true" ]; then
+    if [ -f /etc/nova/nova-cell2.conf ]; then
+        cp -f /etc/nova/nova-cell2.conf /etc/nova/nova.conf
+    else
+        echo "ERROR: PLEASE CHECK MANUALLY - nova cell2 is enabled, but there is no /etc/nova/nova-cell2.conf file - giving up!"
+        exit 1
+    fi
+fi
+
 # we run an endless loop to run the script periodically
 echo "INFO: starting a loop to periodically run the nanny job for the nova instance info cache sync from neutron"
 while true; do

@@ -30,6 +30,16 @@ export NOVA_DB_PURGE_DRY_RUN
 export NOVA_DB_PURGE_MAX_NUMBER
 export NOVA_DB_PURGE_OLDER_THAN
 
+# this is to handle the case of having a second cell db for nova
+if [ "$NOVA_CELL2_ENABLED" = "True" ] || [ "$NOVA_CELL2_ENABLED" = "true" ]; then
+    if [ -f /etc/nova/nova-cell2.conf ]; then
+        cp /etc/nova/nova-cell2.conf /etc/nova/nova.conf
+    else
+        echo "ERROR: PLEASE CHECK MANUALLY - nova cell2 is enabled, but there is no /etc/nova/nova-cell2.conf file - giving up!"
+        exit 1
+    fi
+fi
+
 # we run an endless loop to run the script periodically
 echo "INFO: starting a loop to periodically run the nanny job for the nova db concistency check and purge"
 while true; do
