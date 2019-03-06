@@ -28,6 +28,10 @@ sed -i 's,raven\.handlers\.logging\.SentryHandler,logging.NullHandler,g' /etc/no
 # this is to handle the case of having a second cell db for nova
 if [ "$NOVA_CELL2_ENABLED" = "True" ] || [ "$NOVA_CELL2_ENABLED" = "true" ]; then
     if [ -f /etc/nova/nova-cell2.conf ]; then
+        # we append the cell2 config file to the regular one, so that the get_db_url function will find
+        # the cell2 db string as it uses the last string provided if multiple connection sections are
+        # given like in the resulting file, on the other side it still contains all the other config
+        # options from the original nova.conf file, which are partially needed for the sync as well
         cat /etc/nova/nova-cell2.conf >> /etc/nova/nova.conf
     else
         echo "ERROR: PLEASE CHECK MANUALLY - nova cell2 is enabled, but there is no /etc/nova/nova-cell2.conf file - giving up!"
