@@ -853,12 +853,15 @@ class ConsistencyCheck:
             if self.ask_user_yes_no():
                 log.info("- setting the attach_status of the volume %s to detached as requested", self.volume_query)
                 self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
+            return True
         if (self.cinder_os_volume_status.get(self.volume_query) == 'in-use') and (self.cinder_db_volume_attach_status.get(self.volume_query) == 'detached'):
             log.info("the status and attach_status of the volume %s in the cinder db is in-use and detached", self.volume_query)
             log.info("- the attach_status should be set to attached")
             if self.ask_user_yes_no():
                 log.info("- setting the attach_status of the volume %s to attached as requested", self.volume_query)
                 self.cinder_db_update_volume_status(self.volume_query, 'in-use', 'attached')
+            return True
+        return False
 
     def ask_user_yes_no(self):
         while True:
