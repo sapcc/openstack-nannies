@@ -665,6 +665,9 @@ class ConsistencyCheck:
                 return True
             if self.problem_fix_only_partially_attached():
                 return True
+            # offer this fix in interactive mode only for now
+            if self.interactive and self.problem_fix_sync_cinder_status():
+                return True
             log.warning("- PLEASE CHECK MANUALLY - looks like everything is good - otherwise i have no idea how to fix this particualr case, then please check by hand")
         else:
             # TODO we should handle his in more detail, as we might have entries for meanwhile no longer existing volumes
@@ -841,6 +844,21 @@ class ConsistencyCheck:
         else:
             log.debug("problem_fix_only_partially_attached does not apply")
             return False
+
+    def problem_fix_sync_cinder_status(self):
+
+        if (self.cinder_os_volume_status.get(self.volume_query) == 'available') and (self.cinder_db_volume_attach_status.get(self.volume_query) == 'attached'):
+            log.info("the status and attach_status of the volume %s in the cinder db is available and attached", self.volume_query)
+            log.info("- the attach_status should be set to detached")
+            if self.ask_user_yes_no():
+                log.info("- setting the attach_status of the volume %s to detached as requested", self.volume_query)
+                self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
+        if (self.cinder_os_volume_status.get(self.volume_query) == 'in-use') and (self.cinder_db_volume_attach_status.get(self.volume_query) == 'detached'):
+            log.info("the status and attach_status of the volume %s in the cinder db is in-use and detached", self.volume_query)
+            log.info("- the attach_status should be set to attached")
+            if self.ask_user_yes_no():
+                log.info("- setting the attach_status of the volume %s to attached as requested", self.volume_query)
+                self.cinder_db_update_volume_status(self.volume_query, 'in-use', 'attached')
 
     def ask_user_yes_no(self):
         while True:
