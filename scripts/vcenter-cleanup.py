@@ -949,13 +949,18 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
             if not (ghost_port_detached.get(i) == 0 or ghost_port_detached.get(i) == 1):
                 # use len here to get the proper count in case we have multiple ports for one instance
                 gauge_value_ghost_ports_ignored += len(ghost_port_detach_candidates[i])
-                log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port(s) from instance %s - most probably it is an orphan at vcenter level or detaching is denied due to too many ghost ports - ignoring it", i)
+                if i in missing:
+                    log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port(s) from instance %s - most probably it is an orphan at vcenter level or detaching is denied due to too many ghost ports - it is an orphan on openstack - ignoring it", i)
+                else:
+                    log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port(s) from instance %s - most probably it is an orphan at vcenter level or detaching is denied due to too many ghost ports - it is NOT an orphan on openstack - ignoring it", i)
         for i in ghost_volume_detach_candidates:
             if not (ghost_volume_detached.get(i) == 0 or ghost_volume_detached.get(i) == 1):
                 # use len here to get the proper count in case we have multiple ports for one instance
                 gauge_value_ghost_volumes_ignored += len(ghost_volume_detach_candidates[i])
-                log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume(s) from instance %s - most probably it is an orphan at vcenter level or detaching is denied due to too many ghost volumes - ignoring it", i)
-
+                if i in missing:
+                    log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume(s) from instance %s - most probably it is an orphan at vcenter level or detaching is denied due to too many ghost volumes - it is an orphan on openstack - ignoring it", i)
+                else:
+                    log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume(s) from instance %s - most probably it is an orphan at vcenter level or detaching is denied due to too many ghost volumes - it is NOT an orphan on openstack - ignoring it", i)
 
     # send the counters to the prometheus exporter - ugly for now, will change
     for kind in [ "plan", "dry_run", "done"]:
