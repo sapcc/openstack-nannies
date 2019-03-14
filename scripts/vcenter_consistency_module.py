@@ -1086,9 +1086,9 @@ class ConsistencyCheck:
                         self.gauge_value_cinder_volume_in_use_without_attachments += 1
                         self.volume_attachment_fix_candidates[volume_uuid] = 'in use without attachments'
                     continue
-                self.cinder_volume_volume_in_use_without_attachments[volume_uuid] = 0
+                self.cinder_volume_in_use_without_attachments[volume_uuid] = 0
             else:
-                self.cinder_volume_volume_in_use_without_attachments[volume_uuid] = 0
+                self.cinder_volume_in_use_without_attachments[volume_uuid] = 0
 
     def send_gauge_values(self):
         self.gauge_cinder_volume_attaching_for_too_long.set(self.gauge_value_cinder_volume_attaching_for_too_long)
