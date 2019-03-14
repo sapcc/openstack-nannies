@@ -1054,7 +1054,7 @@ class ConsistencyCheck:
         for volume_uuid in self.cinder_os_all_volumes:
             if self.cinder_os_volume_status.get(volume_uuid) == 'in-use':
                 if not self.cinder_os_servers_with_attached_volume.get(volume_uuid):
-                    if self.cinder_volume_in_use_without_attachments.get(volume_uuid):
+                    if not self.cinder_volume_in_use_without_attachments.get(volume_uuid):
                         self.cinder_volume_in_use_without_attachments[volume_uuid] = 1
                         log.debug("- plan: fix volume %s in project %s in state 'in-use' without attachments for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_available_with_attachments[volume_uuid], iterations)
                     elif self.cinder_volume_in_use_without_attachments.get(volume_uuid) < iterations:
@@ -1081,7 +1081,7 @@ class ConsistencyCheck:
                         log.debug("- plan: fix volume %s in project %s in state 'in-use' without attachments for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_available_with_attachments[volume_uuid], iterations)
                     elif self.cinder_volume_in_use_without_attachments.get(volume_uuid) < iterations:
                         self.cinder_volume_in_use_without_attachments[volume_uuid] += 1
-                        log.info("- plan: fix volume %s in project %s in state 'in-use without attachments for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_available_with_attachments[volume_uuid], iterations)
+                        log.info("- plan: fix volume %s in project %s in state 'in-use' without attachments for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_available_with_attachments[volume_uuid], iterations)
                     else:
                         self.gauge_value_cinder_volume_in_use_without_attachments += 1
                         self.volume_attachment_fix_candidates[volume_uuid] = 'in use without attachments'
