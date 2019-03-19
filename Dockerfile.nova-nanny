@@ -20,4 +20,4 @@ ADD scripts/nova-* /scripts/
 ADD scripts/db-cleanup.py /scripts/
 ADD scripts/count-deleted.py /scripts/
 
-RUN /var/lib/kolla/venv/bin/pip install click==6.7 python-openstackclient==3.12.0 openstacksdk==0.20.0 prometheus-client==0.1.1 os-client-config==1.30.0 requestsexceptions==1.2.0 keystoneauth1==3.11.2 osc-lib==1.10.0 oslo.db==4.42.0
+RUN /var/lib/kolla/venv/bin/pip install click==6.7 python-openstackclient==3.12.0 openstacksdk==0.20.0 prometheus-client==0.1.1 os-client-config==1.30.0 requestsexceptions==1.2.0 keystoneauth1==3.11.2 osc-lib==1.11.0 oslo.db==4.42.0
