@@ -932,7 +932,7 @@ class ConsistencyCheck:
         self.discover_cinder_volume_deleting_for_too_long(iterations)
         self.discover_cinder_volume_is_in_reserved_state(iterations)
         self.discover_cinder_volume_available_with_attachments(iterations)
-        self.discover_cinder_volume_in_use_without_attachments(iterations):
+        self.discover_cinder_volume_in_use_without_attachments(iterations)
         self.discover_cinder_volume_in_use_without_some_attachments(iterations)
 
     # in the below discover functions we increase a counter for each occurence of the problem per volume uuid
