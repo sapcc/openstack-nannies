@@ -932,10 +932,8 @@ class ConsistencyCheck:
         self.discover_cinder_volume_deleting_for_too_long(iterations)
         self.discover_cinder_volume_is_in_reserved_state(iterations)
         self.discover_cinder_volume_available_with_attachments(iterations)
-        # first check if a volumes in-use has no attachments at all
-        if not self.discover_cinder_volume_in_use_without_attachments(iterations):
-            # otherwise check if some of the attachments are missing
-            self.discover_cinder_volume_in_use_without_some_attachments(iterations)
+        self.discover_cinder_volume_in_use_without_attachments(iterations):
+        self.discover_cinder_volume_in_use_without_some_attachments(iterations)
 
     # in the below discover functions we increase a counter for each occurence of the problem per volume uuid
     # if the counter reaches 'iterations' then the problem is persisting for too long and we log a warning or fix it
@@ -1057,9 +1055,34 @@ class ConsistencyCheck:
             else:
                 self.cinder_volume_available_with_attachments[volume_uuid] = 0
 
-    def discover_cinder_volume_in_use_without_some_attachments(self, iterations):
+    def discover_cinder_volume_in_use_without_attachments(self, iterations):
         for volume_uuid in self.cinder_os_all_volumes:
             if self.cinder_os_volume_status.get(volume_uuid) == 'in-use':
+                if not self.cinder_os_servers_with_attached_volume.get(volume_uuid):
+                    if not self.nova_os_servers_with_attached_volume.get(volume_uuid):
+                        if not self.vc_server_name_with_mounted_volume.get(volume_uuid):
+                            if not self.cinder_volume_in_use_without_attachments.get(volume_uuid):
+                                self.cinder_volume_in_use_without_attachments[volume_uuid] = 1
+                                log.debug("- plan: fix volume %s in project %s in state 'in-use' without attachments for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_in_use_without_attachments[volume_uuid], iterations)
+                            elif self.cinder_volume_in_use_without_attachments.get(volume_uuid) < iterations:
+                                self.cinder_volume_in_use_without_attachments[volume_uuid] += 1
+                                log.info("- plan: fix volume %s in project %s in state 'in-use' without attachments for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_in_use_without_attachments[volume_uuid], iterations)
+                            else:
+                                self.gauge_value_cinder_volume_in_use_without_attachments += 1
+                                #self.volume_attachment_fix_candidates[volume_uuid] = 'in use without attachments'
+                        else:
+                            self.cinder_volume_in_use_without_attachments[volume_uuid] = 0
+                    else:
+                        self.cinder_volume_in_use_without_attachments[volume_uuid] = 0
+                else:
+                    self.cinder_volume_in_use_without_attachments[volume_uuid] = 0
+            else:
+                self.cinder_volume_in_use_without_attachments[volume_uuid] = 0
+
+    def discover_cinder_volume_in_use_without_some_attachments(self, iterations):
+        for volume_uuid in self.cinder_os_all_volumes:
+            # we only have to check for some missing attachments if we did not yet find out that all are missing :)
+            if self.cinder_os_volume_status.get(volume_uuid) == 'in-use' and self.cinder_volume_in_use_without_attachments[volume_uuid] == 0:
                 if not self.cinder_os_servers_with_attached_volume.get(volume_uuid):
                     if not self.cinder_volume_in_use_without_some_attachments.get(volume_uuid):
                         self.cinder_volume_in_use_without_some_attachments[volume_uuid] = 1
@@ -1096,30 +1119,6 @@ class ConsistencyCheck:
                 self.cinder_volume_in_use_without_some_attachments[volume_uuid] = 0
             else:
                 self.cinder_volume_in_use_without_some_attachments[volume_uuid] = 0
-
-    def discover_cinder_volume_in_use_without_attachments(self, iterations):
-        for volume_uuid in self.cinder_os_all_volumes:
-            if self.cinder_os_volume_status.get(volume_uuid) == 'in-use':
-                if not self.cinder_os_servers_with_attached_volume.get(volume_uuid):
-                    if not self.nova_os_servers_with_attached_volume.get(volume_uuid):
-                        if not self.vc_server_name_with_mounted_volume.get(volume_uuid):
-                            if not self.cinder_volume_in_use_without_attachments.get(volume_uuid):
-                                self.cinder_volume_in_use_without_attachments[volume_uuid] = 1
-                                log.debug("- plan: fix volume %s in project %s in state 'in-use' without attachments for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_in_use_without_attachments[volume_uuid], iterations)
-                            elif self.cinder_volume_in_use_without_attachments.get(volume_uuid) < iterations:
-                                self.cinder_volume_in_use_without_attachments[volume_uuid] += 1
-                                log.info("- plan: fix volume %s in project %s in state 'in-use' without attachments for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_in_use_without_attachments[volume_uuid], iterations)
-                            else:
-                                self.gauge_value_cinder_volume_in_use_without_attachments += 1
-                                #self.volume_attachment_fix_candidates[volume_uuid] = 'in use without attachments'
-                        else:
-                            self.cinder_volume_in_use_without_attachments[volume_uuid] = 0
-                    else:
-                        self.cinder_volume_in_use_without_attachments[volume_uuid] = 0
-                else:
-                    self.cinder_volume_in_use_without_attachments[volume_uuid] = 0
-            else:
-                self.cinder_volume_in_use_without_attachments[volume_uuid] = 0
 
     def send_gauge_values(self):
         self.gauge_cinder_volume_attaching_for_too_long.set(self.gauge_value_cinder_volume_attaching_for_too_long)
