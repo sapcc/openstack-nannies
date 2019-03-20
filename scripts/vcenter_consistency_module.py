@@ -1069,7 +1069,7 @@ class ConsistencyCheck:
                                 log.info("- plan: fix volume %s in project %s in state 'in-use' without attachments for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_in_use_without_attachments[volume_uuid], iterations)
                             else:
                                 self.gauge_value_cinder_volume_in_use_without_attachments += 1
-                                #self.volume_attachment_fix_candidates[volume_uuid] = 'in use without attachments'
+                                self.volume_attachment_fix_candidates[volume_uuid] = 'in use without attachments'
                         else:
                             self.cinder_volume_in_use_without_attachments[volume_uuid] = 0
                     else:
@@ -1092,7 +1092,6 @@ class ConsistencyCheck:
                         log.info("- PLEASE CHECK MANUALLY - volume %s in project %s is in state 'in-use' without some attachments for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_in_use_without_some_attachments[volume_uuid], iterations)
                     else:
                         self.gauge_value_cinder_volume_in_use_without_some_attachments += 1
-                        #self.volume_attachment_fix_candidates[volume_uuid] = 'in use without some attachments'
                     continue
                 if not self.nova_os_servers_with_attached_volume.get(volume_uuid):
                     if not self.cinder_volume_in_use_without_some_attachments.get(volume_uuid):
@@ -1103,7 +1102,6 @@ class ConsistencyCheck:
                         log.info("- PLEASE CHECK MANUALLY - volume %s in project %s is in state 'in-use' without some attachments for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_in_use_without_some_attachments[volume_uuid], iterations)
                     else:
                         self.gauge_value_cinder_volume_in_use_without_some_attachments += 1
-                        #self.volume_attachment_fix_candidates[volume_uuid] = 'in use without some attachments'
                     continue
                 if not self.vc_server_name_with_mounted_volume.get(volume_uuid):
                     if not self.cinder_volume_in_use_without_some_attachments.get(volume_uuid):
@@ -1114,7 +1112,6 @@ class ConsistencyCheck:
                         log.info("- PLEASE CHECK MANUALLY - volume %s in project %s is in state 'in-use' without some attachments for too long (%s/%s)", volume_uuid, self.cinder_os_volume_project_id.get(volume_uuid), self.cinder_volume_in_use_without_some_attachments[volume_uuid], iterations)
                     else:
                         self.gauge_value_cinder_volume_in_use_without_some_attachments += 1
-                        #self.volume_attachment_fix_candidates[volume_uuid] = 'in use without some attachments'
                     continue
                 self.cinder_volume_in_use_without_some_attachments[volume_uuid] = 0
             else:
