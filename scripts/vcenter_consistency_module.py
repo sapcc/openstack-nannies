@@ -1130,8 +1130,6 @@ class ConsistencyCheck:
         self.gauge_cinder_volume_attachment_max_fix_count.set(self.max_automatic_fix)
 
     def run_tool(self):
-        if self.dry_run:
-            log.info("- INFO - running in dry run mode")
         log.info("- INFO - connecting to the vcenter")
         self.vc_connect()
         # exit here in case we get problems connecting to the vcenter
@@ -1249,7 +1247,7 @@ class ConsistencyCheck:
                 self.problem_fixes()
         else:
             # TODO create a metric for this case we may alert on
-            log.warn("- PLEASE CHECK MANUALLY - too many (more than %s) volume attachment inconsistencies - deniying to fix them automatically", str(self.max_automatic_fix))
+            log.warn("- PLEASE CHECK MANUALLY - too many (more than %s) volume attachment inconsistencies - denying to fix them automatically", str(self.max_automatic_fix))
         log.info("- INFO - disconnecting from the cinder db")
         self.cinder_db_disconnect()
         log.info("- INFO - disconnecting from the nova db")
