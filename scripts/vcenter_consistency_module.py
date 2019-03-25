@@ -524,6 +524,16 @@ class ConsistencyCheck:
         except Exception as e:
             log.warn("- WARNING - there was an error deleting the volume %s in the cinder db", volume_uuid)
 
+    def cinder_db_insert_volume_attachment(self, fix_uuid, attachment_info):
+
+        try:
+            now = datetime.datetime.utcnow()
+            cinder_db_volume_attachment_t = Table('volume_attachment', self.cinder_metadata, autoload=True)
+            cinder_db_insert_volume_attachment_q = cinder_db_volume_attachment_t.insert().values(created_at=now, updated_at=now, deleted=False, id=attachment_info['attachment_id'], volume_id=fix_uuid, instance_uuid=attachment_info['instance_uuid'], mountpoint=attachment_info['device_name'], attach_time=now, attach_mode='rw', attach_status='attached')
+            cinder_db_insert_volume_attachment_q.execute()
+        except Exception as e:
+            log.warn("- WARNING - there was an error inserting the volume attachment for the volume %s into the cinder db - %s", fix_uuid, str(e))
+
     # connect to the nova db
     def nova_db_connect(self):
 
@@ -560,6 +570,23 @@ class ConsistencyCheck:
     def nova_db_disconnect(self):
         self.nova_thisSession.close()
         self.nova_connection.close()
+
+
+    def nova_db_get_attachment_info(self, volume_uuid):
+
+        attachment_info = dict()
+
+        nova_db_block_device_mapping_t = Table('block_device_mapping', self.nova_metadata, autoload=True)
+        # maybe we can even live without the connection_info
+        nova_db_get_attachment_info_q = select(columns=[nova_db_block_device_mapping_t.c.attachment_id, nova_db_block_device_mapping_t.c.device_name, nova_db_block_device_mapping_t.c.connection_info, nova_db_block_device_mapping_t.c.instance_uuid],whereclause=and_(nova_db_block_device_mapping_t.c.deleted == 0, nova_db_block_device_mapping_t.c.volume_id == volume_uuid))
+
+        for (attachment_id, device_name, connection_info, instance_uuid) in nova_db_get_attachment_info_q.execute():
+            attachment_info['attachment_id'] = attachment_id
+            attachment_info['device_name'] = device_name
+            attachment_info['connection_info'] = connection_info
+            attachment_info['instance_uuid'] = instance_uuid
+
+        return attachment_info
 
     def nova_db_delete_block_device_mapping(self, volume_uuid):
 
