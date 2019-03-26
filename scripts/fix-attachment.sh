@@ -20,7 +20,7 @@ if [ "$#" != "1" ]; then
   echo ""
   echo "reconstruct a missing volume_attachment entry in the cinder db from the corresponding block_device_mapping entry in the nova db"
   echo ""
-  echo "usage: $0 volume_uuid_to_fix
+  echo "usage: $0 volume_uuid_to_fix"
   echo ""
 fi
 
