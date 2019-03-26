@@ -22,6 +22,7 @@ if [ "$#" != "1" ]; then
   echo ""
   echo "usage: $0 volume_uuid_to_fix"
   echo ""
+  exit 1
 fi
 
 if { [ "$NOVA_CELL2_ENABLED" = "True" ] || [ "$NOVA_CELL2_ENABLED" = "true" ]; } && \
