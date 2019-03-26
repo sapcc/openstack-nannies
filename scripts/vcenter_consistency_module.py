@@ -494,6 +494,20 @@ class ConsistencyCheck:
         for (volume_uuid, attach_status) in cinder_db_volume_attachment_attach_status_q.execute():
             self.cinder_db_volume_attachment_attach_status[volume_uuid] = attach_status
 
+    def cinder_db_get_volume_attachment_ids(self):
+
+        cinder_db_volume_attachment_t = Table('volume_attachment', self.cinder_metadata, autoload=True)
+        # get even the deleted ones, as a newly inserted entry might clash with them as well
+        # cinder_db_volume_attachment_ids_q = select(columns=[cinder_db_volume_attachment_t.c.id],whereclause=and_(cinder_db_volume_attachment_t.c.deleted == False))
+        cinder_db_volume_attachment_ids_q = select(columns=[cinder_db_volume_attachment_t.c.id])
+
+        # build a list of volume attachment ids
+        volume_attachment_ids=[]
+        for (attachment_id) in cinder_db_volume_attachment_ids_q.execute():
+            volume_attachment_ids.append(attachment_id[0].encode('ascii'))
+
+        return volume_attachment_ids
+
     def cinder_db_update_volume_status(self, volume_uuid, new_status, new_attach_status):
 
         try:
@@ -526,13 +540,19 @@ class ConsistencyCheck:
 
     def cinder_db_insert_volume_attachment(self, fix_uuid, attachment_info):
 
-        try:
-            now = datetime.datetime.utcnow()
-            cinder_db_volume_attachment_t = Table('volume_attachment', self.cinder_metadata, autoload=True)
-            cinder_db_insert_volume_attachment_q = cinder_db_volume_attachment_t.insert().values(created_at=now, updated_at=now, deleted=False, id=attachment_info['attachment_id'], volume_id=fix_uuid, instance_uuid=attachment_info['instance_uuid'], mountpoint=attachment_info['device_name'], attach_time=now, attach_mode='rw', attach_status='attached')
-            cinder_db_insert_volume_attachment_q.execute()
-        except Exception as e:
-            log.warn("- WARNING - there was an error inserting the volume attachment for the volume %s into the cinder db - %s", fix_uuid, str(e))
+        # first double check, that the attachment id has not yet been reused meanwhile
+        if attachment_info['attachment_id'] not in self.cinder_db_get_volume_attachment_ids():
+
+            try:
+                now = datetime.datetime.utcnow()
+                cinder_db_volume_attachment_t = Table('volume_attachment', self.cinder_metadata, autoload=True)
+                cinder_db_insert_volume_attachment_q = cinder_db_volume_attachment_t.insert().values(created_at=now, updated_at=now, deleted=False, id=attachment_info['attachment_id'], volume_id=fix_uuid, instance_uuid=attachment_info['instance_uuid'], mountpoint=attachment_info['device_name'], attach_time=now, attach_mode='rw', attach_status='attached')
+                cinder_db_insert_volume_attachment_q.execute()
+            except Exception as e:
+                log.error("- ERROR - there was an error inserting the volume attachment for the volume %s into the cinder db - %s", fix_uuid, str(e))
+
+        else:
+            log.error("- ERROR - the attachment id %s seems to already exist (maybe even as flagged deleted), giving up - please check by hand", fix_uuid)
 
     # connect to the nova db
     def nova_db_connect(self):
