@@ -102,7 +102,7 @@ def fix_wrong_share_metadata(meta, wrong_share_metadata):
     share_metadata_t = Table('share_metadata', meta, autoload=True)
 
     for share_metadata_id in wrong_share_metadata:
-        log.info ("-- action: deleting network allocation id: %s", share_metadata_id)
+        log.info ("-- action: deleting share metadata id: %s", share_metadata_id)
         delete_share_metadata_q = share_metadata_t.delete().where(share_metadata_t.c.id == share_metadata_id)
         delete_share_metadata_q.execute()
 
