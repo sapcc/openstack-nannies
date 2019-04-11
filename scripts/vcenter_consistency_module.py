@@ -26,6 +26,7 @@ import time
 import sys
 import datetime
 import ConfigParser
+import uuid
 
 from pyVim.connect import SmartConnect, Disconnect
 from pyVmomi import vim, vmodl
@@ -540,13 +541,25 @@ class ConsistencyCheck:
 
     def cinder_db_insert_volume_attachment(self, fix_uuid, attachment_info):
 
-        # first double check, that the attachment id has not yet been reused meanwhile
-        if attachment_info['attachment_id'] not in self.cinder_db_get_volume_attachment_ids():
+        nova_attachment_id = attachment_info['attachment_id']
+
+        if nova_attachment_id == None:
+            # generate a new attachment_id (uuid) and make sure this one is not yet used
+            while True:
+                nova_attachment_id = str(uuid.uuid4())
+                if nova_attachment_id not in self.cinder_db_get_volume_attachment_ids():
+                    break
+
+            # after we generated a new uuid, replace the missing attachment_id in the nova db with it
+            self.nova_db_add_volume_attachment_id(fix_uuid, nova_attachment_id)
+
+        # first double check, that the attachment id has not yet been reused meanwhile (in the case it comes from the nova db)
+        if nova_attachment_id not in self.cinder_db_get_volume_attachment_ids():
 
             try:
                 now = datetime.datetime.utcnow()
                 cinder_db_volume_attachment_t = Table('volume_attachment', self.cinder_metadata, autoload=True)
-                cinder_db_insert_volume_attachment_q = cinder_db_volume_attachment_t.insert().values(created_at=now, updated_at=now, deleted=False, id=attachment_info['attachment_id'], volume_id=fix_uuid, instance_uuid=attachment_info['instance_uuid'], mountpoint=attachment_info['device_name'], attach_time=now, attach_mode='rw', attach_status='attached')
+                cinder_db_insert_volume_attachment_q = cinder_db_volume_attachment_t.insert().values(created_at=now, updated_at=now, deleted=False, id=nova_attachment_id, volume_id=fix_uuid, instance_uuid=attachment_info['instance_uuid'], mountpoint=attachment_info['device_name'], attach_time=now, attach_mode='rw', attach_status='attached')
                 cinder_db_insert_volume_attachment_q.execute()
             except Exception as e:
                 log.error("- ERROR - there was an error inserting the volume attachment for the volume %s into the cinder db - %s", fix_uuid, str(e))
@@ -607,6 +620,18 @@ class ConsistencyCheck:
             attachment_info['instance_uuid'] = instance_uuid
 
         return attachment_info
+
+    # this function will generate a new uuid and add it to a block_device_mapping in case there is one missing
+    # and the corresponding cinder entry is missing too
+    def nova_db_add_volume_attachment_id(self, volume_uuid, new_attachment_id):
+
+        try:
+            now = datetime.datetime.utcnow()
+            nova_db_block_device_mapping_t = Table('block_device_mapping', self.nova_metadata, autoload=True)
+            nova_db_delete_block_device_mapping_q = nova_db_block_device_mapping_t.update().where(and_(nova_db_block_device_mapping_t.c.volume_id == volume_uuid, nova_db_block_device_mapping_t.c.deleted == 0)).values(updated_at=now, nova_db_block_device_mapping_t.c.attachment_id=new_attachment_id)
+            nova_db_delete_block_device_mapping_q.execute()
+        except Exception as e:
+            log.warn("- WARNING - there was an error adding an attachment_id to the block_device_mapping for the volume %s in the nova db", volume_uuid)
 
     def nova_db_delete_block_device_mapping(self, volume_uuid):
 
