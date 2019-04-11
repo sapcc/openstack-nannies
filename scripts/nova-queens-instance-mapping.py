@@ -116,7 +116,7 @@ api_cur.execute("SELECT instance_uuid FROM build_requests")
 
 building_instances = api_cur.fetchall()
 for (instance_uuid,) in building_instances:
-  api_cur.execute("SELECT id FROM instance_mappings WHERE instance_uuid = '%s' AND cell_id IS NOT NULL;", (instance_uuid,))
+  api_cur.execute("SELECT id FROM instance_mappings WHERE instance_uuid = %s AND cell_id IS NOT NULL;", (instance_uuid,))
   if api_cur.rowcount != 0:
     log.info("Found build_request of instance that has been already scheduled: %s", instance_uuid)
     if not args.dry_run:
