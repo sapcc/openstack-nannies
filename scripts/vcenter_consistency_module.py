@@ -551,6 +551,7 @@ class ConsistencyCheck:
                     break
 
             # after we generated a new uuid, replace the missing attachment_id in the nova db with it
+            log.info("- INFO - inserting a missing attachment_id entry for the volume %s into the nova db block_device_mapping table", fix_uuid)
             self.nova_db_add_volume_attachment_id(fix_uuid, nova_attachment_id)
 
         # first double check, that the attachment id has not yet been reused meanwhile (in the case it comes from the nova db)
@@ -628,8 +629,8 @@ class ConsistencyCheck:
         try:
             now = datetime.datetime.utcnow()
             nova_db_block_device_mapping_t = Table('block_device_mapping', self.nova_metadata, autoload=True)
-            nova_db_delete_block_device_mapping_q = nova_db_block_device_mapping_t.update().where(and_(nova_db_block_device_mapping_t.c.volume_id == volume_uuid, nova_db_block_device_mapping_t.c.deleted == 0)).values(updated_at=now, nova_db_block_device_mapping_t.c.attachment_id=new_attachment_id)
-            nova_db_delete_block_device_mapping_q.execute()
+            nova_db_add_volume_attachment_id_q = nova_db_block_device_mapping_t.update().where(and_(nova_db_block_device_mapping_t.c.volume_id == volume_uuid, nova_db_block_device_mapping_t.c.deleted == 0)).values(updated_at=now, attachment_id=new_attachment_id)
+            nova_db_add_volume_attachment_id_q.execute()
         except Exception as e:
             log.warn("- WARNING - there was an error adding an attachment_id to the block_device_mapping for the volume %s in the nova db", volume_uuid)
 
