@@ -24,6 +24,8 @@ import os
 import six
 import ssl
 import time
+import calendar
+import time
 
 from pyVim.connect import SmartConnect, Disconnect
 from pyVim.task import WaitForTask, WaitForTasks
@@ -141,6 +143,8 @@ def _uuids(task):
 @click.option('--port')
 def run_me(host, username, password, interval, iterations, dry_run, power_off, unregister, delete, detach_ghost_volumes, detach_ghost_ports, detach_ghost_limit, vol_check, port):
 
+    starttime = calendar.timegm(time.gmtime())
+
     # Start http server for exported data
     if port:
         prometheus_exporter_port = int(port)
@@ -219,8 +223,9 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
             raise Exception("maybe too old python version with ssl problems?")
 
         # wait the interval time
-        log.info("INFO: waiting %s minutes before starting the next loop run", str(interval))
-        time.sleep(60 * int(interval))
+        log.info("INFO: waiting so that the next loop run will start %s minutes after the start of this loop run", str(interval))
+        endtime = calendar.timegm(time.gmtime())
+        time.sleep((60 * int(interval)) - (endtime - starttime))
 
 # init dict of all vms or files we have seen already
 def init_seen_dict(seen_dict):
