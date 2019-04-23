@@ -32,6 +32,8 @@ from sqlalchemy import create_engine
 from sqlalchemy import or_
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
+# prometheus export functionality
+from prometheus_client import start_http_server, Gauge
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
@@ -50,7 +52,10 @@ def parse_cmdline_args():
                         help="in which interval the check should run")
     parser.add_argument("--iterations",
                         default=3,
-                        help="how many checks to wait before doing anything")       
+                        help="how many checks to wait before doing anything")
+    parser.add_argument("--port",
+                        default=9456,
+                        help="port to use for prometheus exporter, otherwise we use 9456 as default")
     return parser.parse_args()
 
 class NeutronLbaasCleanupPending:
@@ -65,6 +70,21 @@ class NeutronLbaasCleanupPending:
 
         self.seen_dict = dict()
         self.to_be_dict = dict()
+
+        self.gauge_value_pending_lb = 0
+
+        self.gauge_pending_lb = Gauge('neutron_nanny_pending_lb', 'number of lbs in pending state for a longer time')
+
+        # Start http server for exported data
+        if int(args.port):
+            prometheus_exporter_port = int(args.port)
+        else:
+            prometheus_exporter_port = 9456
+
+        try:
+            start_http_server(prometheus_exporter_port)
+        except Exception as e:
+            logging.error("failed to start prometheus exporter http server: " + str(e))
 
         self.run_me()
 
@@ -119,9 +139,11 @@ class NeutronLbaasCleanupPending:
                     log.info("- PLEASE CHECK MANUALLY - dry-run: setting the provisioning_status for loadbalancer %s from PENDING_* to ERROR", lbaas_loadbalancer_id)
                 else:
                     log.info("- PLEASE CHECK MANUALLY - action: setting the provisioning_status for loadbalancer %s from PENDING_* to ERROR", lbaas_loadbalancer_id)
-                    # do something here ...
+                    # do something here ... we will implement this part if we see this case more often
+                # increase the metric counting the lbs in pending state for a longer time
+                self.gauge_value_pending_lb += 1
             else:
-                # avoid logging it if we have it the first ime on out list to reduce log spam
+                # avoid logging it if we have it the first time on out list to reduce log spam
                 if self.to_be_dict.get(lbaas_loadbalancer_id, default) > 0:
                     log.info("- PLEASE CHECK MANUALLY - plan: to set the provisioning_status for loadbalancer %s from PENDING_* to ERROR (%s/%s)", lbaas_loadbalancer_id, str(self.to_be_dict.get(lbaas_loadbalancer_id, default) + 1), str(self.args.iterations))
             self.to_be_dict[lbaas_loadbalancer_id] = self.to_be_dict.get(lbaas_loadbalancer_id, default) + 1
@@ -140,6 +162,9 @@ class NeutronLbaasCleanupPending:
         log.info("waiting %s minutes before starting the next loop run", str(self.args.interval))
         time.sleep(60 * int(self.args.interval))
 
+    def send_to_prometheus_exporter(self):
+        self.gauge_pending_lb.set(float(self.gauge_value_pending_lb))
+
     def run_me(self):
         # connect to the DB
         self.get_db_url()
@@ -147,8 +172,10 @@ class NeutronLbaasCleanupPending:
 
         while True:
             self.init_seen_dict()
+            self.gauge_value_pending_lb = 0
             for i in self.get_pending_lbaas_loadbalancers():
                 self.now_or_later(i)
+            self.send_to_prometheus_exporter()
             self.reset_to_be_dict()
             self.wait_a_moment()
 
