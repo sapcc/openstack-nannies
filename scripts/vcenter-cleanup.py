@@ -409,6 +409,9 @@ def detach_ghost_port(service_instance, vm, mac_address):
     except vim.fault.GenericVmConfigFault as e:
         log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - %s", vm.config.instanceUuid, str(e.msg))
         return False
+    except vim.fault.InvalidState as e:
+        log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - %s", vm.config.instanceUuid, str(e.msg))
+        return False
     return True
 
 
@@ -450,6 +453,9 @@ def detach_ghost_volume(service_instance, vm, volume_uuid):
         log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume from instance %s - %s", vm.config.instanceUuid, str(e.msg))
         return False
     except vim.fault.GenericVmConfigFault as e:
+        log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume from instance %s - %s", vm.config.instanceUuid, str(e.msg))
+        return False
+    except vim.fault.InvalidState as e:
         log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost volume from instance %s - %s", vm.config.instanceUuid, str(e.msg))
         return False
     return True
