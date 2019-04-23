@@ -143,8 +143,6 @@ def _uuids(task):
 @click.option('--port')
 def run_me(host, username, password, interval, iterations, dry_run, power_off, unregister, delete, detach_ghost_volumes, detach_ghost_ports, detach_ghost_limit, vol_check, port):
 
-    starttime = calendar.timegm(time.gmtime())
-
     # Start http server for exported data
     if port:
         prometheus_exporter_port = int(port)
@@ -157,6 +155,7 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
 
     while True:
 
+        starttime = calendar.timegm(time.gmtime())
         log.info("INFO: starting new loop run")
 
         gauge_value_vcenter_connection_problems = 0
