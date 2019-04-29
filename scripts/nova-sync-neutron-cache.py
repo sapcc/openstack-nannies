@@ -43,6 +43,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
 log = logging.getLogger(__name__)
+# we log on ERROR as otherwise on INFO we would get too much other logging from nova
 logging.basicConfig(level=logging.ERROR, format='%(asctime)-15s %(message)s')
 
 # cmdline handling
@@ -54,6 +55,9 @@ def parse_cmdline_args():
     parser.add_argument("--dry-run",
                         action="store_true",
                         help='print only what would be done without actually doing it')
+    parser.add_argument("--sync-baremetal",
+                        action="store_false",
+                        help='sync ports on baremetal systems too')
     return parser.parse_args()
 
 class NovaInstanceInfoCacheSync:
@@ -212,8 +216,8 @@ class NovaInstanceInfoCacheSync:
                         # log.error("- instance %s - mac address %s is already in the nova cache", instance.uuid, i)
                     else:
                         # the cache is not yet used for baremetal machines
-                        if network_info_entries[i]['vnic_type'] == "baremetal":
-                            log.debug("- instance %s - mac address %s is a baremetal machine and should not go into the nova cache", instance.uuid, i)
+                        if (network_info_entries[i]['vnic_type'] == "baremetal" and not self.args.sync_baremetal):
+                            log.error("- instance %s - mac address %s is a baremetal machine and syncing for baremetal machines is disabled", instance.uuid, i)
                         elif self.args.dry_run:
                             log.error("- PLEASE CHECK MANUALLY - instance %s - mac address %s is not yet in the nova cache and needs to be added", instance.uuid, i)
                         else:

@@ -44,9 +44,15 @@ echo "INFO: starting a loop to periodically run the nanny job for the nova insta
 while true; do
     if [ "$NOVA_SYNC_NEUTRON_CACHE_ENABLED" = "True" ] || [ "$NOVA_SYNC_NEUTRON_CACHE_ENABLED" = "true" ]; then
         if [ "$NOVA_SYNC_NEUTRON_CACHE_DRY_RUN" = "False" ] || [ "$NOVA_SYNC_NEUTRON_CACHE_DRY_RUN" = "false" ]; then
+            # the sync-baremetal case is only relevant for the non dry-run mode, as in dry-run we do not sync anything anyway
+            if [ "$NOVA_SYNC_NEUTRON_CACHE_BAREMETAL" = "True" ] || [ "$NOVA_SYNC_NEUTRON_CACHE_BAREMETAL" = "true" ]; then
+                SYNC_BAREMETAL="--sync-baremetal"
+            else
+                SYNC_BAREMETAL=""
+            fi
             echo -n "INFO: syncing nova instance info cache from neutron - "
             date
-            /var/lib/kolla/venv/bin/python /scripts/nova-sync-neutron-cache.py --config /etc/nova/nova.conf
+            /var/lib/kolla/venv/bin/python /scripts/nova-sync-neutron-cache.py $SYNC_BAREMETAL --config /etc/nova/nova.conf
         else
             echo -n "INFO: comparing nova instance info cache with neutron values - "
             date
