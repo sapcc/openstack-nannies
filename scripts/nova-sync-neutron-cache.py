@@ -56,7 +56,7 @@ def parse_cmdline_args():
                         action="store_true",
                         help='print only what would be done without actually doing it')
     parser.add_argument("--sync-baremetal",
-                        action="store_false",
+                        action="store_true",
                         help='sync ports on baremetal systems too')
     return parser.parse_args()
 
