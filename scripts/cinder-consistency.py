@@ -61,6 +61,9 @@ def get_nova_instances(conn):
     #for i in nova_instances:
     #    print nova_instances[i].id
 
+    if not nova_instances:
+        raise RuntimeError('Did not get any nova instances back.')
+
     return nova_instances
 
 # get all volume attachments for volumes
