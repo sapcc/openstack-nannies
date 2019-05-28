@@ -514,6 +514,11 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         service = "nova"
         for server in conn.compute.servers(details=False, all_projects=1):
             known[server.id] = 'server'
+
+        # TO BE FIXED IN A CLEANER WAY LATER
+        if not known:
+            raise RuntimeError('Did not get any nova instances back.')
+
         service = "cinder"
         for volume in conn.block_store.volumes(details=False, all_projects=1):
             known[volume.id] = 'volume'
@@ -1029,7 +1034,13 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
     # get all servers, volumes, snapshots and images from openstack to compare the resources we find on the vcenter against
     try:
         service = "nova"
-        for server in conn.compute.servers(details=True, all_projects=1):
+
+        # TO BE FIXED IN A CLEANER WAY LATER
+        temporary_server_list = conn.compute.servers(details=True, all_projects=1)
+        if not temporary_server_list:
+            raise RuntimeError('Did not get any nova instances back.')
+
+        for server in temporary_server_list:
             # we only care about servers from the vcenter this nanny is taking care of
             if server.availability_zone.lower() == vcenter_name:
                 os_all_servers.append(server.id)

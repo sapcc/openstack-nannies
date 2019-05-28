@@ -288,7 +288,13 @@ class ConsistencyCheck:
 
         try:
             service = "nova"
-            for server in self.os_conn.compute.servers(details=True, all_projects=1):
+
+            # TO BE FIXED IN A CLEANER WAY LATER
+            temporary_server_list = conn.compute.servers(details=True, all_projects=1)
+            if not temporary_server_list:
+                raise RuntimeError('Did not get any nova instances back.')
+
+            for server in temporary_server_list:
                 # we only care about servers from the vcenter this nanny is taking care of
                 if server.availability_zone.lower() == self.vcenter_name:
                     self.os_all_servers.append(server.id)

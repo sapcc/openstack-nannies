@@ -169,6 +169,11 @@ class Cleanup:
         # get all instances from nova sorted by their id
         try:
             self.servers = sorted(self.conn.compute.servers(details=True, all_projects=1), key=lambda x: x.id)
+
+            # TO BE FIXED IN A CLEANER WAY LATER - also: self.servers should be declared in the init section
+            if not self.servers:
+                raise RuntimeError('Did not get any nova instances back.')
+
         except exceptions.HttpException as e:
             log.warn("- PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
             return
