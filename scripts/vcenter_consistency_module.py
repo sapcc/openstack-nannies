@@ -688,7 +688,7 @@ class ConsistencyCheck:
             service = "nova"
 
             # TO BE FIXED IN A CLEANER WAY LATER
-            temporary_server_list = conn.compute.servers(details=True, all_projects=1)
+            temporary_server_list = self.os_conn.compute.servers(details=True, all_projects=1)
             if not temporary_server_list:
                 raise RuntimeError('Did not get any nova instances back.')
 
