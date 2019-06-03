@@ -67,7 +67,7 @@ class ConsistencyCheck:
         self.prometheus_port = prometheus_port
         self.interactive = interactive
         if fix_limit:
-            self.max_automatic_fix = fix_limit
+            self.max_automatic_fix = int(fix_limit)
         else:
             self.max_automatic_fix = 10
 
