@@ -49,6 +49,8 @@ def get_nova_instances(conn):
     try:
         for nova_instance in conn.compute.servers(details=False, all_projects=1):
             nova_instances[nova_instance.id] = nova_instance
+        if not nova_instances:
+            raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any nova instances back from the nova api - this should in theory never happen ...')
 
     except exceptions.HttpException as e:
         log.warn("- PLEASE CHECK MANUALLY - got an http exception connecting to openstack: %s", str(e))
@@ -91,15 +93,20 @@ def get_wrong_orphan_volume_attachments(nova_instances, orphan_volume_attachment
     return wrong_orphan_volume_attachments
 
 # delete volume attachments in the cinder db for already deleted instances in nova
-def fix_wrong_orphan_volume_attachments(meta, wrong_orphan_volume_attachments):
+def fix_wrong_orphan_volume_attachments(meta, wrong_orphan_volume_attachments, fix_limit):
 
-    orphan_volume_attachment_t = Table('volume_attachment', meta, autoload=True)
+    if len(wrong_orphan_volume_attachments) <= int(fix_limit):
 
-    for orphan_volume_attachment_id in wrong_orphan_volume_attachments:
-        log.info ("-- action: deleting orphan volume attachment id: %s", orphan_volume_attachment_id)
-        now = datetime.datetime.utcnow()
-        delete_orphan_volume_attachment_q = orphan_volume_attachment_t.update().where(orphan_volume_attachment_t.c.id == orphan_volume_attachment_id).values(updated_at=now, deleted_at=now, deleted=True)
-        delete_orphan_volume_attachment_q.execute()
+        orphan_volume_attachment_t = Table('volume_attachment', meta, autoload=True)
+
+        for orphan_volume_attachment_id in wrong_orphan_volume_attachments:
+            log.info ("-- action: deleting orphan volume attachment id: %s", orphan_volume_attachment_id)
+            now = datetime.datetime.utcnow()
+            delete_orphan_volume_attachment_q = orphan_volume_attachment_t.update().where(orphan_volume_attachment_t.c.id == orphan_volume_attachment_id).values(updated_at=now, deleted_at=now, deleted=True)
+            delete_orphan_volume_attachment_q.execute()
+
+    else:
+        log.warn("- PLEASE CHECK MANUALLY - too many (more than %s) wrong orphan volume attachments - denying to fix them automatically", str(fix_limit))
 
 # get all the volumes in state "error_deleting"
 def get_error_deleting_volumes(meta):
@@ -224,14 +231,19 @@ def get_wrong_volume_attachments(meta):
     return wrong_attachments
 
 # delete volume attachment still defined where the corresponding volume is already deleted
-def fix_wrong_volume_attachments(meta, wrong_attachments):
+def fix_wrong_volume_attachments(meta, wrong_attachments, fix_limit):
 
-    volume_attachment_t = Table('volume_attachment', meta, autoload=True)
+    if len(wrong_attachments) <= int(fix_limit):
 
-    for volume_attachment_id in wrong_attachments:
-        log.info("-- action: deleting volume attachment id: %s", volume_attachment_id)
-        delete_volume_attachment_q = volume_attachment_t.delete().where(volume_attachment_t.c.id == volume_attachment_id)
-        delete_volume_attachment_q.execute()
+        volume_attachment_t = Table('volume_attachment', meta, autoload=True)
+
+        for volume_attachment_id in wrong_attachments:
+            log.info("-- action: deleting volume attachment id: %s", volume_attachment_id)
+            delete_volume_attachment_q = volume_attachment_t.delete().where(volume_attachment_t.c.id == volume_attachment_id)
+            delete_volume_attachment_q.execute()
+
+    else:
+        log.warn("- PLEASE CHECK MANUALLY - too many (more than %s) wrong volume attachments - denying to fix them automatically", str(fix_limit))
 
 # get all the rows, which have the deleted flag set, but not the delete_at column
 def get_missing_deleted_at(meta, table_names):
@@ -332,6 +344,10 @@ def parse_cmdline_args():
     parser.add_argument("--dry-run",
                        action="store_true",
                        help='print only what would be done without actually doing it')
+    parser.add_argument("--fix-limit",
+                       action="store_const",
+                       const=25,
+                       help='maximum number of inconsistencies to fix automatically - if there are more, automatic fixing is denied')
     return parser.parse_args()
 
 def main():
@@ -359,7 +375,7 @@ def main():
                      orphan_volume_attachments[orphan_volume_attachment_id])
         if not args.dry_run:
             log.info("- deleting orphan volume attachment inconsistencies found")
-            fix_wrong_orphan_volume_attachments(cinder_metadata, wrong_orphan_volume_attachments)
+            fix_wrong_orphan_volume_attachments(cinder_metadata, wrong_orphan_volume_attachments, args.fix_limit)
     else:
         log.info("- no orphan volume attachments found")
 
@@ -424,7 +440,7 @@ def main():
             log.info("-- volume attachment id: %s - deleted volume id: %s", volume_attachment_id, wrong_attachments[volume_attachment_id])
         if not args.dry_run:
             log.info("- removing volume attachment inconsistencies found")
-            fix_wrong_volume_attachments(cinder_metadata, wrong_attachments)
+            fix_wrong_volume_attachments(cinder_metadata, wrong_attachments, args.fix_limit)
     else:
         log.info("- volume attachments are consistent")
 

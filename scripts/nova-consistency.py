@@ -49,6 +49,8 @@ def get_cinder_volumes(conn):
     try:
         for cinder_volume in conn.block_store.volumes(details=False, all_projects=1):
             cinder_volumes[cinder_volume.id] = cinder_volume
+        if not cinder_volumes:
+            raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any cinder volumes back from the cinder api - this should in theory never happen ...')
 
     except exceptions.HttpException as e:
         log.warn("- PLEASE CHECK MANUALLY - got an http exception connecting to openstack: %s", str(e))

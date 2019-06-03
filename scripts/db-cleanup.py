@@ -125,6 +125,8 @@ class Cleanup:
             # successfully created the connection, so that chance is low to fail
             for project in self.conn.identity.projects():
                 self.projects[project.id] = project.name
+            if not self.projects:
+                raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any keystone projects back from the keystone api - this should in theory never happen ...')
 
         if self.cindercmdline:
             # cinder client session reusing the auth from the openstacksdk connection session
@@ -169,11 +171,8 @@ class Cleanup:
         # get all instances from nova sorted by their id
         try:
             self.servers = sorted(self.conn.compute.servers(details=True, all_projects=1), key=lambda x: x.id)
-
-            # TO BE FIXED IN A CLEANER WAY LATER - also: self.servers should be declared in the init section
             if not self.servers:
-                raise RuntimeError('Did not get any nova instances back.')
-
+                raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any nova instances back from the nova api - this should in theory never happen ...')
         except exceptions.HttpException as e:
             log.warn("- PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
             return
@@ -192,6 +191,8 @@ class Cleanup:
             # as they are created from them and thus should be deleted first
             try:
                 self.snapshots = sorted(self.conn.block_store.snapshots(details=True, all_projects=1), key=lambda x: x.id)
+                if not self.snapshots:
+                    raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any cinder snapshots back from the cinder api - this should in theory never happen ...')
             except exceptions.HttpException as e:
                 log.warn("- PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
                 return
@@ -217,6 +218,8 @@ class Cleanup:
             # get all volumes from cinder sorted by their id
             try:
                 self.volumes = sorted(self.conn.block_store.volumes(details=True, all_projects=1), key=lambda x: x.id)
+                if not self.volumes:
+                    raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any cinder volumes back from the cinder api - this should in theory never happen ...')
             except exceptions.HttpException as e:
                 log.warn("- PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
                 return

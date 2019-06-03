@@ -512,26 +512,35 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     # get all servers, volumes, snapshots and images from openstack to compare the resources we find on the vcenter against
     try:
         service = "nova"
-        for server in conn.compute.servers(details=False, all_projects=1):
+        temporary_server_list = conn.compute.servers(details=False, all_projects=1)
+        if not temporary_server_list:
+            raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any nova instances back from the nova api - this should in theory never happen ...')
+        for server in temporary_server_list:
             known[server.id] = 'server'
-
-        # TO BE FIXED IN A CLEANER WAY LATER
-        if not known:
-            raise RuntimeError('Did not get any nova instances back.')
-
         service = "cinder"
-        for volume in conn.block_store.volumes(details=False, all_projects=1):
+        temporary_volume_list = conn.block_store.volumes(details=False, all_projects=1)
+        if not temporary_volume_list:
+            raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any cinder volumes back from the cinder api - this should in theory never happen ...')
+        for volume in temporary_volume_list:
             known[volume.id] = 'volume'
         service = "cinder"
-        for snapshot in conn.block_store.snapshots(details=False, all_projects=1):
+        temporary_snapshot_list = conn.block_store.snapshots(details=False, all_projects=1)
+        if not temporary_snapshot_list:
+            raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any cinder snapshots back from the cinder api - this should in theory never happen ...')
+        for snapshot in temporary_snapshot_list:
             known[snapshot.id] = 'snapshot'
         service = "glance"
-        for image in conn.image.images():
+        temporary_image_list = conn.image.images()
+        if not temporary_image_list:
+            raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any glance images back from the glance api - this should in theory never happen ...')
+        for image in temporary_image_list:
             known[image.id] = 'image'
-
         service = "neutron"
+        temporary_port_list conn.network.ports()
+        if not temporary_port_list:
+            raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any neutron ports back from the neutron api - this should in theory never happen ...')
         # build a dict of ports related to the network interfaces on the servers on the vcenter
-        for port in conn.network.ports():
+        for port in temporary_port_list:
             # we only care about ports handled by nova-compute here
             if str(port.binding_host_id).startswith('nova-compute-'):
                 # TODO - remove this old code at some point
@@ -1034,12 +1043,9 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
     # get all servers, volumes, snapshots and images from openstack to compare the resources we find on the vcenter against
     try:
         service = "nova"
-
-        # TO BE FIXED IN A CLEANER WAY LATER
         temporary_server_list = conn.compute.servers(details=True, all_projects=1)
         if not temporary_server_list:
-            raise RuntimeError('Did not get any nova instances back.')
-
+            raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any nova instances back from the nova api - this should in theory never happen ...')
         for server in temporary_server_list:
             # we only care about servers from the vcenter this nanny is taking care of
             if server.availability_zone.lower() == vcenter_name:
@@ -1051,7 +1057,10 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
                         else:
                             os_volumes_attached_at_server[server.id] = [attachment['id']]
         service = "cinder"
-        for volume in conn.block_store.volumes(details=True, all_projects=1):
+        temporary_volume_list = conn.block_store.volumes(details=True, all_projects=1)
+        if not temporary_volume_list:
+            raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any cinder volumes back from the cinder api - this should in theory never happen ...')
+        for volume in temporary_volume_list:
             # we only care about volumes from the vcenter this nanny is taking care of
             if volume.availability_zone.lower() == vcenter_name:
                 os_all_volumes.append(volume.id)

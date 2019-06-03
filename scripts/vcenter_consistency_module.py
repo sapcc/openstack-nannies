@@ -226,7 +226,7 @@ class ConsistencyCheck:
             vm_handle = search_index.FindByUuid(None,instance_uuid, True, True)
 
         except Exception as e:
-            log.warn("- PLEASE CHECK_ MANUALLY - Problem during instance search in vcenter %s", str(e))
+            log.warn("- PLEASE CHECK MANUALLY - Problem during instance search in vcenter %s", str(e))
             return False
 
         return vm_handle
@@ -686,12 +686,9 @@ class ConsistencyCheck:
 
         try:
             service = "nova"
-
-            # TO BE FIXED IN A CLEANER WAY LATER
             temporary_server_list = self.os_conn.compute.servers(details=True, all_projects=1)
             if not temporary_server_list:
-                raise RuntimeError('Did not get any nova instances back.')
-
+                raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any nova instances back from the nova api - this should in theory never happen ...')
             for server in temporary_server_list:
                 # we only care about servers from the vcenter this nanny is taking care of
                 if server.availability_zone.lower() == self.vcenter_name:
@@ -704,7 +701,10 @@ class ConsistencyCheck:
                                 self.nova_os_volumes_attached_at_server[server.id] = [attachment['id'].encode('ascii')]
                             self.nova_os_servers_with_attached_volume[attachment['id'].encode('ascii')] = server.id.encode('ascii')
             service = "cinder"
-            for volume in self.os_conn.block_store.volumes(details=True, all_projects=1):
+            temporary_volume_list = self.os_conn.block_store.volumes(details=True, all_projects=1)
+            if not temporary_volume_list:
+                raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any cinder volumes back from the cinder api - this should in theory never happen ...')
+            for volume in temporary_volume_list:
                 # we only care about volumes from the vcenter this nanny is taking care of
                 if volume.availability_zone.lower() == self.vcenter_name:
                     self.cinder_os_all_volumes.append(volume.id.encode('ascii'))
