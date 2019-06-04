@@ -536,7 +536,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         for image in temporary_image_list:
             known[image.id] = 'image'
         service = "neutron"
-        temporary_port_list conn.network.ports()
+        temporary_port_list = conn.network.ports()
         if not temporary_port_list:
             raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any neutron ports back from the neutron api - this should in theory never happen ...')
         # build a dict of ports related to the network interfaces on the servers on the vcenter
