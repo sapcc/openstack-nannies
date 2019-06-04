@@ -90,15 +90,18 @@ def get_wrong_block_device_mappings(cinder_volumes, block_device_mappings):
     return wrong_block_device_mappings
 
 # delete block_device_mappings in the nova db for already deleted volumes in cinder
-def fix_wrong_block_device_mappings(meta, wrong_block_device_mappings):
+def fix_wrong_block_device_mappings(meta, wrong_block_device_mappings, fix_limit):
 
-    block_device_mapping_t = Table('block_device_mapping', meta, autoload=True)
+    if len(wrong_block_device_mappings) <= int(fix_limit):
+        block_device_mapping_t = Table('block_device_mapping', meta, autoload=True)
 
-    for block_device_mapping_id in wrong_block_device_mappings:
-        log.info ("-- action: deleting block device mapping id: %s", block_device_mapping_id)
-        now = datetime.datetime.utcnow()
-        delete_block_device_mapping_q = block_device_mapping_t.update().where(block_device_mapping_t.c.id == block_device_mapping_id).values(updated_at=now, deleted_at=now, deleted=block_device_mapping_id)
-        delete_block_device_mapping_q.execute()
+        for block_device_mapping_id in wrong_block_device_mappings:
+            log.info ("-- action: deleting block device mapping id: %s", block_device_mapping_id)
+            now = datetime.datetime.utcnow()
+            delete_block_device_mapping_q = block_device_mapping_t.update().where(block_device_mapping_t.c.id == block_device_mapping_id).values(updated_at=now, deleted_at=now, deleted=block_device_mapping_id)
+            delete_block_device_mapping_q.execute()
+    else:
+        log.warn("- PLEASE CHECK MANUALLY - too many (more than %s) wrong block device mappings - denying to fix them automatically", str(fix_limit))
 
 # delete block_device_mappings in the nova db with the deleted flag set and older than a certain time
 # looks like the nova db purge does not clean those up properly
@@ -198,6 +201,10 @@ def parse_cmdline_args():
     parser.add_argument("--max-instance-faults",
                        type=int,
                        help='how many instance faults entries to keep')
+    parser.add_argument("--fix-limit",
+                       action="store_const",
+                       const=25,
+                       help='maximum number of inconsistencies to fix automatically - if there are more, automatic fixing is denied')
     return parser.parse_args()
 
 def main():
