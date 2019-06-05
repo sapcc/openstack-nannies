@@ -30,9 +30,14 @@ echo "INFO: starting a loop to periodically run the nanny job for the cinder db 
 while true; do
     if [ "$CINDER_CONSISTENCY_ENABLED" = "True" ] || [ "$CINDER_CONSISTENCY_ENABLED" = "true" ]; then
         if [ "$CINDER_CONSISTENCY_DRY_RUN" = "False" ] || [ "$CINDER_CONSISTENCY_DRY_RUN" = "false" ]; then
+            if [ "$CINDER_CONSISTENCY_FIX_LIMIT" != "" ]; then
+                FIX_LIMIT="--fix-limit $CINDER_CONSISTENCY_FIX_LIMIT"
+            else
+                FIX_LIMIT=""
+            fi
             echo -n "INFO: checking and fixing cinder db consistency - "
             date
-            /var/lib/kolla/venv/bin/python /scripts/cinder-consistency.py --config /etc/cinder/cinder.conf
+            /var/lib/kolla/venv/bin/python /scripts/cinder-consistency.py --config /etc/cinder/cinder.conf $FIX_LIMIT
         else
             echo -n "INFO: checking cinder db consistency - "
             date

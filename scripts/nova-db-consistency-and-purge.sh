@@ -58,9 +58,14 @@ while true; do
             else
                 MAX_INSTANCE_FAULTS=""
             fi
+            if [ "$NOVA_CONSISTENCY_FIX_LIMIT" != "" ]; then
+                FIX_LIMIT="--fix-limit $NOVA_CONSISTENCY_FIX_LIMIT"
+            else
+                FIX_LIMIT=""
+            fi
             echo -n "INFO: checking and fixing nova db consistency - "
             date
-            /var/lib/kolla/venv/bin/python /scripts/nova-consistency.py --config /etc/nova/nova.conf $OLDER_THAN $MAX_INSTANCE_FAULTS
+            /var/lib/kolla/venv/bin/python /scripts/nova-consistency.py --config /etc/nova/nova.conf $OLDER_THAN $MAX_INSTANCE_FAULTS $FIX_LIMIT
         else
             echo -n "INFO: checking nova db consistency - "
             date
