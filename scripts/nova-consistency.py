@@ -202,8 +202,7 @@ def parse_cmdline_args():
                        type=int,
                        help='how many instance faults entries to keep')
     parser.add_argument("--fix-limit",
-                       action="store_const",
-                       const=25,
+                       default=25,
                        help='maximum number of inconsistencies to fix automatically - if there are more, automatic fixing is denied')
     return parser.parse_args()
 

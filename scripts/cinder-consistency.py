@@ -345,8 +345,7 @@ def parse_cmdline_args():
                        action="store_true",
                        help='print only what would be done without actually doing it')
     parser.add_argument("--fix-limit",
-                       action="store_const",
-                       const=25,
+                       default=25,
                        help='maximum number of inconsistencies to fix automatically - if there are more, automatic fixing is denied')
     return parser.parse_args()
 
