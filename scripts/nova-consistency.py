@@ -235,7 +235,7 @@ def main():
                      block_device_mappings[block_device_mapping_id])
         if not args.dry_run:
             log.info("- deleting block device mapping inconsistencies found")
-            fix_wrong_block_device_mappings(nova_metadata, wrong_block_device_mappings, fix_limit)
+            fix_wrong_block_device_mappings(nova_metadata, wrong_block_device_mappings, args.fix_limit)
     else:
         log.info("- block device mappings are consistent")
 
