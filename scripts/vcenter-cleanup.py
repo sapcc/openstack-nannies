@@ -583,6 +583,8 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     # development stage of this script to validate the volume attachments with cinder and nova
     vm_properties = [
         "config.hardware.device",
+        "config.hardware.memoryMB",
+        "resourcePool",
         "config.name",
         "config.uuid",
         "config.instanceUuid",
@@ -601,6 +603,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     # to find possible ghost volumes
     vc_server_uuid_with_mounted_volume = dict()
     vc_server_name_with_mounted_volume = dict()
+    big_vm_disable_drs = []
     # iterate over the list of vms
     for k in data:
         # only work with results, which have an instance uuid defined and are openstack vms (i.e. have an annotation set)
@@ -612,6 +615,18 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
             # get the config.hardware.device property out of the data dict and iterate over its elements
             # for j in k['config.hardware.device']:
             # this check seems to be required as in one bb i got a key error otherwise - looks like a vm without that property
+            if k.get('config.hardware.memoryMB'):
+                # Collect 'BigVMs' with >= 1TB
+                if k['config.hardware.memoryMB'] >= 1024 * 1024:
+                    cluster = k['resourcePool'].owner
+                    drs_enabled = True
+                    for drs in cluster.configuration.drsVmConfig:
+                        if str(drs.key) == str(k) and not drs.enabled:
+                            drs_enabled = False
+                            break
+                    if drs_enabled:
+                        log.warn("- discovered new bigVM %s with %.02f TB Ram and DRS still enabled", k['config.name'], k['config.hardware.memoryMB']/(1024*1024))
+                        big_vm_disable_drs.append((k['obj'], cluster))
             if k.get('config.hardware.device'):
                 for j in k.get('config.hardware.device'):
                     # we are only interested in disks for ghost volumes ...
@@ -689,6 +704,20 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     missing = dict()
     # a dict of locations by uuid known to openstack
     not_missing = dict()
+
+    # Disable DRS for bigVMs
+    for vm, cluster in big_vm_disable_drs:
+        cluster_spec = vim.cluster.ConfigSpec()
+        drs_vm_config_spec = vim.cluster.DrsVmConfigSpec()
+        drs_vm_config_spec.operation = vim.option.ArrayUpdateSpec.Operation.add
+
+        drs_vm_config_info = vim.cluster.DrsVmConfigInfo()
+        drs_vm_config_info.enabled = False
+        drs_vm_config_info.behavior = vim.cluster.DrsConfigInfo.DrsBehavior.manual
+        drs_vm_config_info.key = vm
+        drs_vm_config_spec.info = drs_vm_config_info
+        cluster_spec.drsVmConfigSpec = [drs_vm_config_spec]
+        cluster.ReconfigureCluster_Task(cluster_spec, not dry_run)
 
     # iterate through all datastores in the vcenter
     for ds in dc.datastore:
