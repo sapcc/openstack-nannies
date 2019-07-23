@@ -83,6 +83,7 @@ gauge_openstack_connection_problems = Gauge('vcenter_nanny_openstack_connection_
 gauge_unknown_vcenter_templates = Gauge('vcenter_nanny_unknown_vcenter_templates', 'number of templates unknown to openstack')
 gauge_complete_orphans = Gauge('vcenter_nanny_complete_orphans', 'number of possibly completely orphan vms')
 gauge_volume_attachment_inconsistencies = Gauge('vcenter_nanny_volume_attachment_inconsistencies', 'number of volume attachment inconsistencies between nova, cinder and the vcenter')
+gauge_big_vm_disable_drs = Gauge('vcenter_nanny_big_vm_disable_drs', 'number of big vms which got drs disabled')
 
 # find vmx and vmdk files with a uuid name pattern
 def _uuids(task):
@@ -508,6 +509,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     gauge_value_openstack_connection_problems = 0
     gauge_value_unknown_vcenter_templates = 0
     gauge_value_complete_orphans = 0
+    gauge_value_big_vm_disable_drs = 0
 
     # get all servers, volumes, snapshots and images from openstack to compare the resources we find on the vcenter against
     try:
@@ -717,7 +719,8 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         drs_vm_config_info.key = vm
         drs_vm_config_spec.info = drs_vm_config_info
         cluster_spec.drsVmConfigSpec = [drs_vm_config_spec]
-        cluster.ReconfigureCluster_Task(cluster_spec, not dry_run)
+        cluster.ReconfigureCluster_Task(cluster_spec, True)
+        gauge_value_big_vm_disable_drs += 1
 
     # iterate through all datastores in the vcenter
     for ds in dc.datastore:
@@ -1040,6 +1043,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     gauge_vcenter_task_problems.set(float(gauge_value_vcenter_task_problems))
     gauge_unknown_vcenter_templates.set(float(gauge_value_unknown_vcenter_templates))
     gauge_complete_orphans.set(float(gauge_value_complete_orphans))
+    gauge_big_vm_disable_drs.set(float(gauge_value_big_vm_disable_drs))
 
     # reset the dict of vms or files we plan to do something with for all machines we did not see or which disappeared
     reset_to_be_dict(vms_to_be_suspended, vms_seen)
