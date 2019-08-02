@@ -144,6 +144,9 @@ def parse_cmdline_args():
     parser.add_argument("--promquery",
                         default=query,
                         help="always sync resources (no interactive check)")
+    parser.add_argument("--dry-run",
+                       action="store_true",
+                       help='print only what would be done without actually doing it')
     return parser.parse_args()
 
 
@@ -164,14 +167,15 @@ def main():
     for share_id, v in ctl._shares.items():
         if v.get('manila_size') is not None and v.get('size') is not None:
             if v.get('manila_size') != v.get('size'):
-                if (datetime.datetime.utcnow() - v.get('updated_at')).total_seconds() > 600:
-                    print "share %s: manila share size (%d) does not \
-                           match share size (%d) on backend, fixing ..." % (\
-                           share_id, v.get('manila_size'), v.get('size'))
+                if (datetime.datetime.utcnow() - v.get('updated_at')).total_seconds() > 600 \
+                    and args.dry_run is False:
+                    print ("share %s: manila share size (%d) does not " + \
+                        "match share size (%d) on backend, fixing ...") % (\
+                        share_id, v.get('manila_size'), v.get('size'))
                     ctl.set_share_size(share_id, v.get('size'))
                 else:
-                    print "share %s: manila share size (%d) does not \
-                           match share size (%d) on backend" % (\
+                    print ("share %s: manila share size (%d) does not " + \
+                           "match share size (%d) on backend") % (\
                            share_id, v.get('manila_size'), v.get('size'))
 
 def test_resize():
@@ -185,7 +189,7 @@ def test_resize():
     manila_session, manila_metadata, manila_Base = makeConnection(db_url)
 
     ctl = SharesController(manila_session, manila_metadata, args.promhost, args.promquery)
-    ctl.set_share_size('1d807a4a-7c2c-468b-b4d7-5178d820257b', 2)
+    ctl.set_share_size('7eb50f3b-b5ea-47e2-a6e9-5934de57c777', 4)
 
 
 if __name__ == "__main__":
