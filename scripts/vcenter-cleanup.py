@@ -621,7 +621,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
             if k.get('config.hardware.memoryMB', 0) >= 1024 * 1024:
                 cluster = k['resourcePool'].owner
                 for drs in cluster.configuration.drsVmConfig:
-                    if str(drs.key) != str(k):
+                    if str(drs.key) != str(k['obj']):
                         continue
 
                     wanted_behavior = vim.cluster.DrsConfigInfo.DrsBehavior.partiallyAutomated
@@ -630,7 +630,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                  k['config.name'],
                                  k['config.hardware.memoryMB'] / (1024 * 1024))
                         big_vm_drs_action_necessary.append((k['obj'], cluster, drs))
-                        break
+                    break
                 else:
                     log.warn("- discovered new bigVM %s with %.02f TB Ram and no DRS override",
                              k['config.name'],
