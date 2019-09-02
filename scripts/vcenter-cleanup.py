@@ -1008,7 +1008,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                         # double check that the volume is really a ghost volume, i.e. even now not know to openstack
                                         try:
                                             # this will give a ResourceNotFound in case the volume does not exist in openstack
-                                            conn.block_storage.get_volume(item)
+                                            conn.block_storage.get_volume(ghost_volume_detach_candidate)
                                             log.warn("- looks like the volume with the uuid %s on instance %s has only been temporary assumed to be a ghost volume - not doing anything with it ...", ghost_volume_detach_candidate, item)
                                             gauge_value_ghost_volume_ignored += 1
                                         except ResourceNotFound:
