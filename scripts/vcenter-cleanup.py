@@ -997,7 +997,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                                 gauge_value_ghost_ports_detach_errors += 1
                                                 ghost_port_detached[item] = 0
                                         else:
-                                            log.warn("- looks like the port with the mac address %s on instance %s has only been temporary a ghost port - not doing anything with it ...", ghost_port_detach_candidate, item)
+                                            log.warn("- looks like the port with the mac address %s on instance %s has only been temporary assumed to be a ghost port - not doing anything with it ...", ghost_port_detach_candidate, item)
                                             gauge_value_ghost_ports_ignored += 1
                             # if this vm is a ghost volume detach candidate
                             elif ghost_volume_detach_candidates.get(item):
@@ -1005,14 +1005,22 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                 if len(ghost_volume_detach_candidates) <= detach_ghost_limit:
                                     # in case we have multiple ghost volumes
                                     for ghost_volume_detach_candidate in ghost_volume_detach_candidates.get(item):
-                                        if detach_ghost_volume(service_instance, vm, ghost_volume_detach_candidate):
-                                            gauge_value_ghost_volumes_detached += 1
-                                            # here we do not need to worry about multiple ghost volumes per instance
-                                            # as the instance is orphan or not, independent of the numer of ghost volumes
-                                            ghost_volume_detached[item] = 1
-                                        else:
-                                            gauge_value_ghost_volumes_detach_errors += 1
-                                            ghost_volume_detached[item] = 0
+                                        # double check that the volume is really a ghost volume, i.e. even now not know to openstack
+                                        try:
+                                            # this will give a ResourceNotFound in case the volume does not exist in openstack
+                                            conn.block_storage.get_volume(item)
+                                            log.warn("- looks like the volume with the uuid %s on instance %s has only been temporary assumed to be a ghost volume - not doing anything with it ...", ghost_volume_detach_candidate, item)
+                                            gauge_value_ghost_volume_ignored += 1
+                                        except ResourceNotFound:
+                                            conn.block_store.volumes(details=False, all_projects=1)
+                                            if detach_ghost_volume(service_instance, vm, ghost_volume_detach_candidate):
+                                                gauge_value_ghost_volumes_detached += 1
+                                                # here we do not need to worry about multiple ghost volumes per instance
+                                                # as the instance is orphan or not, independent of the numer of ghost volumes
+                                                ghost_volume_detached[item] = 1
+                                            else:
+                                                gauge_value_ghost_volumes_detach_errors += 1
+                                                ghost_volume_detached[item] = 0
         for i in ghost_port_detach_candidates:
             if not (ghost_port_detached.get(i) == 0 or ghost_port_detached.get(i) == 1):
                 # use len here to get the proper count in case we have multiple ports for one instance
