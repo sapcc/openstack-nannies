@@ -1011,7 +1011,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                             conn.block_storage.get_volume(ghost_volume_detach_candidate)
                                             log.warn("- looks like the volume with the uuid %s on instance %s has only been temporary assumed to be a ghost volume - not doing anything with it ...", ghost_volume_detach_candidate, item)
                                             gauge_value_ghost_volume_ignored += 1
-                                        except ResourceNotFound:
+                                        except exceptions.ResourceNotFound:
                                             conn.block_store.volumes(details=False, all_projects=1)
                                             if detach_ghost_volume(service_instance, vm, ghost_volume_detach_candidate):
                                                 gauge_value_ghost_volumes_detached += 1
