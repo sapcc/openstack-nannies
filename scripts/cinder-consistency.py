@@ -175,7 +175,7 @@ def get_wrong_volume_admin_metadata(meta):
     volume_admin_metadata_t = Table('volume_admin_metadata', meta, autoload=True)
     volumes_t = Table('volumes', meta, autoload=True)
     admin_metadata_join = volume_admin_metadata_t.join(volumes_t,volume_admin_metadata_t.c.volume_id == volumes_t.c.id)
-    wrong_volume_admin_metadata_q = select(columns=[volumes_t.c.id,volumes_t.c.deleted,volume_admin_metadata_t.c.id,volume_admin_metadata_t.c.deleted]).select_from(admin_metadata_join).where(and_(volumes_t.c.deleted == "true",volume_admin_metadata_t.c.deleted == "false"))
+    wrong_volume_admin_metadata_q = select(columns=[volumes_t.c.id,volumes_t.c.deleted,volume_admin_metadata_t.c.id,volume_admin_metadata_t.c.deleted]).select_from(admin_metadata_join).where(and_(volumes_t.c.deleted == True,volume_admin_metadata_t.c.deleted == False))
 
     # return a dict indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments
     for (volume_id, volume_deleted, volume_admin_metadata_id, volume_admin_metadata_deleted) in wrong_volume_admin_metadata_q.execute():
@@ -199,7 +199,7 @@ def get_wrong_volume_metadata(meta):
     volume_metadata_t = Table('volume_metadata', meta, autoload=True)
     volumes_t = Table('volumes', meta, autoload=True)
     metadata_join = volume_metadata_t.join(volumes_t,volume_metadata_t.c.volume_id == volumes_t.c.id)
-    wrong_volume_metadata_q = select(columns=[volumes_t.c.id,volumes_t.c.deleted,volume_metadata_t.c.id,volume_metadata_t.c.deleted]).select_from(metadata_join).where(and_(volumes_t.c.deleted == "true",volume_metadata_t.c.deleted == "false"))
+    wrong_volume_metadata_q = select(columns=[volumes_t.c.id,volumes_t.c.deleted,volume_metadata_t.c.id,volume_metadata_t.c.deleted]).select_from(metadata_join).where(and_(volumes_t.c.deleted == True,volume_metadata_t.c.deleted == False))
 
     # return a dict indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments
     for (volume_id, volume_deleted, volume_metadata_id, volume_metadata_deleted) in wrong_volume_metadata_q.execute():
@@ -223,7 +223,7 @@ def get_wrong_volume_attachments(meta):
     volume_attachment_t = Table('volume_attachment', meta, autoload=True)
     volumes_t = Table('volumes', meta, autoload=True)
     attachment_join = volume_attachment_t.join(volumes_t,volume_attachment_t.c.volume_id == volumes_t.c.id)
-    wrong_volume_attachment_q = select(columns=[volumes_t.c.id,volumes_t.c.deleted,volume_attachment_t.c.id,volume_attachment_t.c.deleted]).select_from(attachment_join).where(and_(volumes_t.c.deleted == "true",volume_attachment_t.c.deleted == "false"))
+    wrong_volume_attachment_q = select(columns=[volumes_t.c.id,volumes_t.c.deleted,volume_attachment_t.c.id,volume_attachment_t.c.deleted]).select_from(attachment_join).where(and_(volumes_t.c.deleted == True,volume_attachment_t.c.deleted == False))
 
     # return a dict indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments
     for (volume_id, volume_deleted, volume_attachment_id, volume_attachment_deleted) in wrong_volume_attachment_q.execute():
@@ -277,7 +277,7 @@ def get_deleted_services_still_used_in_volumes(meta):
     services_t = Table('services', meta, autoload=True)
     volumes_t = Table('volumes', meta, autoload=True)
     services_volumes_join = services_t.join(volumes_t,services_t.c.uuid == volumes_t.c.service_uuid)
-    deleted_services_still_used_in_volumes_q = select(columns=[services_t.c.uuid,services_t.c.deleted,volumes_t.c.id,volumes_t.c.deleted]).select_from(services_volumes_join).where(and_(volumes_t.c.deleted == "false",services_t.c.deleted == "true"))
+    deleted_services_still_used_in_volumes_q = select(columns=[services_t.c.uuid,services_t.c.deleted,volumes_t.c.id,volumes_t.c.deleted]).select_from(services_volumes_join).where(and_(volumes_t.c.deleted == False,services_t.c.deleted == True))
 
     # return a dict indexed by service_uuid and with the value volume_id for deleted but still referenced services
     for (service_uuid, service_deleted, volume_id, volume_deleted) in deleted_services_still_used_in_volumes_q.execute():
