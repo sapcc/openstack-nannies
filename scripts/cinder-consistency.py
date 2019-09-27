@@ -18,23 +18,16 @@
 # this script checks for volume attachments of already deleted volumes in the cinder db
 
 import argparse
-import sys
 import ConfigParser
-import logging
 import datetime
+import logging
 import os
+import sys
 
-from openstack import connection, exceptions, utils
+from openstack import connection, exceptions
 
-from sqlalchemy import and_
-from sqlalchemy import func
-from sqlalchemy import MetaData
-from sqlalchemy import select
-from sqlalchemy import join
-from sqlalchemy import Table
-from sqlalchemy import create_engine
+from sqlalchemy import and_, MetaData, select, Table, create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.sql.expression import false
 from sqlalchemy.ext.declarative import declarative_base
 
 log = logging.getLogger(__name__)
