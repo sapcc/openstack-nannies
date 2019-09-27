@@ -30,8 +30,10 @@ from sqlalchemy import and_, MetaData, select, Table, create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
+
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
+
 
 # get all instances from nova
 def get_nova_instances(conn):
@@ -61,6 +63,7 @@ def get_nova_instances(conn):
 
     return nova_instances
 
+
 # get all volume attachments for volumes
 def get_orphan_volume_attachments(meta):
 
@@ -74,6 +77,7 @@ def get_orphan_volume_attachments(meta):
 
     return orphan_volume_attachments
 
+
 # get all the volume attachments in the cinder db for already deleted instances in nova
 def get_wrong_orphan_volume_attachments(nova_instances, orphan_volume_attachments):
 
@@ -84,6 +88,7 @@ def get_wrong_orphan_volume_attachments(nova_instances, orphan_volume_attachment
             wrong_orphan_volume_attachments[orphan_volume_attachment_id] = orphan_volume_attachments[orphan_volume_attachment_id]
 
     return wrong_orphan_volume_attachments
+
 
 # delete volume attachments in the cinder db for already deleted instances in nova
 def fix_wrong_orphan_volume_attachments(meta, wrong_orphan_volume_attachments, fix_limit):
@@ -101,6 +106,7 @@ def fix_wrong_orphan_volume_attachments(meta, wrong_orphan_volume_attachments, f
     else:
         log.warn("- PLEASE CHECK MANUALLY - too many (more than %s) wrong orphan volume attachments - denying to fix them automatically", str(fix_limit))
 
+
 # get all the volumes in state "error_deleting"
 def get_error_deleting_volumes(meta):
 
@@ -114,6 +120,7 @@ def get_error_deleting_volumes(meta):
         error_deleting_volumes.append(i[0])
 
     return error_deleting_volumes
+
 
 # delete all the volumes in state "error_deleting"
 def fix_error_deleting_volumes(meta, error_deleting_volumes):
@@ -137,6 +144,7 @@ def fix_error_deleting_volumes(meta, error_deleting_volumes):
         delete_volume_q = volumes_t.delete().where(volumes_t.c.id == error_deleting_volumes_id)
         delete_volume_q.execute()
 
+
 # get all the snapshots in state "error_deleting"
 def get_error_deleting_snapshots(meta):
 
@@ -151,6 +159,7 @@ def get_error_deleting_snapshots(meta):
 
     return error_deleting_snapshots
 
+
 # delete all the snapshots in state "error_deleting"
 def fix_error_deleting_snapshots(meta, error_deleting_snapshots):
 
@@ -160,6 +169,7 @@ def fix_error_deleting_snapshots(meta, error_deleting_snapshots):
         log.info("-- action: deleting snapshot id: %s", error_deleting_snapshots_id)
         delete_snapshot_q = snapshots_t.delete().where(snapshots_t.c.id == error_deleting_snapshots_id)
         delete_snapshot_q.execute()
+
 
 # get all the rows with a volume_admin_metadata still defined where the corresponding volume is already deleted
 def get_wrong_volume_admin_metadata(meta):
@@ -175,6 +185,7 @@ def get_wrong_volume_admin_metadata(meta):
         wrong_admin_metadata[volume_admin_metadata_id] = volume_id
     return wrong_admin_metadata
 
+
 # delete volume_admin_metadata still defined where the corresponding volume is already deleted
 def fix_wrong_volume_admin_metadata(meta, wrong_admin_metadata):
 
@@ -184,6 +195,7 @@ def fix_wrong_volume_admin_metadata(meta, wrong_admin_metadata):
         log.info("-- action: deleting volume_admin_metadata id: %s", volume_admin_metadata_id)
         delete_volume_admin_metadata_q = volume_admin_metadata_t.delete().where(volume_admin_metadata_t.c.id == volume_admin_metadata_id)
         delete_volume_admin_metadata_q.execute()
+
 
 # get all the rows with a volume_metadata still defined where the corresponding volume is already deleted
 def get_wrong_volume_metadata(meta):
@@ -199,6 +211,7 @@ def get_wrong_volume_metadata(meta):
         wrong_metadata[volume_metadata_id] = volume_id
     return wrong_metadata
 
+
 # delete volume_metadata still defined where the corresponding volume is already deleted
 def fix_wrong_volume_metadata(meta, wrong_metadata):
 
@@ -208,6 +221,7 @@ def fix_wrong_volume_metadata(meta, wrong_metadata):
         log.info("-- action: deleting volume_metadata id: %s", volume_metadata_id)
         delete_volume_metadata_q = volume_metadata_t.delete().where(volume_metadata_t.c.id == volume_metadata_id)
         delete_volume_metadata_q.execute()
+
 
 # get all the rows with a volume attachment still defined where the corresponding volume is already deleted
 def get_wrong_volume_attachments(meta):
@@ -222,6 +236,7 @@ def get_wrong_volume_attachments(meta):
     for (volume_id, volume_deleted, volume_attachment_id, volume_attachment_deleted) in wrong_volume_attachment_q.execute():
         wrong_attachments[volume_attachment_id] = volume_id
     return wrong_attachments
+
 
 # delete volume attachment still defined where the corresponding volume is already deleted
 def fix_wrong_volume_attachments(meta, wrong_attachments, fix_limit):
@@ -238,6 +253,7 @@ def fix_wrong_volume_attachments(meta, wrong_attachments, fix_limit):
     else:
         log.warn("- PLEASE CHECK MANUALLY - too many (more than %s) wrong volume attachments - denying to fix them automatically", str(fix_limit))
 
+
 # get all the rows, which have the deleted flag set, but not the delete_at column
 def get_missing_deleted_at(meta, table_names):
 
@@ -251,6 +267,7 @@ def get_missing_deleted_at(meta, table_names):
             missing_deleted_at[row.id] = t
     return missing_deleted_at
 
+
 # set deleted_at to updated_at value if not set for marked as deleted rows
 def fix_missing_deleted_at(meta, table_names):
     now = datetime.datetime.utcnow()
@@ -262,6 +279,7 @@ def fix_missing_deleted_at(meta, table_names):
             and_(a_table_t.c.deleted == True, a_atable_t.c.deleted_at == None)).values(
             deleted_at=now)
         a_table_set_deleted_at_q.execute()
+
 
 # get all the rows with a volume_admin_metadata still defined where the corresponding volume is already deleted
 def get_deleted_services_still_used_in_volumes(meta):
@@ -277,6 +295,7 @@ def get_deleted_services_still_used_in_volumes(meta):
         deleted_services_still_used_in_volumes[service_uuid] = volume_id
     return deleted_services_still_used_in_volumes
 
+
 # delete volume_admin_metadata still defined where the corresponding volume is already deleted
 def fix_deleted_services_still_used_in_volumes(meta, deleted_services_still_used_in_volumes):
 
@@ -286,6 +305,7 @@ def fix_deleted_services_still_used_in_volumes(meta, deleted_services_still_used
         log.info("-- action: undeleting service uuid: %s", deleted_services_still_used_in_volumes_id)
         undelete_services_q = services_t.update().where(services_t.c.uuid == deleted_services_still_used_in_volumes_id).values(deleted=False,deleted_at=None)
         undelete_services_q.execute()
+
 
 # establish an openstack connection
 def makeOsConnection():
@@ -304,9 +324,9 @@ def makeOsConnection():
 
     return conn
 
+
 # establish a database connection and return the handle
 def makeConnection(db_url):
-
     engine = create_engine(db_url)
     engine.connect()
     Session = sessionmaker(bind=engine)
@@ -316,9 +336,9 @@ def makeConnection(db_url):
     Base = declarative_base()
     return thisSession, metadata, Base
 
+
 # return the database connection string from the config file
 def get_db_url(config_file):
-
     parser = ConfigParser.SafeConfigParser()
     try:
         parser.read(config_file)
@@ -327,6 +347,7 @@ def get_db_url(config_file):
         log.info("ERROR: Check Cinder configuration file.")
         sys.exit(2)
     return db_url
+
 
 # cmdline handling
 def parse_cmdline_args():
@@ -341,6 +362,7 @@ def parse_cmdline_args():
                        default=25,
                        help='maximum number of inconsistencies to fix automatically - if there are more, automatic fixing is denied')
     return parser.parse_args()
+
 
 def main():
     try:
@@ -463,6 +485,7 @@ def main():
             fix_deleted_services_still_used_in_volumes(cinder_metadata, deleted_services_still_used_in_volumes)
     else:
         log.info("- deleted services still used in volumes")
+
 
 if __name__ == "__main__":
     main()
