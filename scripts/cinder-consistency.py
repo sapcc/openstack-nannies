@@ -284,7 +284,7 @@ def fix_missing_deleted_at(meta, table_names):
 
         log.info("- action: fixing columns with missing deleted_at times in the %s table", t)
         a_table_set_deleted_at_q = a_table_t.update().where(
-            and_(a_table_t.c.deleted == True, a_atable_t.c.deleted_at == None)).values(
+            and_(a_table_t.c.deleted == True, a_table_t.c.deleted_at == None)).values(
             deleted_at=now)
         a_table_set_deleted_at_q.execute()
 
