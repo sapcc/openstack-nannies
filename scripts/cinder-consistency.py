@@ -69,7 +69,8 @@ def get_orphan_volume_attachments(meta):
 
     orphan_volume_attachments = {}
     orphan_volume_attachment_t = Table('volume_attachment', meta, autoload=True)
-    orphan_volume_attachment_q = select(columns=[orphan_volume_attachment_t.c.id, orphan_volume_attachment_t.c.instance_uuid],whereclause=and_(orphan_volume_attachment_t.c.deleted == False))
+    columns = [orphan_volume_attachment_t.c.id, orphan_volume_attachment_t.c.instance_uuid]
+    orphan_volume_attachment_q = select(columns=columns, whereclause=and_(orphan_volume_attachment_t.c.deleted == False))
 
     # return a dict indexed by orphan_volume_attachment_id and with the value nova_instance_uuid for non deleted orphan_volume_attachments
     for (orphan_volume_attachment_id, nova_instance_uuid) in orphan_volume_attachment_q.execute():
@@ -100,7 +101,8 @@ def fix_wrong_orphan_volume_attachments(meta, wrong_orphan_volume_attachments, f
         for orphan_volume_attachment_id in wrong_orphan_volume_attachments:
             log.info ("-- action: deleting orphan volume attachment id: %s", orphan_volume_attachment_id)
             now = datetime.datetime.utcnow()
-            delete_orphan_volume_attachment_q = orphan_volume_attachment_t.update().where(orphan_volume_attachment_t.c.id == orphan_volume_attachment_id).values(updated_at=now, deleted_at=now, deleted=True)
+            delete_orphan_volume_attachment_q = orphan_volume_attachment_t.update().\
+                where(orphan_volume_attachment_t.c.id == orphan_volume_attachment_id).values(updated_at=now, deleted_at=now, deleted=True)
             delete_orphan_volume_attachment_q.execute()
 
     else:
@@ -178,7 +180,9 @@ def get_wrong_volume_admin_metadata(meta):
     volume_admin_metadata_t = Table('volume_admin_metadata', meta, autoload=True)
     volumes_t = Table('volumes', meta, autoload=True)
     admin_metadata_join = volume_admin_metadata_t.join(volumes_t,volume_admin_metadata_t.c.volume_id == volumes_t.c.id)
-    wrong_volume_admin_metadata_q = select(columns=[volumes_t.c.id,volumes_t.c.deleted,volume_admin_metadata_t.c.id,volume_admin_metadata_t.c.deleted]).select_from(admin_metadata_join).where(and_(volumes_t.c.deleted == True,volume_admin_metadata_t.c.deleted == False))
+    columns = [volumes_t.c.id, volumes_t.c.deleted, volume_admin_metadata_t.c.id, volume_admin_metadata_t.c.deleted]
+    wrong_volume_admin_metadata_q = select(columns=columns).select_from(admin_metadata_join).\
+        where(and_(volumes_t.c.deleted == True, volume_admin_metadata_t.c.deleted == False))
 
     # return a dict indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments
     for (volume_id, volume_deleted, volume_admin_metadata_id, volume_admin_metadata_deleted) in wrong_volume_admin_metadata_q.execute():
@@ -204,7 +208,9 @@ def get_wrong_volume_metadata(meta):
     volume_metadata_t = Table('volume_metadata', meta, autoload=True)
     volumes_t = Table('volumes', meta, autoload=True)
     metadata_join = volume_metadata_t.join(volumes_t,volume_metadata_t.c.volume_id == volumes_t.c.id)
-    wrong_volume_metadata_q = select(columns=[volumes_t.c.id,volumes_t.c.deleted,volume_metadata_t.c.id,volume_metadata_t.c.deleted]).select_from(metadata_join).where(and_(volumes_t.c.deleted == True,volume_metadata_t.c.deleted == False))
+    columns = [volumes_t.c.id, volumes_t.c.deleted, volume_metadata_t.c.id, volume_metadata_t.c.deleted]
+    wrong_volume_metadata_q = select(columns=columns).select_from(metadata_join).\
+        where(and_(volumes_t.c.deleted == True, volume_metadata_t.c.deleted == False))
 
     # return a dict indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments
     for (volume_id, volume_deleted, volume_metadata_id, volume_metadata_deleted) in wrong_volume_metadata_q.execute():
@@ -230,7 +236,9 @@ def get_wrong_volume_attachments(meta):
     volume_attachment_t = Table('volume_attachment', meta, autoload=True)
     volumes_t = Table('volumes', meta, autoload=True)
     attachment_join = volume_attachment_t.join(volumes_t,volume_attachment_t.c.volume_id == volumes_t.c.id)
-    wrong_volume_attachment_q = select(columns=[volumes_t.c.id,volumes_t.c.deleted,volume_attachment_t.c.id,volume_attachment_t.c.deleted]).select_from(attachment_join).where(and_(volumes_t.c.deleted == True,volume_attachment_t.c.deleted == False))
+    columns = [volumes_t.c.id, volumes_t.c.deleted, volume_attachment_t.c.id, volume_attachment_t.c.deleted]
+    wrong_volume_attachment_q = select(columns=columns).select_from(attachment_join).\
+        where(and_(volumes_t.c.deleted == True, volume_attachment_t.c.deleted == False))
 
     # return a dict indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments
     for (volume_id, volume_deleted, volume_attachment_id, volume_attachment_deleted) in wrong_volume_attachment_q.execute():
@@ -288,7 +296,9 @@ def get_deleted_services_still_used_in_volumes(meta):
     services_t = Table('services', meta, autoload=True)
     volumes_t = Table('volumes', meta, autoload=True)
     services_volumes_join = services_t.join(volumes_t,services_t.c.uuid == volumes_t.c.service_uuid)
-    deleted_services_still_used_in_volumes_q = select(columns=[services_t.c.uuid,services_t.c.deleted,volumes_t.c.id,volumes_t.c.deleted]).select_from(services_volumes_join).where(and_(volumes_t.c.deleted == False,services_t.c.deleted == True))
+    columns = [services_t.c.uuid, services_t.c.deleted, volumes_t.c.id, volumes_t.c.deleted]
+    deleted_services_still_used_in_volumes_q = select(columns=columns).select_from(services_volumes_join).\
+        where(and_(volumes_t.c.deleted == False, services_t.c.deleted == True))
 
     # return a dict indexed by service_uuid and with the value volume_id for deleted but still referenced services
     for (service_uuid, service_deleted, volume_id, volume_deleted) in deleted_services_still_used_in_volumes_q.execute():
