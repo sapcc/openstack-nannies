@@ -18,27 +18,22 @@
 # this script checks for volume attachments of already deleted volumes in the cinder db
 
 import argparse
-import sys
 import ConfigParser
-import logging
 import datetime
+import logging
 import os
+import sys
 
-from openstack import connection, exceptions, utils
+from openstack import connection, exceptions
 
-from sqlalchemy import and_
-from sqlalchemy import func
-from sqlalchemy import MetaData
-from sqlalchemy import select
-from sqlalchemy import join
-from sqlalchemy import Table
-from sqlalchemy import create_engine
+from sqlalchemy import and_, MetaData, select, Table, create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.sql.expression import false
 from sqlalchemy.ext.declarative import declarative_base
+
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
+
 
 # get all instances from nova
 def get_nova_instances(conn):
@@ -68,18 +63,21 @@ def get_nova_instances(conn):
 
     return nova_instances
 
+
 # get all volume attachments for volumes
 def get_orphan_volume_attachments(meta):
 
     orphan_volume_attachments = {}
     orphan_volume_attachment_t = Table('volume_attachment', meta, autoload=True)
-    orphan_volume_attachment_q = select(columns=[orphan_volume_attachment_t.c.id, orphan_volume_attachment_t.c.instance_uuid],whereclause=and_(orphan_volume_attachment_t.c.deleted == False))
+    columns = [orphan_volume_attachment_t.c.id, orphan_volume_attachment_t.c.instance_uuid]
+    orphan_volume_attachment_q = select(columns=columns, whereclause=and_(orphan_volume_attachment_t.c.deleted == False))
 
     # return a dict indexed by orphan_volume_attachment_id and with the value nova_instance_uuid for non deleted orphan_volume_attachments
     for (orphan_volume_attachment_id, nova_instance_uuid) in orphan_volume_attachment_q.execute():
         orphan_volume_attachments[orphan_volume_attachment_id] = nova_instance_uuid
 
     return orphan_volume_attachments
+
 
 # get all the volume attachments in the cinder db for already deleted instances in nova
 def get_wrong_orphan_volume_attachments(nova_instances, orphan_volume_attachments):
@@ -92,6 +90,7 @@ def get_wrong_orphan_volume_attachments(nova_instances, orphan_volume_attachment
 
     return wrong_orphan_volume_attachments
 
+
 # delete volume attachments in the cinder db for already deleted instances in nova
 def fix_wrong_orphan_volume_attachments(meta, wrong_orphan_volume_attachments, fix_limit):
 
@@ -102,11 +101,13 @@ def fix_wrong_orphan_volume_attachments(meta, wrong_orphan_volume_attachments, f
         for orphan_volume_attachment_id in wrong_orphan_volume_attachments:
             log.info ("-- action: deleting orphan volume attachment id: %s", orphan_volume_attachment_id)
             now = datetime.datetime.utcnow()
-            delete_orphan_volume_attachment_q = orphan_volume_attachment_t.update().where(orphan_volume_attachment_t.c.id == orphan_volume_attachment_id).values(updated_at=now, deleted_at=now, deleted=True)
+            delete_orphan_volume_attachment_q = orphan_volume_attachment_t.update().\
+                where(orphan_volume_attachment_t.c.id == orphan_volume_attachment_id).values(updated_at=now, deleted_at=now, deleted=True)
             delete_orphan_volume_attachment_q.execute()
 
     else:
         log.warn("- PLEASE CHECK MANUALLY - too many (more than %s) wrong orphan volume attachments - denying to fix them automatically", str(fix_limit))
+
 
 # get all the volumes in state "error_deleting"
 def get_error_deleting_volumes(meta):
@@ -121,6 +122,7 @@ def get_error_deleting_volumes(meta):
         error_deleting_volumes.append(i[0])
 
     return error_deleting_volumes
+
 
 # delete all the volumes in state "error_deleting"
 def fix_error_deleting_volumes(meta, error_deleting_volumes):
@@ -144,6 +146,7 @@ def fix_error_deleting_volumes(meta, error_deleting_volumes):
         delete_volume_q = volumes_t.delete().where(volumes_t.c.id == error_deleting_volumes_id)
         delete_volume_q.execute()
 
+
 # get all the snapshots in state "error_deleting"
 def get_error_deleting_snapshots(meta):
 
@@ -158,6 +161,7 @@ def get_error_deleting_snapshots(meta):
 
     return error_deleting_snapshots
 
+
 # delete all the snapshots in state "error_deleting"
 def fix_error_deleting_snapshots(meta, error_deleting_snapshots):
 
@@ -168,6 +172,7 @@ def fix_error_deleting_snapshots(meta, error_deleting_snapshots):
         delete_snapshot_q = snapshots_t.delete().where(snapshots_t.c.id == error_deleting_snapshots_id)
         delete_snapshot_q.execute()
 
+
 # get all the rows with a volume_admin_metadata still defined where the corresponding volume is already deleted
 def get_wrong_volume_admin_metadata(meta):
 
@@ -175,12 +180,15 @@ def get_wrong_volume_admin_metadata(meta):
     volume_admin_metadata_t = Table('volume_admin_metadata', meta, autoload=True)
     volumes_t = Table('volumes', meta, autoload=True)
     admin_metadata_join = volume_admin_metadata_t.join(volumes_t,volume_admin_metadata_t.c.volume_id == volumes_t.c.id)
-    wrong_volume_admin_metadata_q = select(columns=[volumes_t.c.id,volumes_t.c.deleted,volume_admin_metadata_t.c.id,volume_admin_metadata_t.c.deleted]).select_from(admin_metadata_join).where(and_(volumes_t.c.deleted == True,volume_admin_metadata_t.c.deleted == False))
+    columns = [volumes_t.c.id, volumes_t.c.deleted, volume_admin_metadata_t.c.id, volume_admin_metadata_t.c.deleted]
+    wrong_volume_admin_metadata_q = select(columns=columns).select_from(admin_metadata_join).\
+        where(and_(volumes_t.c.deleted == True, volume_admin_metadata_t.c.deleted == False))
 
     # return a dict indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments
     for (volume_id, volume_deleted, volume_admin_metadata_id, volume_admin_metadata_deleted) in wrong_volume_admin_metadata_q.execute():
         wrong_admin_metadata[volume_admin_metadata_id] = volume_id
     return wrong_admin_metadata
+
 
 # delete volume_admin_metadata still defined where the corresponding volume is already deleted
 def fix_wrong_volume_admin_metadata(meta, wrong_admin_metadata):
@@ -192,6 +200,7 @@ def fix_wrong_volume_admin_metadata(meta, wrong_admin_metadata):
         delete_volume_admin_metadata_q = volume_admin_metadata_t.delete().where(volume_admin_metadata_t.c.id == volume_admin_metadata_id)
         delete_volume_admin_metadata_q.execute()
 
+
 # get all the rows with a volume_metadata still defined where the corresponding volume is already deleted
 def get_wrong_volume_metadata(meta):
 
@@ -199,12 +208,15 @@ def get_wrong_volume_metadata(meta):
     volume_metadata_t = Table('volume_metadata', meta, autoload=True)
     volumes_t = Table('volumes', meta, autoload=True)
     metadata_join = volume_metadata_t.join(volumes_t,volume_metadata_t.c.volume_id == volumes_t.c.id)
-    wrong_volume_metadata_q = select(columns=[volumes_t.c.id,volumes_t.c.deleted,volume_metadata_t.c.id,volume_metadata_t.c.deleted]).select_from(metadata_join).where(and_(volumes_t.c.deleted == True,volume_metadata_t.c.deleted == False))
+    columns = [volumes_t.c.id, volumes_t.c.deleted, volume_metadata_t.c.id, volume_metadata_t.c.deleted]
+    wrong_volume_metadata_q = select(columns=columns).select_from(metadata_join).\
+        where(and_(volumes_t.c.deleted == True, volume_metadata_t.c.deleted == False))
 
     # return a dict indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments
     for (volume_id, volume_deleted, volume_metadata_id, volume_metadata_deleted) in wrong_volume_metadata_q.execute():
         wrong_metadata[volume_metadata_id] = volume_id
     return wrong_metadata
+
 
 # delete volume_metadata still defined where the corresponding volume is already deleted
 def fix_wrong_volume_metadata(meta, wrong_metadata):
@@ -216,6 +228,7 @@ def fix_wrong_volume_metadata(meta, wrong_metadata):
         delete_volume_metadata_q = volume_metadata_t.delete().where(volume_metadata_t.c.id == volume_metadata_id)
         delete_volume_metadata_q.execute()
 
+
 # get all the rows with a volume attachment still defined where the corresponding volume is already deleted
 def get_wrong_volume_attachments(meta):
 
@@ -223,12 +236,15 @@ def get_wrong_volume_attachments(meta):
     volume_attachment_t = Table('volume_attachment', meta, autoload=True)
     volumes_t = Table('volumes', meta, autoload=True)
     attachment_join = volume_attachment_t.join(volumes_t,volume_attachment_t.c.volume_id == volumes_t.c.id)
-    wrong_volume_attachment_q = select(columns=[volumes_t.c.id,volumes_t.c.deleted,volume_attachment_t.c.id,volume_attachment_t.c.deleted]).select_from(attachment_join).where(and_(volumes_t.c.deleted == True,volume_attachment_t.c.deleted == False))
+    columns = [volumes_t.c.id, volumes_t.c.deleted, volume_attachment_t.c.id, volume_attachment_t.c.deleted]
+    wrong_volume_attachment_q = select(columns=columns).select_from(attachment_join).\
+        where(and_(volumes_t.c.deleted == True, volume_attachment_t.c.deleted == False))
 
     # return a dict indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments
     for (volume_id, volume_deleted, volume_attachment_id, volume_attachment_deleted) in wrong_volume_attachment_q.execute():
         wrong_attachments[volume_attachment_id] = volume_id
     return wrong_attachments
+
 
 # delete volume attachment still defined where the corresponding volume is already deleted
 def fix_wrong_volume_attachments(meta, wrong_attachments, fix_limit):
@@ -245,6 +261,7 @@ def fix_wrong_volume_attachments(meta, wrong_attachments, fix_limit):
     else:
         log.warn("- PLEASE CHECK MANUALLY - too many (more than %s) wrong volume attachments - denying to fix them automatically", str(fix_limit))
 
+
 # get all the rows, which have the deleted flag set, but not the delete_at column
 def get_missing_deleted_at(meta, table_names):
 
@@ -258,6 +275,7 @@ def get_missing_deleted_at(meta, table_names):
             missing_deleted_at[row.id] = t
     return missing_deleted_at
 
+
 # set deleted_at to updated_at value if not set for marked as deleted rows
 def fix_missing_deleted_at(meta, table_names):
     now = datetime.datetime.utcnow()
@@ -266,9 +284,10 @@ def fix_missing_deleted_at(meta, table_names):
 
         log.info("- action: fixing columns with missing deleted_at times in the %s table", t)
         a_table_set_deleted_at_q = a_table_t.update().where(
-            and_(a_table_t.c.deleted == True, a_atable_t.c.deleted_at == None)).values(
+            and_(a_table_t.c.deleted == True, a_table_t.c.deleted_at == None)).values(
             deleted_at=now)
         a_table_set_deleted_at_q.execute()
+
 
 # get all the rows with a volume_admin_metadata still defined where the corresponding volume is already deleted
 def get_deleted_services_still_used_in_volumes(meta):
@@ -277,12 +296,15 @@ def get_deleted_services_still_used_in_volumes(meta):
     services_t = Table('services', meta, autoload=True)
     volumes_t = Table('volumes', meta, autoload=True)
     services_volumes_join = services_t.join(volumes_t,services_t.c.uuid == volumes_t.c.service_uuid)
-    deleted_services_still_used_in_volumes_q = select(columns=[services_t.c.uuid,services_t.c.deleted,volumes_t.c.id,volumes_t.c.deleted]).select_from(services_volumes_join).where(and_(volumes_t.c.deleted == False,services_t.c.deleted == True))
+    columns = [services_t.c.uuid, services_t.c.deleted, volumes_t.c.id, volumes_t.c.deleted]
+    deleted_services_still_used_in_volumes_q = select(columns=columns).select_from(services_volumes_join).\
+        where(and_(volumes_t.c.deleted == False, services_t.c.deleted == True))
 
     # return a dict indexed by service_uuid and with the value volume_id for deleted but still referenced services
     for (service_uuid, service_deleted, volume_id, volume_deleted) in deleted_services_still_used_in_volumes_q.execute():
         deleted_services_still_used_in_volumes[service_uuid] = volume_id
     return deleted_services_still_used_in_volumes
+
 
 # delete volume_admin_metadata still defined where the corresponding volume is already deleted
 def fix_deleted_services_still_used_in_volumes(meta, deleted_services_still_used_in_volumes):
@@ -293,6 +315,7 @@ def fix_deleted_services_still_used_in_volumes(meta, deleted_services_still_used
         log.info("-- action: undeleting service uuid: %s", deleted_services_still_used_in_volumes_id)
         undelete_services_q = services_t.update().where(services_t.c.uuid == deleted_services_still_used_in_volumes_id).values(deleted=False,deleted_at=None)
         undelete_services_q.execute()
+
 
 # establish an openstack connection
 def makeOsConnection():
@@ -311,9 +334,9 @@ def makeOsConnection():
 
     return conn
 
+
 # establish a database connection and return the handle
 def makeConnection(db_url):
-
     engine = create_engine(db_url)
     engine.connect()
     Session = sessionmaker(bind=engine)
@@ -323,9 +346,9 @@ def makeConnection(db_url):
     Base = declarative_base()
     return thisSession, metadata, Base
 
+
 # return the database connection string from the config file
 def get_db_url(config_file):
-
     parser = ConfigParser.SafeConfigParser()
     try:
         parser.read(config_file)
@@ -334,6 +357,7 @@ def get_db_url(config_file):
         log.info("ERROR: Check Cinder configuration file.")
         sys.exit(2)
     return db_url
+
 
 # cmdline handling
 def parse_cmdline_args():
@@ -348,6 +372,7 @@ def parse_cmdline_args():
                        default=25,
                        help='maximum number of inconsistencies to fix automatically - if there are more, automatic fixing is denied')
     return parser.parse_args()
+
 
 def main():
     try:
@@ -470,6 +495,7 @@ def main():
             fix_deleted_services_still_used_in_volumes(cinder_metadata, deleted_services_still_used_in_volumes)
     else:
         log.info("- deleted services still used in volumes")
+
 
 if __name__ == "__main__":
     main()
