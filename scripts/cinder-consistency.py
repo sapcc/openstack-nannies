@@ -133,23 +133,20 @@ def fix_error_deleting_volumes(meta, error_deleting_volumes):
     volume_admin_metadata_t = Table('volume_admin_metadata', meta, autoload=True)
 
     for error_deleting_volumes_id in error_deleting_volumes:
-        log.info("-- action: deleting possible volume admin metadata for volume id: %s", error_deleting_volumes_id)
         now = datetime.datetime.utcnow()
+        log.info("-- action: deleting possible volume admin metadata for volume id: %s", error_deleting_volumes_id)
         delete_volume_admin_metadata_q = volume_admin_metadata_t.update().\
             where(volume_admin_metadata_t.c.volume_id == error_deleting_volumes_id).values(updated_at=now, deleted_at=now, deleted=1)
         delete_volume_admin_metadata_q.execute()
         log.info("-- action: deleting possible volume metadata for volume id: %s", error_deleting_volumes_id)
-        now = datetime.datetime.utcnow()
         delete_volume_metadata_q = volume_metadata_t.update().\
             where(volume_metadata_t.c.volume_id == error_deleting_volumes_id).values(updated_at=now, deleted_at=now, deleted=1)
         delete_volume_metadata_q.execute()
         log.info("-- action: deleting possible volume attachments for volume id: %s", error_deleting_volumes_id)
-        now = datetime.datetime.utcnow()
         delete_volume_attachment_q = volume_attachment_t.update().\
             where(volume_attachment_t.c.volume_id == error_deleting_volumes_id).values(updated_at=now, deleted_at=now, deleted=1)
         delete_volume_attachment_q.execute()
         log.info("-- action: deleting volume id: %s", error_deleting_volumes_id)
-        now = datetime.datetime.utcnow()
         delete_volume_q = volumes_t.update().\
             where(volumes_t.c.id == error_deleting_volumes_id).values(updated_at=now, deleted_at=now, deleted=1)
         delete_volume_q.execute()
@@ -294,11 +291,11 @@ def get_missing_deleted_at(meta, table_names):
 
 # set deleted_at to updated_at value if not set for marked as deleted rows
 def fix_missing_deleted_at(meta, table_names):
+    now = datetime.datetime.utcnow()
     for t in table_names:
         a_table_t = Table(t, meta, autoload=True)
 
         log.info("- action: fixing columns with missing deleted_at times in the %s table", t)
-        now = datetime.datetime.utcnow()
         a_table_set_deleted_at_q = a_table_t.update().where(
             and_(a_table_t.c.deleted == 1, a_table_t.c.deleted_at == None)).values(
             deleted_at=now)
