@@ -133,17 +133,22 @@ def fix_error_deleting_volumes(meta, error_deleting_volumes):
     volume_admin_metadata_t = Table('volume_admin_metadata', meta, autoload=True)
 
     for error_deleting_volumes_id in error_deleting_volumes:
+        now = datetime.datetime.utcnow()
         log.info("-- action: deleting possible volume admin metadata for volume id: %s", error_deleting_volumes_id)
-        delete_volume_admin_metadata_q = volume_admin_metadata_t.delete().where(volume_admin_metadata_t.c.volume_id == error_deleting_volumes_id)
+        delete_volume_admin_metadata_q = volume_admin_metadata_t.update().\
+            where(volume_admin_metadata_t.c.volume_id == error_deleting_volumes_id).values(updated_at=now, deleted_at=now, deleted=1)
         delete_volume_admin_metadata_q.execute()
         log.info("-- action: deleting possible volume metadata for volume id: %s", error_deleting_volumes_id)
-        delete_volume_metadata_q = volume_metadata_t.delete().where(volume_metadata_t.c.volume_id == error_deleting_volumes_id)
+        delete_volume_metadata_q = volume_metadata_t.update().\
+            where(volume_metadata_t.c.volume_id == error_deleting_volumes_id).values(updated_at=now, deleted_at=now, deleted=1)
         delete_volume_metadata_q.execute()
         log.info("-- action: deleting possible volume attachments for volume id: %s", error_deleting_volumes_id)
-        delete_volume_attachment_q = volume_attachment_t.delete().where(volume_attachment_t.c.volume_id == error_deleting_volumes_id)
+        delete_volume_attachment_q = volume_attachment_t.update().\
+            where(volume_attachment_t.c.volume_id == error_deleting_volumes_id).values(updated_at=now, deleted_at=now, deleted=1)
         delete_volume_attachment_q.execute()
         log.info("-- action: deleting volume id: %s", error_deleting_volumes_id)
-        delete_volume_q = volumes_t.delete().where(volumes_t.c.id == error_deleting_volumes_id)
+        delete_volume_q = volumes_t.update().\
+            where(volumes_t.c.id == error_deleting_volumes_id).values(updated_at=now, deleted_at=now, deleted=1)
         delete_volume_q.execute()
 
 
@@ -169,7 +174,9 @@ def fix_error_deleting_snapshots(meta, error_deleting_snapshots):
 
     for error_deleting_snapshots_id in error_deleting_snapshots:
         log.info("-- action: deleting snapshot id: %s", error_deleting_snapshots_id)
-        delete_snapshot_q = snapshots_t.delete().where(snapshots_t.c.id == error_deleting_snapshots_id)
+        now = datetime.datetime.utcnow()
+        delete_snapshot_q = snapshots_t.update().\
+            where(snapshots_t.c.id == error_deleting_snapshots_id).values(updated_at=now, deleted_at=now, deleted=1)
         delete_snapshot_q.execute()
 
 
@@ -197,7 +204,9 @@ def fix_wrong_volume_admin_metadata(meta, wrong_admin_metadata):
 
     for volume_admin_metadata_id in wrong_admin_metadata:
         log.info("-- action: deleting volume_admin_metadata id: %s", volume_admin_metadata_id)
-        delete_volume_admin_metadata_q = volume_admin_metadata_t.delete().where(volume_admin_metadata_t.c.id == volume_admin_metadata_id)
+        now = datetime.datetime.utcnow()
+        delete_volume_admin_metadata_q = volume_admin_metadata_t.update().\
+            where(volume_admin_metadata_t.c.id == volume_admin_metadata_id).values(updated_at=now, deleted_at=now, deleted=1)
         delete_volume_admin_metadata_q.execute()
 
 
@@ -225,7 +234,9 @@ def fix_wrong_volume_metadata(meta, wrong_metadata):
 
     for volume_metadata_id in wrong_metadata:
         log.info("-- action: deleting volume_metadata id: %s", volume_metadata_id)
-        delete_volume_metadata_q = volume_metadata_t.delete().where(volume_metadata_t.c.id == volume_metadata_id)
+        now = datetime.datetime.utcnow()
+        delete_volume_metadata_q = volume_metadata_t.update().\
+            where(volume_metadata_t.c.id == volume_metadata_id).values(updated_at=now, deleted_at=now, deleted=1)
         delete_volume_metadata_q.execute()
 
 
@@ -255,7 +266,9 @@ def fix_wrong_volume_attachments(meta, wrong_attachments, fix_limit):
 
         for volume_attachment_id in wrong_attachments:
             log.info("-- action: deleting volume attachment id: %s", volume_attachment_id)
-            delete_volume_attachment_q = volume_attachment_t.delete().where(volume_attachment_t.c.id == volume_attachment_id)
+            now = datetime.datetime.utcnow()
+            delete_volume_attachment_q = volume_attachment_t.update().\
+                where(volume_attachment_t.c.id == volume_attachment_id).values(updated_at=now, deleted_at=now, deleted=1)
             delete_volume_attachment_q.execute()
 
     else:
