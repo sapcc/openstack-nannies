@@ -137,7 +137,7 @@ def get_db_url(config_file):
 def parse_cmdline_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config",
-                        default='./manila.conf',
+                        default='/manila-etc/manila.conf',
                         help='configuration file')
     parser.add_argument("--promhost",
                         help="never sync resources (no interactive check)")
