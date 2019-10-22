@@ -42,7 +42,7 @@ while true; do
                 --dry-run
         fi
     fi
-    echo -n "INFO: waiting $MANILA_NANNY_INTERVAL minutes before starting the next loop run - "
+    echo -n "INFO: waiting $MANILA_NANNY_INTERVAL seconds before starting the next loop run - "
     date
-    sleep $(( 60 * $MANILA_NANNY_INTERVAL ))
+    sleep $(( $MANILA_NANNY_INTERVAL ))
 done
