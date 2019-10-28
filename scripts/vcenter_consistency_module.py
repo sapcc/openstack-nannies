@@ -480,7 +480,7 @@ class ConsistencyCheck:
     def cinder_db_get_volume_attach_status(self):
 
         cinder_db_volumes_t = Table('volumes', self.cinder_metadata, autoload=True)
-        cinder_db_volume_attach_status_q = select(columns=[cinder_db_volumes_t.c.id, cinder_db_volumes_t.c.attach_status],whereclause=and_(cinder_db_volumes_t.c.deleted == False))
+        cinder_db_volume_attach_status_q = select(columns=[cinder_db_volumes_t.c.id, cinder_db_volumes_t.c.attach_status],whereclause=and_(cinder_db_volumes_t.c.deleted == 0))
 
         # build a dict indexed by volume_uuid (=.c.id) and with the value of attach_status
         for (volume_uuid, attach_status) in cinder_db_volume_attach_status_q.execute():
@@ -489,7 +489,7 @@ class ConsistencyCheck:
     def cinder_db_get_volume_attachment_attach_status(self):
 
         cinder_db_volume_attachment_t = Table('volume_attachment', self.cinder_metadata, autoload=True)
-        cinder_db_volume_attachment_attach_status_q = select(columns=[cinder_db_volume_attachment_t.c.volume_id, cinder_db_volume_attachment_t.c.attach_status],whereclause=and_(cinder_db_volume_attachment_t.c.deleted == False))
+        cinder_db_volume_attachment_attach_status_q = select(columns=[cinder_db_volume_attachment_t.c.volume_id, cinder_db_volume_attachment_t.c.attach_status],whereclause=and_(cinder_db_volume_attachment_t.c.deleted == 0))
 
         # build a dict indexed by volume_uuid (=.c.volume_id) and with the value of attach_status
         for (volume_uuid, attach_status) in cinder_db_volume_attachment_attach_status_q.execute():
@@ -499,7 +499,7 @@ class ConsistencyCheck:
 
         cinder_db_volume_attachment_t = Table('volume_attachment', self.cinder_metadata, autoload=True)
         # get even the deleted ones, as a newly inserted entry might clash with them as well
-        # cinder_db_volume_attachment_ids_q = select(columns=[cinder_db_volume_attachment_t.c.id],whereclause=and_(cinder_db_volume_attachment_t.c.deleted == False))
+        # cinder_db_volume_attachment_ids_q = select(columns=[cinder_db_volume_attachment_t.c.id],whereclause=and_(cinder_db_volume_attachment_t.c.deleted == 0))
         cinder_db_volume_attachment_ids_q = select(columns=[cinder_db_volume_attachment_t.c.id])
 
         # build a list of volume attachment ids
@@ -514,7 +514,7 @@ class ConsistencyCheck:
         try:
             now = datetime.datetime.utcnow()
             cinder_db_volumes_t = Table('volumes', self.cinder_metadata, autoload=True)
-            cinder_db_update_volume_attach_status_q = cinder_db_volumes_t.update().where(and_(cinder_db_volumes_t.c.id == volume_uuid, cinder_db_volumes_t.c.deleted == False)).values(updated_at=now, status=new_status, attach_status=new_attach_status)
+            cinder_db_update_volume_attach_status_q = cinder_db_volumes_t.update().where(and_(cinder_db_volumes_t.c.id == volume_uuid, cinder_db_volumes_t.c.deleted == 0)).values(updated_at=now, status=new_status, attach_status=new_attach_status)
             cinder_db_update_volume_attach_status_q.execute()
         except Exception as e:
             log.warn("- WARNING - there was an error setting the status / attach_status of volume %s to %s / %s in the cinder db - %s", volume_uuid, new_status, new_attach_status, str(e))
@@ -524,7 +524,7 @@ class ConsistencyCheck:
         try:
             now = datetime.datetime.utcnow()
             cinder_db_volume_attachment_t = Table('volume_attachment', self.cinder_metadata, autoload=True)
-            cinder_db_delete_volume_attachment_q = cinder_db_volume_attachment_t.update().where(and_(cinder_db_volume_attachment_t.c.volume_id == volume_uuid, cinder_db_volume_attachment_t.c.deleted == False)).values(updated_at=now, deleted_at=now, deleted=True)
+            cinder_db_delete_volume_attachment_q = cinder_db_volume_attachment_t.update().where(and_(cinder_db_volume_attachment_t.c.volume_id == volume_uuid, cinder_db_volume_attachment_t.c.deleted == 0)).values(updated_at=now, deleted_at=now, deleted=True)
             cinder_db_delete_volume_attachment_q.execute()
         except Exception as e:
             log.warn("- WARNING - there was an error deleting the volume_attachment for the volume %s in the cinder db", volume_uuid)
@@ -534,7 +534,7 @@ class ConsistencyCheck:
         try:
             now = datetime.datetime.utcnow()
             cinder_db_volumes_t = Table('volumes', self.cinder_metadata, autoload=True)
-            cinder_db_delete_volume_q = cinder_db_volumes_t.update().where(and_(cinder_db_volumes_t.c.id == volume_uuid, cinder_db_volumes_t.c.deleted == False)).values(updated_at=now, deleted_at=now, deleted=True)
+            cinder_db_delete_volume_q = cinder_db_volumes_t.update().where(and_(cinder_db_volumes_t.c.id == volume_uuid, cinder_db_volumes_t.c.deleted == 0)).values(updated_at=now, deleted_at=now, deleted=1)
             cinder_db_delete_volume_q.execute()
         except Exception as e:
             log.warn("- WARNING - there was an error deleting the volume %s in the cinder db", volume_uuid)
@@ -560,7 +560,7 @@ class ConsistencyCheck:
             try:
                 now = datetime.datetime.utcnow()
                 cinder_db_volume_attachment_t = Table('volume_attachment', self.cinder_metadata, autoload=True)
-                cinder_db_insert_volume_attachment_q = cinder_db_volume_attachment_t.insert().values(created_at=now, updated_at=now, deleted=False, id=nova_attachment_id, volume_id=fix_uuid, instance_uuid=attachment_info['instance_uuid'], mountpoint=attachment_info['device_name'], attach_time=now, attach_mode='rw', attach_status='attached')
+                cinder_db_insert_volume_attachment_q = cinder_db_volume_attachment_t.insert().values(created_at=now, updated_at=now, deleted=0, id=nova_attachment_id, volume_id=fix_uuid, instance_uuid=attachment_info['instance_uuid'], mountpoint=attachment_info['device_name'], attach_time=now, attach_mode='rw', attach_status='attached')
                 cinder_db_insert_volume_attachment_q.execute()
             except Exception as e:
                 log.error("- ERROR - there was an error inserting the volume attachment for the volume %s into the cinder db - %s", fix_uuid, str(e))
