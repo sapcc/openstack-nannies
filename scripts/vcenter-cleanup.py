@@ -140,9 +140,11 @@ def _uuids(task):
 @click.option('--detach-ghost-limit', default=3, help='Ghost volume/port detachment limit')
 # check consistency of volume attachments
 @click.option('--vol-check', is_flag=True)
+# size in gb from which on the special bigvm handling gets enabled
+@click.option('--bigvm-size', default=1024, help='Bigvm size in GB')
 # port to use for prometheus exporter, otherwise we use 9456 as default
 @click.option('--port')
-def run_me(host, username, password, interval, iterations, dry_run, power_off, unregister, delete, detach_ghost_volumes, detach_ghost_ports, detach_ghost_limit, vol_check, port):
+def run_me(host, username, password, interval, iterations, dry_run, power_off, unregister, delete, detach_ghost_volumes, detach_ghost_ports, detach_ghost_limit, vol_check, bigvm_size, port):
 
     # Start http server for exported data
     if port:
@@ -208,7 +210,7 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
 
                 # do the cleanup work
                 cleanup_items(host, username, password, iterations, dry_run, power_off, unregister, delete,
-                              detach_ghost_volumes, detach_ghost_ports, detach_ghost_limit,
+                              detach_ghost_volumes, detach_ghost_ports, detach_ghost_limit, bigvm_size,
                               service_instance,
                               content, dc, view_ref)
 
@@ -463,7 +465,7 @@ def detach_ghost_volume(service_instance, vm, volume_uuid):
 
 
 # main cleanup function
-def cleanup_items(host, username, password, iterations, dry_run, power_off, unregister, delete, detach_ghost_volumes, detach_ghost_ports, detach_ghost_limit, service_instance,
+def cleanup_items(host, username, password, iterations, dry_run, power_off, unregister, delete, detach_ghost_volumes, detach_ghost_ports, detach_ghost_limit, bigvm_size, service_instance,
                   content, dc, view_ref):
     # openstack connection
     conn = connection.Connection(auth_url=os.getenv('OS_AUTH_URL'),
@@ -617,8 +619,8 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
             # get the config.hardware.device property out of the data dict and iterate over its elements
             # for j in k['config.hardware.device']:
             # this check seems to be required as in one bb i got a key error otherwise - looks like a vm without that property
-            # Collect 'BigVMs' with >= 1TB
-            if k.get('config.hardware.memoryMB', 0) >= 1024 * 1024:
+            # Collect 'BigVMs' with >= bigvm_size
+            if k.get('config.hardware.memoryMB', 0) >= bigvm_size * 1024:
                 cluster = k['resourcePool'].owner
                 for drs in cluster.configuration.drsVmConfig:
                     if str(drs.key) != str(k['obj']):
@@ -628,13 +630,13 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                     if not drs.enabled or drs.enabled and drs.behavior != wanted_behavior:
                         log.warn("- discovered bigVM %s with %.02f TB Ram and old DRS override",
                                  k['config.name'],
-                                 k['config.hardware.memoryMB'] / (1024 * 1024))
+                                 k['config.hardware.memoryMB'] / (bigvm_size * 1024))
                         big_vm_drs_action_necessary.append((k['obj'], cluster, drs))
                     break
                 else:
                     log.warn("- discovered new bigVM %s with %.02f TB Ram and no DRS override",
                              k['config.name'],
-                             k['config.hardware.memoryMB'] / (1024 * 1024))
+                             k['config.hardware.memoryMB'] / (bigvm_size * 1024))
                     big_vm_drs_action_necessary.append((k['obj'], cluster, None))
             if k.get('config.hardware.device'):
                 for j in k.get('config.hardware.device'):
