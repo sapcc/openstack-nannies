@@ -630,13 +630,13 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                     if not drs.enabled or drs.enabled and drs.behavior != wanted_behavior:
                         log.warn("- discovered bigVM %s with %.02f TB Ram and old DRS override",
                                  k['config.name'],
-                                 k['config.hardware.memoryMB'] / (1024 * 1024))
+                                 k['config.hardware.memoryMB'] / (1024.0 * 1024.0))
                         big_vm_drs_action_necessary.append((k['obj'], cluster, drs))
                     break
                 else:
                     log.warn("- discovered new bigVM %s with %.02f TB Ram and no DRS override",
                              k['config.name'],
-                             k['config.hardware.memoryMB'] / (1024 * 1024))
+                             k['config.hardware.memoryMB'] / (1024.0 * 1024.0))
                     big_vm_drs_action_necessary.append((k['obj'], cluster, None))
             if k.get('config.hardware.device'):
                 for j in k.get('config.hardware.device'):
