@@ -36,7 +36,7 @@ while true; do
         else
             echo -n "INFO: checking manila db share size - "
             date
-            /var/lib/kolla/venv/bin/python /scripts/manila-consistency.py \
+            /var/lib/kolla/venv/bin/python /scripts/manila-share-size-sync.py \
                 --config /etc/manila/manila.conf \
                 --promhost $PROMETHEUS_HOST \
                 --dry-run
