@@ -597,7 +597,8 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         "config.uuid",
         "config.instanceUuid",
         "config.template",
-        "config.annotation"
+        "config.annotation",
+        "config.memoryAllocation.shares.level"
     ]
 
     # collect the properties for all vms
@@ -645,7 +646,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                     big_vm_drs_action_necessary.append((k['obj'], cluster, None))
             # Collect 'BigVMs' with >= bigvm_shares_action_size
             if bigvm_shares_action_size:
-                if k.get('config.hardware.memoryMB', 0) >= bigvm_shares_action_size * 1024:
+                if k.get('config.hardware.memoryMB', 0) >= bigvm_shares_action_size * 1024 and str(k.get('config.memoryAllocation.shares.level')) != 'high':
                     log.warn("- discovered bigVM %s with %.02f TB Ram and memory shares not yet at high",
                                  k['config.name'],
                                  k['config.hardware.memoryMB'] / (1024.0 * 1024.0))
