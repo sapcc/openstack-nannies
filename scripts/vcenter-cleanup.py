@@ -746,7 +746,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         cluster_spec = vim.cluster.ConfigSpecEx()
         cluster_spec.drsVmConfigSpec = [drs_vm_config_spec]
 
-        log.warn("- setting drs overrid for server %s", vm.config.name)
+        log.warn("- setting drs override for server %s", vm.config.name)
         cluster.ReconfigureComputeResource_Task(cluster_spec, True)
         gauge_value_big_vm_disable_drs += 1
 
