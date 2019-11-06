@@ -84,6 +84,7 @@ gauge_unknown_vcenter_templates = Gauge('vcenter_nanny_unknown_vcenter_templates
 gauge_complete_orphans = Gauge('vcenter_nanny_complete_orphans', 'number of possibly completely orphan vms')
 gauge_volume_attachment_inconsistencies = Gauge('vcenter_nanny_volume_attachment_inconsistencies', 'number of volume attachment inconsistencies between nova, cinder and the vcenter')
 gauge_big_vm_disable_drs = Gauge('vcenter_nanny_big_vm_disable_drs', 'number of big vms which got drs disabled')
+gauge_big_vm_memory_shares_high = Gauge('vcenter_nanny_big_vm_memory_shares_high', 'number of big vms which got memory shares set to high')
 
 # find vmx and vmdk files with a uuid name pattern
 def _uuids(task):
@@ -141,10 +142,12 @@ def _uuids(task):
 # check consistency of volume attachments
 @click.option('--vol-check', is_flag=True)
 # size in gb from which on the special bigvm handling gets enabled
-@click.option('--bigvm-size', default=1024, help='Bigvm size in GB')
+@click.option('--bigvm-size', default=1024, help='Bigvm size in GB for drs disablement')
+# size in gb from which on the special bigvm handling gets enabled
+@click.option('--bigvm-shares-action-size', default=1024, help='Bigvm size in GB for setting memory shares to high')
 # port to use for prometheus exporter, otherwise we use 9456 as default
 @click.option('--port')
-def run_me(host, username, password, interval, iterations, dry_run, power_off, unregister, delete, detach_ghost_volumes, detach_ghost_ports, detach_ghost_limit, vol_check, bigvm_size, port):
+def run_me(host, username, password, interval, iterations, dry_run, power_off, unregister, delete, detach_ghost_volumes, detach_ghost_ports, detach_ghost_limit, vol_check, bigvm_size, bigvm_shares_action_size, port):
 
     # Start http server for exported data
     if port:
@@ -210,7 +213,7 @@ def run_me(host, username, password, interval, iterations, dry_run, power_off, u
 
                 # do the cleanup work
                 cleanup_items(host, username, password, iterations, dry_run, power_off, unregister, delete,
-                              detach_ghost_volumes, detach_ghost_ports, detach_ghost_limit, bigvm_size,
+                              detach_ghost_volumes, detach_ghost_ports, detach_ghost_limit, bigvm_size, bigvm_shares_action_size,
                               service_instance,
                               content, dc, view_ref)
 
@@ -465,7 +468,7 @@ def detach_ghost_volume(service_instance, vm, volume_uuid):
 
 
 # main cleanup function
-def cleanup_items(host, username, password, iterations, dry_run, power_off, unregister, delete, detach_ghost_volumes, detach_ghost_ports, detach_ghost_limit, bigvm_size, service_instance,
+def cleanup_items(host, username, password, iterations, dry_run, power_off, unregister, delete, detach_ghost_volumes, detach_ghost_ports, detach_ghost_limit, bigvm_size, bigvm_shares_action_size, service_instance,
                   content, dc, view_ref):
     # openstack connection
     conn = connection.Connection(auth_url=os.getenv('OS_AUTH_URL'),
@@ -512,6 +515,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     gauge_value_unknown_vcenter_templates = 0
     gauge_value_complete_orphans = 0
     gauge_value_big_vm_disable_drs = 0
+    gauge_value_big_vm_memory_shares_high = 0
 
     # get all servers, volumes, snapshots and images from openstack to compare the resources we find on the vcenter against
     try:
@@ -608,6 +612,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     vc_server_uuid_with_mounted_volume = dict()
     vc_server_name_with_mounted_volume = dict()
     big_vm_drs_action_necessary = []
+    big_vm_memory_shares_action_necessary = []
     # iterate over the list of vms
     for k in data:
         # only work with results, which have an instance uuid defined and are openstack vms (i.e. have an annotation set)
@@ -638,6 +643,13 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                              k['config.name'],
                              k['config.hardware.memoryMB'] / (1024.0 * 1024.0))
                     big_vm_drs_action_necessary.append((k['obj'], cluster, None))
+            # Collect 'BigVMs' with >= bigvm_shares_action_size
+            if bigvm_shares_action_size:
+                if k.get('config.hardware.memoryMB', 0) >= bigvm_shares_action_size * 1024:
+                    log.warn("- discovered bigVM %s with %.02f TB Ram and memory shares not yet at high",
+                                 k['config.name'],
+                                 k['config.hardware.memoryMB'] / (1024.0 * 1024.0))
+                    big_vm_memory_shares_action_necessary.append(k['obj'])
             if k.get('config.hardware.device'):
                 for j in k.get('config.hardware.device'):
                     # we are only interested in disks for ghost volumes ...
@@ -733,8 +745,27 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
         cluster_spec = vim.cluster.ConfigSpecEx()
         cluster_spec.drsVmConfigSpec = [drs_vm_config_spec]
 
+        log.warn("- setting drs overrid for server %s (%s)",
+                    vm.config.instanceUuid, vm.config.name)
         cluster.ReconfigureComputeResource_Task(cluster_spec, True)
         gauge_value_big_vm_disable_drs += 1
+
+    # set memory shares to high for bigvms
+    for vm in big_vm_memory_shares_action_necessary:
+        configspec = vim.vm.ConfigSpec()
+        configspec.memoryAllocation = vim.ResourceAllocationInfo()
+        configspec.memoryAllocation.shares = vim.SharesInfo()
+        configspec.memoryAllocation.shares.level = 'high'
+        log.warn("- setting memory shares to high for server %s (%s)",
+                    vm.config.instanceUuid, vm.config.name)
+        task = vm.Reconfigure(configspec)
+        try:
+                # wait for the async task to finish 
+                WaitForTask(task, si=service_instance)
+        except Exception as e:
+                log.warn("- PLEASE CHECK MANUALLY - problems running vcenter tasks: %s - they will run next time then", e.msg)
+                gauge_value_vcenter_task_problems += 1
+        gauge_value_big_vm_memory_shares_high += 1
 
     # iterate through all datastores in the vcenter
     for ds in dc.datastore:
@@ -1066,6 +1097,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     gauge_unknown_vcenter_templates.set(float(gauge_value_unknown_vcenter_templates))
     gauge_complete_orphans.set(float(gauge_value_complete_orphans))
     gauge_big_vm_disable_drs.set(float(gauge_value_big_vm_disable_drs))
+    gauge_big_vm_memory_shares_high.set(float(gauge_value_big_vm_memory_shares_high))
 
     # reset the dict of vms or files we plan to do something with for all machines we did not see or which disappeared
     reset_to_be_dict(vms_to_be_suspended, vms_seen)
