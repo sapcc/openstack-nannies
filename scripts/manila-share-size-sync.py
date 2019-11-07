@@ -178,7 +178,7 @@ def main():
                            "match share size (%d) on backend") % (\
                            share_id, v.get('manila_size'), v.get('size'))
         elif v.get('manila_size') is not None and v.get('size') is None:
-            print("[WARNING] ShareNotExist: share %s does not exist on backend")
+            print("[WARNING] ShareNotExist: share %s does not exist on backend" % share_id)
 
 def test_resize():
     try:
