@@ -21,6 +21,7 @@ import argparse
 import sys
 import ConfigParser
 import logging
+import datetime
 
 from sqlalchemy import and_
 from sqlalchemy import func
@@ -55,9 +56,12 @@ def fix_wrong_share_network_ssas(meta, wrong_share_network_ssas):
 
     share_network_ssa_t = Table('share_network_security_service_association', meta, autoload=True)
 
+    now = datetime.datetime.utcnow()
     for share_network_ssa_id in wrong_share_network_ssas:
         log.info ("-- action: deleting share network security service association id: %s", share_network_ssa_id)
-        delete_share_network_ssa_q = share_network_ssa_t.delete().where(share_network_ssa_t.c.id == share_network_ssa_id)
+        delete_share_network_ssa_q = share_network_ssa_t.update().\
+            where(share_network_ssa_t.c.id == share_network_ssa_id).\
+                values(updated_at=now, deleted_at=now, deleted=share_network_ssa_id)
         delete_share_network_ssa_q.execute()
 
 # get all the rows with a network_allocations still defined where the corresponding share_server is already deleted
@@ -78,9 +82,12 @@ def get_wrong_network_allocations(meta):
 def fix_wrong_network_allocations(meta, wrong_network_allocations):
     network_allocations_t = Table('network_allocations', meta, autoload=True)
 
+    now = datetime.datetime.utcnow()
     for network_allocations_id in wrong_network_allocations:
         log.info ("-- action: deleting network allocation id: %s", network_allocations_id)
-        delete_network_allocations_q = network_allocations_t.delete().where(network_allocations_t.c.id == network_allocations_id)
+        delete_network_allocations_q = network_allocations_t.update().\
+            where(network_allocations_t.c.id == network_allocations_id).\
+                values(updated_at=now, deleted_at=now, deleted=network_allocations_id)
         delete_network_allocations_q.execute()
 
 # get all the rows with a share_metadata still defined where the corresponding share is already deleted
@@ -101,9 +108,12 @@ def get_wrong_share_metadata(meta):
 def fix_wrong_share_metadata(meta, wrong_share_metadata):
     share_metadata_t = Table('share_metadata', meta, autoload=True)
 
+    now = datetime.datetime.utcnow()
     for share_metadata_id in wrong_share_metadata:
         log.info ("-- action: deleting share metadata id: %s", share_metadata_id)
-        delete_share_metadata_q = share_metadata_t.delete().where(share_metadata_t.c.id == share_metadata_id)
+        delete_share_metadata_q = share_metadata_t.update().\
+            where(share_metadata_t.c.id == share_metadata_id).\
+                values(updated_at=now, deleted_at=now, deleted=share_metadata_id)
         delete_share_metadata_q.execute()
 
 # get all the rows with a share_group_type_share_type_mapping still defined where the corresponding share_group_type is already deleted
@@ -124,9 +134,12 @@ def get_wrong_share_gtstm(meta):
 def fix_wrong_share_gtstm(meta, wrong_share_gtstm):
     share_gtstm_t = Table('share_group_type_share_type_mappings', meta, autoload=True)
 
+    now = datetime.datetime.utcnow()
     for share_gtstm_id in wrong_share_gtstm:
         log.info ("-- action: deleting share group type id: %s", share_gtstm_id)
-        delete_share_gtstm_q = share_gtstm_t.delete().where(share_gtstm_t.c.id == share_gtstm_id)
+        delete_share_gtstm_q = share_gtstm_t.update().\
+            where(share_gtstm_t.c.id == share_gtstm_id).\
+                values(updated_at=now, deleted_at=now, deleted=share_gtstm_id)
         delete_share_gtstm_q.execute()
 
 # establish a database connection and return the handle
