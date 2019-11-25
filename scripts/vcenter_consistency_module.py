@@ -51,6 +51,8 @@ from prometheus_client import start_http_server, Gauge
 
 log = logging.getLogger('vcenter_consistency_module')
 
+uuid_re = re.compile('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.IGNORECASE)
+
 # compile a regex for trying to filter out openstack generated vms
 #  they all have the "name:" field set
 openstack_re = re.compile("^name")
@@ -394,12 +396,34 @@ class ConsistencyCheck:
                             # we only care for vvols - in the past we checked starting with 2001 as 2000 usual was the eph
                             # storage, but it looks like eph can also be on another id and 2000 could be a vvol as well ...
                             if j.backing.fileName.lower().startswith('[vvol_'):
+                                # warn about any volumes without a uuid set in the backing store settings
+                                if not j.backing.uuid:
+                                    log.warn("- PLEASE CHECK MANUALLY - volume without uuid in backing store settings: %s", str(j.backing.fileName))
+                                    # TODO: extract uuid from filename if possible, maybe enabled by a switch
+                                # check if the backing uuid setting is proper and potentially set it porperly:
+                                # - the uuid should be the same as the uuid in the backing filename
+                                # - if not the uuid should be set to the uuid extracted from the filename
+                                #   as long as it is not the uuid in the name of the instance, because in that
+                                #   case it might be a volume being move between bbs or similar ...
+                                uuid_search_result = uuid_re.search(j.backing.fileName)
+                                if uuid_search_result.group(0):
+                                    if  j.backing.uuid != uuid_search_result.group(0):
+                                        log.warn("- PLEASE CHECK MANUALLY - volume uuid mismatch: uuid='%s', filename='%s'", str(j.backing.uuid), str(j.backing.fileName))
+                                        if uuid_search_result.group(0) != k['config.name']:
+                                            log.warn("- plan (dry-run only for now): setting uuid %s to uuid %s obtained from filename '%s'", str(j.backing.uuid), str(uuid_search_result.group(0)), str(j.backing.fileName))
+                                            # TODO: set uuid field to uuid values extraceted from filename
+                                else:
+                                    log.warn("- PLEASE CHECK MANUALLY - no volume uuid found in filename='%s'", str(j.backing.fileName))
                                 # map attached volume id to instance uuid - used later
                                 self.vc_server_uuid_with_mounted_volume[j.backing.uuid] = k['config.instanceUuid']
                                 # map attached volume id to instance name - used later for more detailed logging
                                 self.vc_server_name_with_mounted_volume[j.backing.uuid] = k['config.name']
                                 log.debug("==> mount - instance: %s - volume: %s", str(k['config.instanceUuid']), str(j.backing.uuid))
                                 has_volume_attachments[k['config.instanceUuid']] = True
+                            # check for volumes with a size of 0 which should not happen in a perfect world
+                            if j.capacityInBytes == 0:
+                                log.warn("- PLEASE CHECK MANUALLY - volume with zero size: %s", str(j.backing.uuid))
+                                # TODO: add reload in that case, maybe enabled by a switch
                 else:
                     log.warn("- PLEASE CHECK MANUALLY - instance without hardware - this should not happen!")
                 if not has_volume_attachments.get(k['config.instanceUuid']):
