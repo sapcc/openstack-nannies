@@ -417,16 +417,16 @@ class ConsistencyCheck:
                                             log.warn("- PLEASE CHECK MANUALLY - instance uuid %s is equal to volume uuid %s obtained from filename '%s' - not touching this one for safety", str(instancename_uuid_search_result.group(0)), str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
                                 else:
                                     log.warn("- PLEASE CHECK MANUALLY - no volume uuid found in filename='%s'", str(j.backing.fileName))
+                                # check for volumes with a size of 0 which should not happen in a perfect world
+                                if j.capacityInBytes == 0:
+                                    log.warn("- PLEASE CHECK MANUALLY - volume with zero size: uuid='%s' filename='%s'", str(j.backing.uuid), str(j.backing.fileName))
+                                    # TODO: add reload in that case, maybe enabled by a switch
                                 # map attached volume id to instance uuid - used later
                                 self.vc_server_uuid_with_mounted_volume[j.backing.uuid] = k['config.instanceUuid']
                                 # map attached volume id to instance name - used later for more detailed logging
                                 self.vc_server_name_with_mounted_volume[j.backing.uuid] = k['config.name']
                                 log.debug("==> mount - instance: %s - volume: %s", str(k['config.instanceUuid']), str(j.backing.uuid))
                                 has_volume_attachments[k['config.instanceUuid']] = True
-                            # check for volumes with a size of 0 which should not happen in a perfect world
-                            if j.capacityInBytes == 0:
-                                log.warn("- PLEASE CHECK MANUALLY - volume with zero size: %s", str(j.backing.uuid))
-                                # TODO: add reload in that case, maybe enabled by a switch
                 else:
                     log.warn("- PLEASE CHECK MANUALLY - instance without hardware - this should not happen!")
                 if not has_volume_attachments.get(k['config.instanceUuid']):
