@@ -405,13 +405,16 @@ class ConsistencyCheck:
                                 # - if not the uuid should be set to the uuid extracted from the filename
                                 #   as long as it is not the uuid in the name of the instance, because in that
                                 #   case it might be a volume being move between bbs or similar ...
-                                uuid_search_result = uuid_re.search(j.backing.fileName)
-                                if uuid_search_result.group(0):
-                                    if  j.backing.uuid != uuid_search_result.group(0):
+                                filename_uuid_search_result = uuid_re.search(j.backing.fileName)
+                                instancename_uuid_search_result = uuid_re.search(k['config.name'])
+                                if filename_uuid_search_result.group(0):
+                                    if  j.backing.uuid != filename_uuid_search_result.group(0):
                                         log.warn("- PLEASE CHECK MANUALLY - volume uuid mismatch: uuid='%s', filename='%s'", str(j.backing.uuid), str(j.backing.fileName))
-                                        if uuid_search_result.group(0) != k['config.name']:
-                                            log.warn("- plan (dry-run only for now): setting uuid %s to uuid %s obtained from filename '%s'", str(j.backing.uuid), str(uuid_search_result.group(0)), str(j.backing.fileName))
+                                        if filename_uuid_search_result.group(0) != instancename_uuid_search_result.group(0):
+                                            log.warn("- plan (dry-run only for now): setting volume uuid %s to uuid %s obtained from filename '%s' (instance uuid='%s')", str(j.backing.uuid), str(filename_uuid_search_result.group(0)), str(j.backing.fileName), str(instancename_uuid_search_result.group(0)))
                                             # TODO: set uuid field to uuid values extraceted from filename
+                                        else:
+                                            log.warn("- PLEASE CHECK MANUALLY - instance uuid %s is equal to volume uuid %s obtained from filename '%s' - not touching this one for safety", str(instancename_uuid_search_result.group(0)), str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
                                 else:
                                     log.warn("- PLEASE CHECK MANUALLY - no volume uuid found in filename='%s'", str(j.backing.fileName))
                                 # map attached volume id to instance uuid - used later
