@@ -411,8 +411,12 @@ class ConsistencyCheck:
                                     if  j.backing.uuid != filename_uuid_search_result.group(0):
                                         log.warn("- PLEASE CHECK MANUALLY - volume uuid mismatch: uuid='%s', filename='%s'", str(j.backing.uuid), str(j.backing.fileName))
                                         if filename_uuid_search_result.group(0) != instancename_uuid_search_result.group(0):
-                                            log.warn("- plan (dry-run only for now): setting volume uuid %s to uuid %s obtained from filename '%s' (instance uuid='%s')", str(j.backing.uuid), str(filename_uuid_search_result.group(0)), str(j.backing.fileName), str(instancename_uuid_search_result.group(0)))
-                                            # TODO: set uuid field to uuid values extraceted from filename
+                                            # check that the volume uuid we derived from the filename is in cinder
+                                            if self.cinder_os_volume_status.get(str(filename_uuid_search_result.group(0))):
+                                                log.warn("- plan (dry-run only for now): setting volume uuid %s to uuid %s obtained from filename '%s' (instance uuid='%s')", str(j.backing.uuid), str(filename_uuid_search_result.group(0)), str(j.backing.fileName), str(instancename_uuid_search_result.group(0)))
+                                                # TODO: set uuid field to uuid values extraceted from filename
+                                            else:
+                                                log.warn("- PLEASE CHECK MANUALLY - volume uuid %s obtained from filename '%s' does not exist in cinder - not setting volume uuid to it for safety", str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
                                         else:
                                             log.warn("- PLEASE CHECK MANUALLY - instance uuid %s is equal to volume uuid %s obtained from filename '%s' - not touching this one for safety", str(instancename_uuid_search_result.group(0)), str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
                                 else:
@@ -1369,5 +1373,5 @@ class ConsistencyCheck:
             # convert iterations from string to integer and avoid off by one error
             self.run_check_loop(int(iterations))
             # wait the interval time
-            log.info("INFO - waiting %s minutes before starting the next loop run", str(interval))
+            log.info("INFO: waiting %s minutes before starting the next loop run", str(interval))
             time.sleep(60 * int(interval))
