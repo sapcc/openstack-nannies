@@ -258,7 +258,12 @@ def main():
             userlist.append(resource_tuple[1])
         sorteduserlist = sorted(set(userlist))
         for user in sorteduserlist:
-            try:
+            if real_usages.get((resource, user)) is None and quota_usages.get((resource, user)) is not None:
+                quota_usages_to_sync[(resource, user)] = 0
+                ptable.add_row([args.project_id, user, resource,
+                            str(quota_usages[(resource, user)]) + ' -> ' + '0',
+                            '\033[1m\033[91mMISMATCH\033[0m'])
+            else:
                 if real_usages[(resource, user)] != quota_usages[(resource, user)]:
                     quota_usages_to_sync[(resource, user)] = real_usages[(resource, user)]
                     ptable.add_row([args.project_id, user, resource,
@@ -270,8 +275,6 @@ def main():
                                    str(quota_usages[(resource, user)]) + ' -> ' +
                                    str(real_usages[(resource, user)]),
                                    '\033[1m\033[92mOK\033[0m'])
-            except KeyError:
-                pass
 
     if len(quota_usages):
         print ptable
