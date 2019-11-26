@@ -1365,8 +1365,9 @@ class ConsistencyCheck:
     def run_check(self, interval, iterations):
         self.start_prometheus_exporter()
         while True:
+            log.info("INFO: starting new loop run")
             # convert iterations from string to integer and avoid off by one error
             self.run_check_loop(int(iterations))
             # wait the interval time
-            log.info("- INFO - waiting %s minutes before starting the next loop run", str(interval))
+            log.info("INFO - waiting %s minutes before starting the next loop run", str(interval))
             time.sleep(60 * int(interval))
