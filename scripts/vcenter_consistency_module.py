@@ -96,6 +96,8 @@ class ConsistencyCheck:
         self.cinder_db_volume_attach_status = dict()
         self.cinder_db_volume_attachment_attach_status = dict()
         self.volume_attachment_fix_candidates = dict()
+        self.uuid_rewrite_candidates = dict()
+        self.instance_reload_candidates = dict()
 
         # this one has the instance uuid as key
         self.nova_os_volumes_attached_at_server = dict()
@@ -146,6 +148,14 @@ class ConsistencyCheck:
                                                   'how many volumes attachments need fixing')
         self.gauge_cinder_volume_attachment_max_fix_count = Gauge('vcenter_nanny_consistency_cinder_volume_attachment_max_fix_count',
                                                   'volumes attachment fixing is denied if there are more than this many attachments to fix')
+        self.gauge_vcenter_volume_uuid_mismatch = Gauge('vcenter_nanny_consistency_vcenter_volume_uuid_mismatch',
+                                                  'how many volumes have a uuid mismatch in the vcenter')
+        self.gauge_vcenter_volume_uuid_adjustment = Gauge('vcenter_nanny_consistency_vcenter_volume_uuid_adjustment',
+                                                  'how many volumes got a uuid mismatch adjusted in the vcenter')
+        self.gauge_vcenter_volume_uuid_missing = Gauge('vcenter_nanny_consistency_vcenter_volume_uuid_missing',
+                                                  'how many volumes are missing a uuid in the vcenter backing store config')
+        self.gauge_vcenter_volume_zero_size = Gauge('vcenter_nanny_consistency_vcenter_volume_zero_size',
+                                                  'how many volumes have a size of zero in the vcenter')
 
         self.gauge_value_cinder_volume_attaching_for_too_long = 0
         self.gauge_value_cinder_volume_detaching_for_too_long = 0
@@ -154,6 +164,8 @@ class ConsistencyCheck:
         self.gauge_value_cinder_volume_is_in_state_reserved = 0
         self.gauge_value_cinder_volume_available_with_attachments = 0
         self.gauge_value_cinder_volume_in_use_without_attachments = 0
+        self.gauge_value_vcenter_volume_uuid_mismatch = 0
+        self.gauge_value_vcenter_volume_uuid_missing = 0
 
     # start prometheus exporter if needed
     def start_prometheus_exporter(self):
@@ -346,7 +358,7 @@ class ConsistencyCheck:
             data.append(properties)
         return data
 
-    # get all servers and all volumes from the vcenter
+    # get all servers and all volumes from the vcenter and do some basic consistency checks already along the way
     def vc_get_info(self):
 
         # TODO better exception handling
@@ -396,35 +408,40 @@ class ConsistencyCheck:
                             # we only care for vvols - in the past we checked starting with 2001 as 2000 usual was the eph
                             # storage, but it looks like eph can also be on another id and 2000 could be a vvol as well ...
                             if j.backing.fileName.lower().startswith('[vvol_'):
-                                # warn about any volumes without a uuid set in the backing store settings
-                                if not j.backing.uuid:
-                                    log.warn("- PLEASE CHECK MANUALLY - volume without uuid in backing store settings: %s", str(j.backing.fileName))
-                                    # TODO: extract uuid from filename if possible, maybe enabled by a switch
-                                # check if the backing uuid setting is proper and potentially set it porperly:
-                                # - the uuid should be the same as the uuid in the backing filename
-                                # - if not the uuid should be set to the uuid extracted from the filename
-                                #   as long as it is not the uuid in the name of the instance, because in that
-                                #   case it might be a volume being move between bbs or similar ...
-                                filename_uuid_search_result = uuid_re.search(j.backing.fileName)
-                                instancename_uuid_search_result = uuid_re.search(k['config.name'])
-                                if filename_uuid_search_result.group(0):
-                                    if  j.backing.uuid != filename_uuid_search_result.group(0):
-                                        log.warn("- PLEASE CHECK MANUALLY - volume uuid mismatch: uuid='%s', filename='%s'", str(j.backing.uuid), str(j.backing.fileName))
-                                        if filename_uuid_search_result.group(0) != instancename_uuid_search_result.group(0):
-                                            # check that the volume uuid we derived from the filename is in cinder
-                                            if self.cinder_os_volume_status.get(str(filename_uuid_search_result.group(0))):
-                                                log.warn("- plan (dry-run only for now): setting volume uuid %s to uuid %s obtained from filename '%s' (instance uuid='%s')", str(j.backing.uuid), str(filename_uuid_search_result.group(0)), str(j.backing.fileName), str(instancename_uuid_search_result.group(0)))
-                                                # TODO: set uuid field to uuid values extraceted from filename
+                                # do the consistency checks only in non interactive mode
+                                if not self.interactive:
+                                    filename_uuid_search_result = uuid_re.search(j.backing.fileName)
+                                    instancename_uuid_search_result = uuid_re.search(k['config.name'])
+                                    # warn about any volumes without a uuid set in the backing store settings
+                                    if not j.backing.uuid:
+                                        log.warn("- PLEASE CHECK MANUALLY - volume without uuid in backing store settings - uuid extracted from filename '%s' is '%s'", str(j.backing.fileName), str(filename_uuid_search_result.group(0)))
+                                        self.gauge_value_vcenter_volume_uuid_missing += 1
+                                    # check if the backing uuid setting is proper and potentially set it porperly:
+                                    # - the uuid should be the same as the uuid in the backing filename
+                                    # - if not the uuid should be set to the uuid extracted from the filename
+                                    #   as long as it is not the uuid in the name of the instance, because in that
+                                    #   case it might be a volume being move between bbs or similar ...
+                                    if filename_uuid_search_result.group(0):
+                                        if  j.backing.uuid != filename_uuid_search_result.group(0):
+                                            log.warn("- PLEASE CHECK MANUALLY - volume uuid mismatch: uuid='%s', filename='%s'", str(j.backing.uuid), str(j.backing.fileName))
+                                            self.gauge_value_vcenter_volume_uuid_mismatch += 1
+                                            if filename_uuid_search_result.group(0) != instancename_uuid_search_result.group(0):
+                                                # check that the volume uuid we derived from the filename is in cinder
+                                                if self.cinder_os_volume_status.get(str(filename_uuid_search_result.group(0))):
+                                                    log.warn("- plan (dry-run only for now): setting volume uuid %s to uuid %s obtained from filename '%s' (instance uuid='%s')", str(j.backing.uuid), str(filename_uuid_search_result.group(0)), str(j.backing.fileName), str(instancename_uuid_search_result.group(0)))
+                                                    # build a candidate list of volumes to set uuid field to uuid values extraceted from filename
+                                                    self.uuid_rewrite_candidates[str(j.backing.uuid)] = str(filename_uuid_search_result.group(0))
+                                                else:
+                                                    log.warn("- PLEASE CHECK MANUALLY - volume uuid %s obtained from filename '%s' does not exist in cinder - not setting volume uuid to it for safety", str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
                                             else:
-                                                log.warn("- PLEASE CHECK MANUALLY - volume uuid %s obtained from filename '%s' does not exist in cinder - not setting volume uuid to it for safety", str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
-                                        else:
-                                            log.warn("- PLEASE CHECK MANUALLY - instance uuid %s is equal to volume uuid %s obtained from filename '%s' - not touching this one for safety", str(instancename_uuid_search_result.group(0)), str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
-                                else:
-                                    log.warn("- PLEASE CHECK MANUALLY - no volume uuid found in filename='%s'", str(j.backing.fileName))
-                                # check for volumes with a size of 0 which should not happen in a perfect world
-                                if j.capacityInBytes == 0:
-                                    log.warn("- PLEASE CHECK MANUALLY - volume with zero size: uuid='%s' filename='%s'", str(j.backing.uuid), str(j.backing.fileName))
-                                    # TODO: add reload in that case, maybe enabled by a switch
+                                                log.warn("- PLEASE CHECK MANUALLY - instance uuid %s is equal to volume uuid %s obtained from filename '%s' - not touching this one for safety", str(instancename_uuid_search_result.group(0)), str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
+                                    else:
+                                        log.warn("- PLEASE CHECK MANUALLY - no volume uuid found in filename='%s'", str(j.backing.fileName))
+                                    # check for volumes with a size of 0 which should not happen in a perfect world
+                                    if j.capacityInBytes == 0:
+                                        log.warn("- PLEASE CHECK MANUALLY - volume with zero size: uuid='%s' filename='%s'", str(j.backing.uuid), str(j.backing.fileName))
+                                        # build a candidate list of instances to reload to get rid of their buggy zero volume sizes
+                                        self.instance_reload_candidates[k['config.instanceUuid']] = str(j.backing.uuid)
                                 # map attached volume id to instance uuid - used later
                                 self.vc_server_uuid_with_mounted_volume[j.backing.uuid] = k['config.instanceUuid']
                                 # map attached volume id to instance name - used later for more detailed logging
@@ -1033,6 +1050,8 @@ class ConsistencyCheck:
         self.gauge_value_cinder_volume_available_with_attachments = 0
         self.gauge_value_cinder_volume_in_use_without_some_attachments = 0
         self.gauge_value_cinder_volume_in_use_without_attachments = 0
+        self.gauge_value_vcenter_volume_uuid_mismatch = 0
+        self.gauge_value_vcenter_volume_uuid_missing = 0
 
 
     def discover_problems(self, iterations):
@@ -1238,6 +1257,10 @@ class ConsistencyCheck:
         self.gauge_cinder_volume_in_use_without_attachments.set(self.gauge_value_cinder_volume_in_use_without_attachments)
         self.gauge_cinder_volume_attachment_fix_count.set(len(self.volume_attachment_fix_candidates))
         self.gauge_cinder_volume_attachment_max_fix_count.set(self.max_automatic_fix)
+        self.gauge_vcenter_volume_uuid_mismatch.set(self.gauge_value_vcenter_volume_uuid_mismatch)
+        self.gauge_vcenter_volume_uuid_missing.set(self.gauge_value_vcenter_volume_uuid_missing)
+        self.gauge_vcenter_volume_uuid_adjustment.set(len(self.uuid_rewrite_candidates))
+        self.gauge_vcenter_volume_zero_size.set(len(self.instance_reload_candidates))
 
     def run_tool(self):
         log.info("- INFO - connecting to the vcenter")
@@ -1297,6 +1320,11 @@ class ConsistencyCheck:
     def run_check_loop(self, iterations):
         if self.dry_run:
             log.info("- INFO - running in dry run mode")
+        # clean the lists of canditates for uuid rewrite and instance reload
+        self.uuid_rewrite_candidates.clear()
+        self.instance_reload_candidates.clear()
+        # reset gauge values to zero for this new loop run
+        self.reset_gauge_values()
         log.info("- INFO - connecting to vcenter")
         self.vc_connect()
         # stop this loop iteration here in case we get problems connecting to the vcenter
@@ -1331,7 +1359,6 @@ class ConsistencyCheck:
             return
         log.info("- INFO - disconnecting from openstack")
         self.os_disconnect()
-        self.reset_gauge_values()
         # clean the list of canditate volume uuids which are supposed to be fixed automatically
         self.volume_attachment_fix_candidates.clear()
         log.info("- INFO - connecting to the cinder db")
