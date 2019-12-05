@@ -31,4 +31,4 @@ else
     DRY_RUN="--dry-run"
 fi
 # not yet implemented
-#/var/lib/kolla/venv/bin/python /scripts/db-cleanup.py $DRY_RUN --iterations $MANILA_DB_CLEANUP_ITERATIONS --interval $MANILA_DB_CLEANUP_INTERVAL --manila
+#/var/lib/openstack/bin/python /scripts/db-cleanup.py $DRY_RUN --iterations $MANILA_DB_CLEANUP_ITERATIONS --interval $MANILA_DB_CLEANUP_INTERVAL --manila

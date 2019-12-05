@@ -24,7 +24,7 @@ unset http_proxy https_proxy all_proxy no_proxy
 echo "INFO: starting a loop to periodically run the nanny job for the manila netapp re-export"
 while true; do
     date
-    /var/lib/kolla/venv/bin/manila-manage --config-file /etc/manila/backend.conf --config-file /etc/manila/manila.conf shell script --path /scripts/netapp-manila-reexport.py
+    /var/lib/openstack/bin/manila-manage --config-file /etc/manila/backend.conf --config-file /etc/manila/manila.conf shell script --path /scripts/netapp-manila-reexport.py
     echo -n "INFO: waiting $MANILA_NETAPP_NANNY_INTERVAL minutes before starting the next loop run - "
     date
     sleep $(( 60 * $MANILA_NETAPP_NANNY_INTERVAL ))

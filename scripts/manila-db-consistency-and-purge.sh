@@ -30,17 +30,17 @@ while true; do
         if [ "$MANILA_CONSISTENCY_DRY_RUN" = "False" ] || [ "$MANILA_CONSISTENCY_DRY_RUN" = "false" ]; then
             echo -n "INFO: checking and fixing manila db consistency - "
             date
-            /var/lib/kolla/venv/bin/python /scripts/manila-consistency.py --config /etc/manila/manila.conf
+            /var/lib/openstack/bin/python /scripts/manila-consistency.py --config /etc/manila/manila.conf
         else
             echo -n "INFO: checking manila db consistency - "
             date
-            /var/lib/kolla/venv/bin/python /scripts/manila-consistency.py --config /etc/manila/manila.conf --dry-run
+            /var/lib/openstack/bin/python /scripts/manila-consistency.py --config /etc/manila/manila.conf --dry-run
         fi
     fi
     if [ "$MANILA_DB_PURGE_ENABLED" = "True" ] || [ "$MANILA_DB_PURGE_ENABLED" = "true" ]; then
         echo -n "INFO: purging deleted manila entities older than $MANILA_DB_PURGE_OLDER_THAN days from the manila db - "
         date
-        /var/lib/kolla/venv/bin/manila-manage db purge $MANILA_DB_PURGE_OLDER_THAN
+        /var/lib/openstack/bin/manila-manage db purge $MANILA_DB_PURGE_OLDER_THAN
     fi
     echo -n "INFO: waiting $MANILA_NANNY_INTERVAL minutes before starting the next loop run - "
     date
