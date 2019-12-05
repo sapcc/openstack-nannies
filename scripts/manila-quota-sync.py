@@ -21,153 +21,217 @@ import argparse
 import sys
 import ConfigParser
 import datetime
+import logging
+import time
 
 from prettytable import PrettyTable
+from prometheus_client import start_http_server, Counter
 from sqlalchemy import and_
 from sqlalchemy import delete
 from sqlalchemy import func
 from sqlalchemy import MetaData
 from sqlalchemy import select
+from sqlalchemy import join
 from sqlalchemy import Table
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.expression import false
 from sqlalchemy.ext.declarative import declarative_base
 
+class Nanny(object):
+    def __init__(self, db_url, interval, dry_run): 
+        self.makeConnection(db_url)
+        self.interval = interval
+        self.dry_run = dry_run
 
-def get_projects(meta):
+    def _run(self):
+        raise Exception('not implemented')
 
-    """Return a list of all projects in the database"""
+    def run(self):
+        while True:
+            self._run()
+            time.sleep(self.interval)
 
-    projects = []
-    shares_t = Table('shares', meta, autoload=True)
-    shares_q = select(columns=[shares_t.c.project_id]). group_by(shares_t.c.project_id)
-    for project in shares_q.execute():
-        projects.append(project[0])
-
-    return projects
-
-
-def yn_choice():
-
-    """Return True/False after checking with the user"""
-
-    yes = set(['yes', 'y', 'ye'])
-    no = set(['no', 'n'])
-
-    print "Do you want to sync? [Yes/No]"
-    while True:
-        choice = raw_input().lower()
-        if choice in yes:
-            return True
-        elif choice in no:
-            return False
-        else:
-            sys.stdout.write("Do you want to sync? [Yes/No/Abort]")
+    def makeConnection(self, db_url):
+        print(db_url)
+        "Establish a database connection and return the handle"
+        self.db_url = db_url
+        engine = create_engine(self.db_url)
+        engine.connect()
+        Session = sessionmaker(bind=engine)
+        self.db_session = Session()
+        self.db_metadata = MetaData()
+        self.db_metadata.bind = engine
+        self.db_base = declarative_base()
 
 
-def sync_quota_usages_project(meta, project_id, quota_usages_to_sync):
+class ManilaQuotaSyncNanny(Nanny):
+    def __init__(self, db_url, interval, dry_run):
+        super(ManilaQuotaSyncNanny, self).__init__(db_url, interval, dry_run)
+        self.MANILA_QUOTA_BY_USER_SYNCED = Counter('manila_quota_by_user_synced', '')
+        self.MANILA_QUOTA_BY_TYPE_SYNCED = Counter('manila_quota_by_type_synced', '')
 
-    """Sync the quota usages of a project from real usages"""
+    def get_share_networks_usages_project(self, project_id):
+        """Return the share_networks resource usages of a project"""
+        networks_t = Table('share_networks', self.db_metadata, autoload=True)
+        networks_q = select(columns=[networks_t.c.id,
+                                     networks_t.c.user_id],
+                            whereclause=and_(
+                                    networks_t.c.deleted == "False",
+                                    networks_t.c.project_id == project_id))
+        return networks_q.execute()
 
-    print "Syncing %s" % (project_id)
-    now = datetime.datetime.utcnow()
-    quota_usages_t = Table('quota_usages', meta, autoload=True)
-    # a tuple is used here to have a dict value per project and user
-    for resource_tuple, quota in quota_usages_to_sync.iteritems():
-        quota_usages_t.update().where(
-            and_(quota_usages_t.c.project_id == project_id,
-                 quota_usages_t.c.resource == resource_tuple[0],
-            quota_usages_t.c.user_id == resource_tuple[1])).values(
-            updated_at=now, in_use=quota).execute()
+    def get_snapshot_usages_project(self, project_id):
+        """Return the snapshots resource usages of a project"""
+        snapshots_t = Table('share_snapshots', self.db_metadata, autoload=True)
+        share_instances_t = Table('share_instances', self.db_metadata, autoload=True)
+        q = snapshots_t.join(share_instances_t, snapshots_t.c.share_id == share_instances_t.c.share_id)
+        snapshots_q = select(columns=[snapshots_t.c.id,
+                                      snapshots_t.c.user_id,
+                                      snapshots_t.c.share_size,
+                                      share_instances_t.c.share_type_id],
+                             whereclause=and_(
+                                    snapshots_t.c.deleted == "False",
+                                    snapshots_t.c.project_id == project_id)
+                            ).select_from(q)
+        return snapshots_q.execute()
 
+    def get_share_usages_project(self, project_id):
+        """Return the share resource usages of a project"""
+        shares_t = Table('shares', self.db_metadata, autoload=True)
+        share_instances_t = Table('share_instances', self.db_metadata, autoload=True)
+        q = shares_t.join(share_instances_t, shares_t.c.id == share_instances_t.c.share_id)
+        shares_q = select(columns=[shares_t.c.id,
+                                   shares_t.c.user_id,
+                                   shares_t.c.size,
+                                   share_instances_t.c.share_type_id],
+                          whereclause=and_(
+                                shares_t.c.deleted == "False",
+                                shares_t.c.project_id == project_id)
+                         ).select_from(q)
+        return shares_q.execute()
 
-def get_share_networks_usages_project(meta, project_id):
+    def get_quota_usages_project(self, project_id):
+        """Return the quota usages of a project"""
+        quota_usages_t = Table('quota_usages', self.db_metadata, autoload=True)
+        quota_usages_q = select(columns=[quota_usages_t.c.resource,
+                                         quota_usages_t.c.user_id,
+                                         quota_usages_t.c.share_type_id,
+                                         quota_usages_t.c.in_use],
+                                whereclause=and_(
+                                        quota_usages_t.c.deleted == 0,
+                                        quota_usages_t.c.project_id == project_id))
+        return quota_usages_q.execute()
 
-    """Return the share_networks resource usages of a project"""
+    def get_resource_types(self, project_id):
+        """Return a list of all resource types"""
+        quota_usages_t = Table('quota_usages', self.db_metadata, autoload=True)
+        resource_types_q = select(columns=[quota_usages_t.c.resource,
+                                           func.count()],
+                                  whereclause=quota_usages_t.c.deleted == 0,
+                                  group_by=quota_usages_t.c.resource)
+        return [resource for (resource, _) in resource_types_q.execute()]
 
-    networks_t = Table('share_networks', meta, autoload=True)
-    networks_q = select(columns=[networks_t.c.id, networks_t.c.user_id],
-                         whereclause=and_(
-                         networks_t.c.deleted == "False",
-                         networks_t.c.project_id == project_id))
-    return networks_q.execute()
+    def get_projects(self):
+        """Return a list of all projects in the database"""
+        shares_t = Table('shares', self.db_metadata, autoload=True)
+        shares_q = select(columns=[shares_t.c.project_id]).group_by(shares_t.c.project_id)
+        return [project[0] for project in shares_q.execute()]
 
-def get_snapshot_usages_project(meta, project_id):
+    def sync_quota_usages_project(self, project_id, quota_to_sync_by_user, quota_to_sync_by_type):
+        """Sync the quota usages of a project from real usages"""
+        print("Syncing %s" % (project_id))
+        now = datetime.datetime.utcnow()
+        quota_usages_t = Table('quota_usages', self.db_metadata, autoload=True)
+        # a tuple is used here to have a dict value per project and user
+        for resource_tuple, quota in quota_to_sync_by_user.iteritems():
+            quota_usages_t.update().values(updated_at=now, in_use=quota).where(and_(
+                    quota_usages_t.c.project_id == project_id,
+                    quota_usages_t.c.resource == resource_tuple[0],
+                    quota_usages_t.c.user_id == resource_tuple[1])).execute()
+        for (resource, share_type_id), quota in quota_to_sync_by_type.iteritems():
+            quota_usages_t.update().values(updated_at=now, in_use=quota).where(and_(
+                quota_usages_t.c.project_id == project_id,
+                quota_usages_t.c.resource == resource,
+                quota_usages_t.c.share_type_id == share_type_id, 
+            )).execute()
+    def sync_quota_usages_by_type(self, project_id, quota_to_sync):
+        print("Syncing %s" % (project_id))
+        now = datetime.datetime.utcnow()
+        quota_usages_t = Table('quota_usages', self.db_metadata, autoload=True)
 
-    """Return the snapshots resource usages of a project"""
+    def _run(self):
+        # prepare the output
+        ptable_user = PrettyTable(["Project ID", "User ID", "Resource", "Quota -> Real", "Sync Status"])
+        ptable_type = PrettyTable(["Project ID", "Share Type ID", "Resource", "Quota -> Real", "Sync Status"])
 
-    snapshots_t = Table('share_snapshots', meta, autoload=True)
-    snapshots_q = select(columns=[snapshots_t.c.id,
-                                  snapshots_t.c.user_id,
-                                  snapshots_t.c.share_size],
-                         whereclause=and_(
-                         snapshots_t.c.deleted == "False",
-                         snapshots_t.c.project_id == project_id))
-    return snapshots_q.execute()
+        for project_id in self.get_projects():
+            # get the quota usage of a project
+            quota_usages = {}
+            for (resource, user, share_type, count) in self.get_quota_usages_project(project_id):
+                quota_usages[(resource, user, share_type)] = quota_usages.get((resource, user, share_type), 0) + count
 
+            # get the real usage of a project
+            real_usages = {}
+            for (_, user, size, share_type_id) in self.get_share_usages_project(project_id):
+                real_usages[("shares", user, share_type_id)] = real_usages.get(("shares", user, share_type_id), 0) + 1
+                real_usages[("gigabytes", user, share_type_id)] = real_usages.get(("gigabytes", user, share_type_id), 0) + size
+            for (_, user, size, share_type_id) in self.get_snapshot_usages_project(project_id):
+                real_usages[("snapshots",user, share_type_id)] = real_usages.get(("snapshots",user, share_type_id), 0) + 1
+                real_usages[("snapshot_gigabytes", user, share_type_id)] = real_usages.get(("snapshot_gigabytes", user, share_type_id), 0) + size
+            for (_, user) in self.get_share_networks_usages_project(project_id):
+                real_usages[("share_networks", user, None)] = real_usages.get(("share_networks", user, None), 0) + 1
 
-def get_share_usages_project(meta, project_id):
+            # find discrepancies between quota usage and real usage
+            quota_usages_by_user_to_sync = {}
+            quota_usages_by_type_to_sync = {}
 
-    """Return the share resource usages of a project"""
+            quota_usages_by_user = { (r, u): q for (r, u, _), q in quota_usages.iteritems() if u != None }
+            quota_usages_by_type = { (r, t): q for (r, _, t), q in quota_usages.iteritems() if t != None }
+            quota_usages_by_user_sorted_keys = sorted([k for k in quota_usages_by_user.keys()], key=lambda k: k[1])
+            quota_usages_by_type_sorted_keys = sorted([k for k in quota_usages_by_type.keys()], key=lambda k: k[1])
 
-    shares_t = Table('shares', meta, autoload=True)
-    shares_q = select(columns=[shares_t.c.id,
-                                shares_t.c.user_id,
-                                shares_t.c.size],
-                       whereclause=and_(shares_t.c.deleted == "False",
-                                        shares_t.c.project_id == project_id))
-    return shares_q.execute()
+            real_usages_by_user = {}
+            for (r, u, t), q in real_usages.iteritems():
+                real_usages_by_user[(r, u)] = real_usages_by_user.get((r, u), 0) + q
+            real_usages_by_type = {}
+            for (r, u, t), q in real_usages.iteritems():
+                if t != None:
+                    real_usages_by_type[(r, t)] = real_usages_by_type.get((r, t), 0) + q
 
+            for resource, user in quota_usages_by_user_sorted_keys:
+                quota = quota_usages_by_user[(resource, user)]
+                real_quota = real_usages_by_user.get((resource, user), 0)
+                if quota != real_quota:
+                    quota_usages_by_user_to_sync[(resource, user)] = real_quota
+                    ptable_user.add_row([project_id, user, resource,
+                                    str(quota) + ' -> ' + str(real_quota),
+                                    '\033[1m\033[91mMISMATCH\033[0m'])
+                    self.MANILA_QUOTA_BY_USER_SYNCED.inc()
 
-def get_quota_usages_project(meta, project_id):
+            for resource, type in quota_usages_by_type_sorted_keys:
+                quota = quota_usages_by_type[(resource, type)]
+                real_quota = real_usages_by_type.get((resource, type), 0)
+                if quota != real_quota:
+                    quota_usages_by_type_to_sync[(resource, type)] = real_quota
+                    ptable_type.add_row([project_id, type, resource,
+                                    str(quota) + ' -> ' + str(real_quota),
+                                    '\033[1m\033[91mMISMATCH\033[0m'])
+                    self.MANILA_QUOTA_BY_TYPE_SYNCED.inc()
 
-    """Return the quota usages of a project"""
+            # sync the quota with the real usage
+            if not self.dry_run:
+                self.sync_quota_usages_project(project_id,
+                                               quota_usages_by_user_to_sync,
+                                               quota_usages_by_type_to_sync)
 
-    quota_usages_t = Table('quota_usages', meta, autoload=True)
-    quota_usages_q = select(columns=[quota_usages_t.c.resource,
-                                     quota_usages_t.c.user_id,
-                                     quota_usages_t.c.in_use],
-                            whereclause=and_(quota_usages_t.c.deleted == 0,
-                                             quota_usages_t.c.project_id ==
-                                             project_id, quota_usages_t.c.user_id != None))
-    return quota_usages_q.execute()
-
-
-def get_resource_types(meta, project_id):
-
-    """Return a list of all resource types"""
-
-    types = []
-    quota_usages_t = Table('quota_usages', meta, autoload=True)
-    resource_types_q = select(columns=[quota_usages_t.c.resource,
-                                       func.count()],
-                              whereclause=quota_usages_t.c.deleted == 0,
-                              group_by=quota_usages_t.c.resource)
-    for (resource, _) in resource_types_q.execute():
-        types.append(resource)
-    return types
-
-
-def makeConnection(db_url):
-
-    """Establish a database connection and return the handle"""
-
-    engine = create_engine(db_url)
-    engine.connect()
-    Session = sessionmaker(bind=engine)
-    thisSession = Session()
-    metadata = MetaData()
-    metadata.bind = engine
-    Base = declarative_base()
-    tpl = thisSession, metadata, Base
-    return tpl
+        # format output
+        print(ptable_user)
+        print(ptable_type)
 
 
 def get_db_url(config_file):
-
     """Return the database connection string from the config file"""
-
     parser = ConfigParser.SafeConfigParser()
     try:
         parser.read(config_file)
@@ -177,113 +241,37 @@ def get_db_url(config_file):
         sys.exit(2)
     return db_url
 
-
-def parse_cmdline_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config",
-                        default='./manila.conf',
-                        help='configuration file')
-    parser.add_argument("--nosync",
-                        action="store_true",
-                        help="never sync resources (no interactive check)")
-    parser.add_argument("--sync",
-                        action="store_true",
-                        help="always sync resources (no interactive check)")
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--list_projects",
-                       action="store_true",
-                       help='get a list of all projects in the database')
-    group.add_argument("--project_id",
-                       type=str,
-                       help="project to check")
-    return parser.parse_args()
-
-
 def main():
     try:
-        args = parse_cmdline_args()
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--config",
+                            default='./manila.conf',
+                            help='configuration file')
+        parser.add_argument("--dry-run",
+                            action="store_true",
+                            help="never sync resources (no interactive check)")
+        parser.add_argument("--interval",
+                            default=600,
+                            type=float,
+                            help="interval")
+        parser.add_argument("--promport",
+                            default=9456,
+                            help="prometheus port")
+        args = parser.parse_args()
     except Exception as e:
-        sys.stdout.write("Check command line arguments (%s)" % e.strerror)
+        sys.stdout.write("Check command line arguments (%s)" % e)
 
-    # connect to the DB
+    print(args)
+
+    try:
+        start_http_server(args.promport)
+    except Exception as e:
+        logging.fatal("start_http_server: " + str(e))
+        sys.exit(-1)
+
+    # args.dry_run = True
     db_url = get_db_url(args.config)
-    manila_session, manila_metadata, manila_Base = makeConnection(db_url)
-
-    # get the resource types
-    resource_types = get_resource_types(manila_metadata,
-                                        args.project_id)
-
-    # check/sync all projects found in the database
-    #
-    if args.list_projects:
-        for p in get_projects(manila_metadata):
-            print p
-        sys.exit(0)
-
-    # check a single project
-    #
-    print "checking project " + args.project_id + ":"
-
-    # get the quota usage of a project
-    quota_usages = {}
-    for (resource, user, count) in get_quota_usages_project(manila_metadata,
-                                                        args.project_id):
-        quota_usages[(resource, user)] = quota_usages.get((resource, user), 0) + count
-
-    # get the real usage of a project
-    real_usages = {}
-    for (_, user, size) in get_share_usages_project(manila_metadata,
-                                                        args.project_id):
-        real_usages[("shares", user)] = real_usages.get(("shares", user), 0) + 1
-        real_usages[("gigabytes", user)] = real_usages.get(("gigabytes", user), 0) + size
-
-    for (_, user, size) in get_snapshot_usages_project(manila_metadata,
-                                                          args.project_id):
-        real_usages[("snapshots",user)] = real_usages.get(("snapshots",user), 0) + 1
-        real_usages[("snapshot_gigabytes", user)] = real_usages.get(("snapshot_gigabytes", user), 0) + size
-
-    for (_, user) in get_share_networks_usages_project(manila_metadata,
-                                                        args.project_id):
-        real_usages[("share_networks", user)] = real_usages.get(("share_networks", user), 0) + 1
-
-    # prepare the output
-    ptable = PrettyTable(["Project ID", "User ID", "Resource", "Quota -> Real",
-                         "Sync Status"])
-
-    # find discrepancies between quota usage and real usage
-    quota_usages_to_sync = {}
-    for resource in resource_types:
-        userlist = []
-        for resource_tuple in quota_usages:
-            userlist.append(resource_tuple[1])
-        sorteduserlist = sorted(set(userlist))
-        for user in sorteduserlist:
-            if real_usages.get((resource, user)) is None and quota_usages.get((resource, user)) is not None:
-                quota_usages_to_sync[(resource, user)] = 0
-                ptable.add_row([args.project_id, user, resource,
-                            str(quota_usages[(resource, user)]) + ' -> ' + '0',
-                            '\033[1m\033[91mMISMATCH\033[0m'])
-            else:
-                if real_usages[(resource, user)] != quota_usages[(resource, user)]:
-                    quota_usages_to_sync[(resource, user)] = real_usages[(resource, user)]
-                    ptable.add_row([args.project_id, user, resource,
-                                   str(quota_usages[(resource, user)]) + ' -> ' +
-                                   str(real_usages[(resource, user)]),
-                                   '\033[1m\033[91mMISMATCH\033[0m'])
-                else:
-                    ptable.add_row([args.project_id, user, resource,
-                                   str(quota_usages[(resource, user)]) + ' -> ' +
-                                   str(real_usages[(resource, user)]),
-                                   '\033[1m\033[92mOK\033[0m'])
-
-    if len(quota_usages):
-        print ptable
-
-    # sync the quota with the real usage
-    if quota_usages_to_sync and not args.nosync and (args.sync or yn_choice()):
-        sync_quota_usages_project(manila_metadata, args.project_id,
-                                  quota_usages_to_sync)
-
+    ManilaQuotaSyncNanny(db_url, args.interval, args.dry_run).run()
 
 if __name__ == "__main__":
     main()

@@ -25,22 +25,12 @@ cp -v /manila-etc/* /etc/manila
 
 # we run an endless loop to run the script periodically
 echo "INFO: starting a loop to periodically run the nanny job for the manila quota sync"
-while true; do
-    if [ "$MANILA_QUOTA_SYNC_ENABLED" = "True" ] || [ "$MANILA_QUOTA_SYNC_ENABLED" = "true" ]; then
-        echo -n "INFO: sync manila quota - "
-        date
-        if [ "$MANILA_QUOTA_SYNC_DRY_RUN" = "False" ] || [ "$MANILA_QUOTA_SYNC_DRY_RUN" = "false" ]; then
-            SYNC_MODE="--sync"
-        else
-            SYNC_MODE="--nosync"
-            echo "INFO: running in dry-run mode only!"
-        fi
-        for i in `/var/lib/kolla/venv/bin/python /scripts/manila-quota-sync.py --config /etc/manila/manila.conf --list_projects`; do
-            echo project: $i
-            /var/lib/kolla/venv/bin/python /scripts/manila-quota-sync.py --config /etc/manila/manila.conf $SYNC_MODE --project_id $i
-        done
+INTERVAL=$(( 60 * $MANILA_NANNY_INTERVAL ))
+if [ "$MANILA_QUOTA_SYNC_ENABLED" = "True" ] || [ "$MANILA_QUOTA_SYNC_ENABLED" = "true" ]; then
+    if [ "$MANILA_QUOTA_SYNC_DRY_RUN" = "False" ] || [ "$MANILA_QUOTA_SYNC_DRY_RUN" = "false" ]; then
+        /var/lib/kolla/venv/bin/python /scripts/manila-quota-sync.py --config /etc/manila/manila.conf --interval $INTERVAL
+    else
+        echo "INFO: running in dry-run mode only!"
+        /var/lib/kolla/venv/bin/python /scripts/manila-quota-sync.py --config /etc/manila/manila.conf --interval $INTERVAL --dry-run
     fi
-    echo -n "INFO: waiting $MANILA_NANNY_INTERVAL minutes before starting the next loop run - "
-    date
-    sleep $(( 60 * $MANILA_NANNY_INTERVAL ))
-done
+fi
