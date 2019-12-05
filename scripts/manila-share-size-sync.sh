@@ -30,13 +30,13 @@ while true; do
         if [ "$MANILA_SHARE_SIZE_SYNC_DRY_RUN" = "False" ] || [ "$MANILA_SHARE_SIZE_SYNC_DRY_RUN" = "false" ]; then
             echo -n "INFO: checking and fixing manila db share size - "
             date
-            /var/lib/kolla/venv/bin/python /scripts/manila-share-size-sync.py \
+            /var/lib/openstack/bin/python /scripts/manila-share-size-sync.py \
                 --config /etc/manila/manila.conf \
                 --promhost $PROMETHEUS_HOST
         else
             echo -n "INFO: checking manila db share size - "
             date
-            /var/lib/kolla/venv/bin/python /scripts/manila-share-size-sync.py \
+            /var/lib/openstack/bin/python /scripts/manila-share-size-sync.py \
                 --config /etc/manila/manila.conf \
                 --promhost $PROMETHEUS_HOST \
                 --dry-run
