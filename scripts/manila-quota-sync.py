@@ -53,7 +53,6 @@ class Nanny(object):
             time.sleep(self.interval)
 
     def makeConnection(self, db_url):
-        print(db_url)
         "Establish a database connection and return the handle"
         self.db_url = db_url
         engine = create_engine(self.db_url)
@@ -221,9 +220,10 @@ class ManilaQuotaSyncNanny(Nanny):
 
             # sync the quota with the real usage
             if not self.dry_run:
-                self.sync_quota_usages_project(project_id,
-                                               quota_usages_by_user_to_sync,
-                                               quota_usages_by_type_to_sync)
+                if len(quota_usages_by_type_to_sync) > 0 or len(quota_usages_by_user_to_sync) > 0:
+                    self.sync_quota_usages_project(project_id,
+                                                   quota_usages_by_user_to_sync,
+                                                   quota_usages_by_type_to_sync)
 
         # format output
         print(ptable_user)
@@ -256,6 +256,7 @@ def main():
                             help="interval")
         parser.add_argument("--promport",
                             default=9456,
+                            type=int,
                             help="prometheus port")
         args = parser.parse_args()
     except Exception as e:
