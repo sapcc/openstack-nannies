@@ -206,7 +206,8 @@ class ManilaQuotaSyncNanny(Nanny):
                     ptable_user.add_row([project_id, user, resource,
                                     str(quota) + ' -> ' + str(real_quota),
                                     '\033[1m\033[91mMISMATCH\033[0m'])
-                    self.MANILA_QUOTA_BY_USER_SYNCED.inc()
+                    if not self.dry_run:
+                        self.MANILA_QUOTA_BY_USER_SYNCED.inc()
 
             for resource, type in quota_usages_by_type_sorted_keys:
                 quota = quota_usages_by_type[(resource, type)]
@@ -216,7 +217,8 @@ class ManilaQuotaSyncNanny(Nanny):
                     ptable_type.add_row([project_id, type, resource,
                                     str(quota) + ' -> ' + str(real_quota),
                                     '\033[1m\033[91mMISMATCH\033[0m'])
-                    self.MANILA_QUOTA_BY_TYPE_SYNCED.inc()
+                    if not self.dry_run:
+                        self.MANILA_QUOTA_BY_TYPE_SYNCED.inc()
 
             # sync the quota with the real usage
             if not self.dry_run:
