@@ -29,7 +29,7 @@ from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy import Table
 from sqlalchemy.sql.expression import false
-
+from prometheus_client import start_http_server, Counter
 from manila_nanny import ManilaNanny, get_db_url
 
 query = 'netapp_capacity_svm{metric="size_total"} + ignoring(metric) netapp_capacity_svm{metric="size_reserved_by_snapshots"}'
@@ -37,11 +37,14 @@ onegb = 1073741824
 
 class ManilaShareSyncNanny(ManilaNanny):
     _shares = {}
+    _non_exist_shares = {}
 
     def __init__(self, db_url, prom_host, prom_query, interval, dry_run):
         super(ManilaShareSyncNanny, self).__init__(db_url, interval, dry_run)
         self.prom_host = prom_host+"/api/v1/query"
         self.prom_query = prom_query
+        self.MANILA_SHARE_SIZE_SYNCED = Counter('manila_share_size_synced', '')
+        self.MANILA_SHARE_NOT_EXIST = Counter('manila_share_not_exist', '')
 
     def _run(self):
         self._shares = {}
@@ -57,12 +60,16 @@ class ManilaShareSyncNanny(ManilaNanny):
                               "match share size (%d) on backend, fixing ...") % (\
                               share_id, v.get('manila_size'), v.get('size'))
                         self.set_share_size(share_id, v.get('size'))
+                        self.MANILA_SHARE_SIZE_SYNCED.inc()
                     else:
                         print("share %s: manila share size (%d) does not " + \
                               "match share size (%d) on backend") % (\
                               share_id, v.get('manila_size'), v.get('size'))
             elif v.get('manila_size') is not None and v.get('size') is None:
                 print("[WARNING] ShareNotExist: share %s does not exist on backend" % share_id)
+                if self._non_exist_shares.get(share_id, 0) == 0:
+                    self._non_exist_shares[share_id] = 1
+                    self.MANILA_SHARE_NOT_EXIST.inc()
 
     def get_shares_from_netapp(self):
         payloads = {
@@ -145,10 +152,15 @@ def parse_cmdline_args():
 def main():
     try:
         args = parse_cmdline_args()
+        print(args)
     except Exception as e:
-        sys.stdout.write("Check command line arguments (%s)" % e.strerror)
+        sys.stdout.write("parse command line arguments (%s)" % e.strerror)
 
-    print(args)
+    try:
+        start_http_server(args.prom_port)
+    except Exception as e:
+        sys.stdout.write("start_http_server: " + str(e) + "\n")
+        sys.exit(-1)
 
     # connect to the DB
     db_url = get_db_url(args.config)
