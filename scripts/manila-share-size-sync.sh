@@ -23,26 +23,22 @@ unset http_proxy https_proxy all_proxy no_proxy
 echo "INFO: copying manila config files to /etc/manila"
 cp -v /manila-etc/* /etc/manila
 
-# we run an endless loop to run the script periodically
-echo "INFO: starting a loop to periodically run the nanny job for the manila share size sync"
-while true; do
-    if [ "$MANILA_SHARE_SIZE_SYNC_ENABLED" = "True" ] || [ "$MANILA_SHARE_SIZE_SYNC_ENABLED" = "true" ]; then
-        if [ "$MANILA_SHARE_SIZE_SYNC_DRY_RUN" = "False" ] || [ "$MANILA_SHARE_SIZE_SYNC_DRY_RUN" = "false" ]; then
-            echo -n "INFO: checking and fixing manila db share size - "
-            date
-            /var/lib/openstack/bin/python /scripts/manila-share-size-sync.py \
-                --config /etc/manila/manila.conf \
-                --promhost $PROMETHEUS_HOST
-        else
-            echo -n "INFO: checking manila db share size - "
-            date
-            /var/lib/openstack/bin/python /scripts/manila-share-size-sync.py \
-                --config /etc/manila/manila.conf \
-                --promhost $PROMETHEUS_HOST \
-                --dry-run
-        fi
+INTERVAL=$(( 60 * $MANILA_NANNY_INTERVAL ))
+
+if [ "$MANILA_SHARE_SIZE_SYNC_ENABLED" = "True" ] || [ "$MANILA_SHARE_SIZE_SYNC_ENABLED" = "true" ]; then
+    if [ "$MANILA_SHARE_SIZE_SYNC_DRY_RUN" = "False" ] || [ "$MANILA_SHARE_SIZE_SYNC_DRY_RUN" = "false" ]; then
+        echo -n "INFO: syncing manila db share size - "
+        /var/lib/openstack/bin/python /scripts/manila-share-size-sync.py \
+            --config /etc/manila/manila.conf \
+            --netapp-prom-host $PROMETHEUS_HOST \
+            --interval $INTERVAL
+    else
+        echo -n "INFO: DRY-RUN: syncing manila db share size - "
+        /var/lib/openstack/bin/python /scripts/manila-share-size-sync.py \
+            --config /etc/manila/manila.conf \
+            --netapp-prom-host $PROMETHEUS_HOST \
+            --interval $INTERVAL \
+            --dry-run
+ 
     fi
-    echo -n "INFO: waiting $MANILA_NANNY_INTERVAL seconds before starting the next loop run - "
-    date
-    sleep $(( $MANILA_NANNY_INTERVAL ))
-done
+fi
