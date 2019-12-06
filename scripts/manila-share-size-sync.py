@@ -18,7 +18,6 @@
 
 import argparse
 import sys
-import ConfigParser
 import datetime
 import time
 import requests
@@ -31,52 +30,10 @@ from sqlalchemy import select
 from sqlalchemy import Table
 from sqlalchemy.sql.expression import false
 
-from sqlalchemy import MetaData
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
-
-from manila_nanny import ManilaNanny
+from manila_nanny import ManilaNanny, get_db_url
 
 query = 'netapp_capacity_svm{metric="size_total"} + ignoring(metric) netapp_capacity_svm{metric="size_reserved_by_snapshots"}'
 onegb = 1073741824
-
-class ManilaNanny(object):
-    def __init__(self, db_url, interval, dry_run): 
-        self.makeConnection(db_url)
-        self.interval = interval
-        self.dry_run = dry_run
-
-    def _run(self):
-        raise Exception('not implemented')
-
-    def run(self):
-        while True:
-            self._run()
-            time.sleep(self.interval)
-
-    def makeConnection(self, db_url):
-        "Establish a database connection and return the handle"
-        self.db_url = db_url
-        engine = create_engine(self.db_url)
-        engine.connect()
-        Session = sessionmaker(bind=engine)
-        self.db_session = Session()
-        self.db_metadata = MetaData()
-        self.db_metadata.bind = engine
-        self.db_base = declarative_base()
-
-def get_db_url(config_file):
-    """Return the database connection string from the config file"""
-    parser = ConfigParser.SafeConfigParser()
-    try:
-        parser.read(config_file)
-        db_url = parser.get('database', 'connection', raw=True)
-    except:
-        print "ERROR: Check Manila configuration file."
-        sys.exit(2)
-    return db_url
-
 
 class ManilaShareSyncNanny(ManilaNanny):
     _shares = {}
@@ -191,14 +148,16 @@ def main():
     except Exception as e:
         sys.stdout.write("Check command line arguments (%s)" % e.strerror)
 
-    args.dry_run = True
     print(args)
 
     # connect to the DB
     db_url = get_db_url(args.config)
-
-    nanny = ManilaShareSyncNanny(db_url, args.netapp_prom_host, args.netapp_prom_query, args.interval, args.dry_run)
-    nanny.run()
+    ManilaShareSyncNanny(db_url, 
+                         args.netapp_prom_host,
+                         args.netapp_prom_query,
+                         args.interval,
+                         args.dry_run
+                         ).run()
 
 def test_resize():
     try:
