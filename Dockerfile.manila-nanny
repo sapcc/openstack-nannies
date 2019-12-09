@@ -16,7 +16,7 @@ FROM __MANILA_NANNY_BASE_IMAGE__
 
 USER root
 
-ADD scripts/manila-* /scripts/
+ADD scripts/manila* /scripts/
 ADD scripts/db-cleanup.py /scripts/
 ADD scripts/count-deleted.py /scripts/
 
