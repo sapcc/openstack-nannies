@@ -23,23 +23,21 @@ unset http_proxy https_proxy all_proxy no_proxy
 echo "INFO: copying manila config files to /etc/manila"
 cp -v /manila-etc/* /etc/manila
 
-INTERVAL=$(( 60 * $MANILA_NANNY_INTERVAL ))
-
 if [ "$MANILA_SHARE_SIZE_SYNC_ENABLED" = "True" ] || [ "$MANILA_SHARE_SIZE_SYNC_ENABLED" = "true" ]; then
     if [ "$MANILA_SHARE_SIZE_SYNC_DRY_RUN" = "False" ] || [ "$MANILA_SHARE_SIZE_SYNC_DRY_RUN" = "false" ]; then
-        echo -n "INFO: syncing manila db share size - "
+        echo "INFO: syncing manila db share size - "
         /var/lib/openstack/bin/python /scripts/manila-share-size-sync.py \
             --config /etc/manila/manila.conf \
             --netapp-prom-host $PROMETHEUS_HOST \
             --prom-port 9457 \
-            --interval $INTERVAL
+            --interval $MANILA_NANNY_INTERVAL
     else
-        echo -n "INFO: DRY-RUN: syncing manila db share size - "
+        echo "INFO: DRY-RUN: syncing manila db share size - "
         /var/lib/openstack/bin/python /scripts/manila-share-size-sync.py \
             --config /etc/manila/manila.conf \
             --netapp-prom-host $PROMETHEUS_HOST \
             --prom-port 9457 \
-            --interval $INTERVAL \
+            --interval $MANILA_NANNY_INTERVAL \
             --dry-run
  
     fi

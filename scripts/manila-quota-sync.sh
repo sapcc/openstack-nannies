@@ -24,13 +24,12 @@ echo "INFO: copying manila config files to /etc/manila"
 cp -v /manila-etc/* /etc/manila
 
 # we run an endless loop to run the script periodically
-INTERVAL=$(( 60 * $MANILA_NANNY_INTERVAL ))
 if [ "$MANILA_QUOTA_SYNC_ENABLED" = "True" ] || [ "$MANILA_QUOTA_SYNC_ENABLED" = "true" ]; then
     if [ "$MANILA_QUOTA_SYNC_DRY_RUN" = "False" ] || [ "$MANILA_QUOTA_SYNC_DRY_RUN" = "false" ]; then
         echo "INFO: run nanny job for the manila quota sync"
-        /var/lib/openstack/bin/python /scripts/manila-quota-sync.py --config /etc/manila/manila.conf --interval $INTERVAL
+        /var/lib/openstack/bin/python /scripts/manila-quota-sync.py --config /etc/manila/manila.conf --interval $MANILA_NANNY_INTERVAL
     else
         echo "INFO: run nanny job for the manila quota sync in dry-run mode only!"
-        /var/lib/openstack/bin/python /scripts/manila-quota-sync.py --config /etc/manila/manila.conf --interval $INTERVAL --dry-run 
+        /var/lib/openstack/bin/python /scripts/manila-quota-sync.py --config /etc/manila/manila.conf --interval $MANILA_NANNY_INTERVAL --dry-run
     fi
 fi
