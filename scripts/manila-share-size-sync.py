@@ -54,8 +54,7 @@ class ManilaShareSyncNanny(ManilaNanny):
         for share_id, v in self._shares.items():
             if v.get('manila_size') is not None and v.get('size') is not None:
                 if v.get('manila_size') != v.get('size'):
-                    if (datetime.datetime.utcnow() - v.get('updated_at')).total_seconds() > 600 \
-                        and self.dry_run is False:
+                    if not self.dry_run:
                         print("share %s: manila share size (%d) does not " + \
                               "match share size (%d) on backend, fixing ...") % (\
                               share_id, v.get('manila_size'), v.get('size'))
