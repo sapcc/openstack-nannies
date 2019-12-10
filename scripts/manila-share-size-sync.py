@@ -66,7 +66,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                               "match share size (%d) on backend") % (\
                               share_id, v.get('manila_size'), v.get('size'))
             elif v.get('manila_size') is not None and v.get('size') is None:
-                print("[WARNING] ShareNotExist: share %s does not exist on backend" % share_id)
+                print("[WARNING] ShareNotExistOnBackend: id=%s" % share_id)
                 if self._non_exist_shares.get(share_id, 0) == 0:
                     self._non_exist_shares[share_id] = 1
                     self.MANILA_SHARE_NOT_EXIST.inc()
