@@ -43,8 +43,8 @@ class ManilaShareSyncNanny(ManilaNanny):
         super(ManilaShareSyncNanny, self).__init__(db_url, interval, dry_run)
         self.prom_host = prom_host+"/api/v1/query"
         self.prom_query = prom_query
-        self.MANILA_SHARE_SIZE_SYNCED = Counter('manila_share_size_synced', '')
-        self.MANILA_SHARE_NOT_EXIST = Counter('manila_share_not_exist', '')
+        self.MANILA_SHARE_SIZE_SYNCED = Counter('manila_nanny_share_size_synced', '')
+        self.MANILA_SHARE_NOT_EXIST = Counter('manila_nanny_share_not_exist', '')
 
     def _run(self):
         self._shares = {}
