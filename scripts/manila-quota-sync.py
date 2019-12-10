@@ -67,8 +67,8 @@ class Nanny(object):
 class ManilaQuotaSyncNanny(Nanny):
     def __init__(self, db_url, interval, dry_run):
         super(ManilaQuotaSyncNanny, self).__init__(db_url, interval, dry_run)
-        self.MANILA_QUOTA_BY_USER_SYNCED = Counter('manila_quota_by_user_synced', '')
-        self.MANILA_QUOTA_BY_TYPE_SYNCED = Counter('manila_quota_by_type_synced', '')
+        self.MANILA_QUOTA_BY_USER_SYNCED = Counter('manila_nanny_user_quota_synced', '')
+        self.MANILA_QUOTA_BY_TYPE_SYNCED = Counter('manila_nanny_share_type_quota_synced', '')
 
     def get_share_networks_usages_project(self, project_id):
         """Return the share_networks resource usages of a project"""
