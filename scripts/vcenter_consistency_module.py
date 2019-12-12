@@ -65,7 +65,8 @@ class ConsistencyCheck:
         self.vcpassword = vcpassword
         self.novaconfig = novaconfig
         self.cinderconfig = cinderconfig
-        self.dry_run = dry_run
+        # self.dry_run = dry_run
+        self.dry_run = True
         self.prometheus_port = prometheus_port
         self.interactive = interactive
         if fix_limit:
@@ -156,6 +157,8 @@ class ConsistencyCheck:
                                                   'how many volumes are missing a uuid in the vcenter backing store config')
         self.gauge_vcenter_volume_zero_size = Gauge('vcenter_nanny_consistency_vcenter_volume_zero_size',
                                                   'how many volumes have a size of zero in the vcenter')
+        self.gauge_no_autofix = Gauge('vcenter_nanny_consistency_no_autofix',
+                                                  'the number of volume inconsistencies not fixable automatically')
 
         self.gauge_value_cinder_volume_attaching_for_too_long = 0
         self.gauge_value_cinder_volume_detaching_for_too_long = 0
@@ -166,6 +169,7 @@ class ConsistencyCheck:
         self.gauge_value_cinder_volume_in_use_without_attachments = 0
         self.gauge_value_vcenter_volume_uuid_mismatch = 0
         self.gauge_value_vcenter_volume_uuid_missing = 0
+        self.gauge_value_no_autofix = 0
 
     # start prometheus exporter if needed
     def start_prometheus_exporter(self):
@@ -382,7 +386,8 @@ class ConsistencyCheck:
             "config.uuid",
             "config.instanceUuid",
             "config.template",
-            "config.annotation"
+            "config.annotation",
+            "overallStatus"
         ]
 
         # collect the properties for all vms
@@ -414,8 +419,15 @@ class ConsistencyCheck:
                                     instancename_uuid_search_result = uuid_re.search(k['config.name'])
                                     # warn about any volumes without a uuid set in the backing store settings
                                     if not j.backing.uuid:
-                                        log.warn("- PLEASE CHECK MANUALLY - volume without uuid in backing store settings - uuid extracted from filename '%s' is '%s'", str(j.backing.fileName), str(filename_uuid_search_result.group(0)))
                                         self.gauge_value_vcenter_volume_uuid_missing += 1
+                                        if filename_uuid_search_result.group(0):
+                                            log.warn("- PLEASE CHECK MANUALLY - volume without uuid in backing store settings - uuid extracted from its vcenter filename '%s' is '%s'", str(j.backing.fileName), str(filename_uuid_search_result.group(0)))
+                                            my_volume_uuid = filename_uuid_search_result.group(0)
+                                        else:
+                                            log.warn("- PLEASE CHECK MANUALLY - volume without uuid in backing store settings - uuid extraction from its vcenter filename '%s' failed", str(j.backing.fileName))
+                                            my_volume_uuid = None
+                                    else:
+                                        my_volume_uuid = j.backing.uuid
                                     # check if the backing uuid setting is proper and potentially set it porperly:
                                     # - the uuid should be the same as the uuid in the backing filename
                                     # - if not the uuid should be set to the uuid extracted from the filename
@@ -428,20 +440,25 @@ class ConsistencyCheck:
                                             if filename_uuid_search_result.group(0) != instancename_uuid_search_result.group(0):
                                                 # check that the volume uuid we derived from the filename is in cinder
                                                 if self.cinder_os_volume_status.get(str(filename_uuid_search_result.group(0))):
-                                                    log.warn("- plan (dry-run only for now): setting volume uuid %s to uuid %s obtained from filename '%s' (instance uuid='%s')", str(j.backing.uuid), str(filename_uuid_search_result.group(0)), str(j.backing.fileName), str(instancename_uuid_search_result.group(0)))
-                                                    # build a candidate list of volumes to set uuid field to uuid values extraceted from filename
-                                                    self.uuid_rewrite_candidates[str(j.backing.uuid)] = str(filename_uuid_search_result.group(0))
+                                                    log.warn("- plan (dry-run only for now): setting volume uuid %s to uuid %s extracted from its vcenter filename '%s' (instance uuid='%s')", str(j.backing.uuid), str(filename_uuid_search_result.group(0)), str(j.backing.fileName), str(instancename_uuid_search_result.group(0)))
+                                                    # build a candidate list of volumes to set uuid field to uuid values extraceted from its vcenter filename
+                                                    self.uuid_rewrite_candidates[str(my_volume_uuid)] = str(filename_uuid_search_result.group(0))
                                                 else:
-                                                    log.warn("- PLEASE CHECK MANUALLY - volume uuid %s obtained from filename '%s' does not exist in cinder - not setting volume uuid to it for safety", str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
+                                                    log.warn("- PLEASE CHECK MANUALLY - volume uuid %s extracted from its vcenter filename '%s' does not exist in cinder - not setting volume uuid to it for safety", str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
                                             else:
-                                                log.warn("- PLEASE CHECK MANUALLY - instance uuid %s is equal to volume uuid %s obtained from filename '%s' - not touching this one for safety", str(instancename_uuid_search_result.group(0)), str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
+                                                log.warn("- PLEASE CHECK MANUALLY - instance uuid %s is equal to volume uuid %s extracted from its vcenter filename '%s' - not touching this one for safety", str(instancename_uuid_search_result.group(0)), str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
                                     else:
                                         log.warn("- PLEASE CHECK MANUALLY - no volume uuid found in filename='%s'", str(j.backing.fileName))
                                     # check for volumes with a size of 0 which should not happen in a perfect world
-                                    if j.capacityInBytes == 0:
+                                    if j.capacityInBytes == 0 and my_volume_uuid:
                                         log.warn("- PLEASE CHECK MANUALLY - volume with zero size: uuid='%s' filename='%s'", str(j.backing.uuid), str(j.backing.fileName))
                                         # build a candidate list of instances to reload to get rid of their buggy zero volume sizes
-                                        self.instance_reload_candidates[k['config.instanceUuid']] = str(j.backing.uuid)
+                                        self.instance_reload_candidates[str(my_volume_uuid)] = k['config.instanceUuid']
+                                    # check for vms with overallStatus gray and put the on the reload candidates list as well
+                                    if k.get('overallStatus') == 'gray' and my_volume_uuid:
+                                        log.warn("- PLEASE CHECK MANUALLY - volume with overallStatus gray: uuid='%s' filename='%s'", str(j.backing.uuid), str(j.backing.fileName))
+                                        # build a candidate list of instances to reload to get rid of their gray overallStatus
+                                        self.instance_reload_candidates[str(my_volume_uuid)] = k['config.instanceUuid']
                                 # map attached volume id to instance uuid - used later
                                 self.vc_server_uuid_with_mounted_volume[j.backing.uuid] = k['config.instanceUuid']
                                 # map attached volume id to instance name - used later for more detailed logging
@@ -734,7 +751,7 @@ class ConsistencyCheck:
 
         try:
             service = "nova"
-            temporary_server_list = self.os_conn.compute.servers(details=True, all_projects=1)
+            temporary_server_list = list(self.os_conn.compute.servers(details=True, all_projects=1))
             if not temporary_server_list:
                 raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any nova instances back from the nova api - this should in theory never happen ...')
             for server in temporary_server_list:
@@ -749,7 +766,7 @@ class ConsistencyCheck:
                                 self.nova_os_volumes_attached_at_server[server.id] = [attachment['id'].encode('ascii')]
                             self.nova_os_servers_with_attached_volume[attachment['id'].encode('ascii')] = server.id.encode('ascii')
             service = "cinder"
-            temporary_volume_list = self.os_conn.block_store.volumes(details=True, all_projects=1)
+            temporary_volume_list = list(self.os_conn.block_store.volumes(details=True, all_projects=1))
             if not temporary_volume_list:
                 raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any cinder volumes back from the cinder api - this should in theory never happen ...')
             for volume in temporary_volume_list:
@@ -793,6 +810,9 @@ class ConsistencyCheck:
     def problem_fixes(self):
         # only offer fixes if the volume uuid entered is in the az this code is running against
         if self.volume_query in self.cinder_os_all_volumes:
+            # offer this fix in interactive mode only for now - do this one first, as we do not want to do other fixes in this case
+            if self.interactive and self.problem_fix_rewrite_uuid():
+                return True
             if self.problem_fix_volume_status_nothing_attached():
                 return True
             if self.problem_fix_volume_status_all_attached():
@@ -801,6 +821,9 @@ class ConsistencyCheck:
                 return True
             # offer this fix in interactive mode only for now
             if self.interactive and self.problem_fix_sync_cinder_status():
+                return True
+            # offer this fix in interactive mode only for now
+            if self.interactive and self.problem_fix_reload_instance():
                 return True
             log.warning("- PLEASE CHECK MANUALLY - looks like everything is good - otherwise i have no idea how to fix this particualr case, then please check by hand")
         else:
@@ -887,21 +910,24 @@ class ConsistencyCheck:
         # TODO maybe even consider checking and setting the cinder_db_volume_attach_status
         # TODO maybe add the error state as well?
         if (self.cinder_os_volume_status.get(self.volume_query) in ['in-use', 'available', 'attaching', 'detaching', 'creating', 'deleting', 'reserved']):
-            something_attached = False
-            something_not_attached = False
-            if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
-                something_attached = True
-            if self.nova_os_servers_with_attached_volume.get(self.volume_query):
-                something_attached = True
-            if self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
-                something_attached = True
-            if not self.cinder_os_servers_with_attached_volume.get(self.volume_query):
-                something_not_attached = True
-            if not self.nova_os_servers_with_attached_volume.get(self.volume_query):
-                something_not_attached = True
-            if not self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
-                something_not_attached = True
-            if something_attached and something_not_attached:
+        # be more conservative and only remove attachments in nova and cinder if they are detached in the vcenter
+        #     something_attached = False
+        #     something_not_attached = False
+        #     if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
+        #         something_attached = True
+        #     if self.nova_os_servers_with_attached_volume.get(self.volume_query):
+        #         something_attached = True
+        #     if self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
+        #         something_attached = True
+        #     if not self.cinder_os_servers_with_attached_volume.get(self.volume_query):
+        #         something_not_attached = True
+        #     if not self.nova_os_servers_with_attached_volume.get(self.volume_query):
+        #         something_not_attached = True
+        #     if not self.vc_server_uuid_with_mounted_volume.get(self.volume_query):
+        #         something_not_attached = True
+        #     if something_attached and something_not_attached:
+            if ((not self.vc_server_uuid_with_mounted_volume.get(self.volume_query)) and self.cinder_os_servers_with_attached_volume.get(self.volume_query)) \
+                or ((not self.vc_server_uuid_with_mounted_volume.get(self.volume_query)) and self.nova_os_servers_with_attached_volume.get(self.volume_query)):
                 if self.interactive:
                     if self.cinder_os_servers_with_attached_volume.get(self.volume_query):
                         # below the self.cinder_os_servers_with_attached_volume.get(self.volume_query)[0] should maybe be replaced with proper handling of the corresponding list
@@ -969,10 +995,23 @@ class ConsistencyCheck:
                             else:
                                 log.info("- action: setting the state of the volume %s to available / detached", self.volume_query)
                                 self.cinder_db_update_volume_status(self.volume_query, 'available', 'detached')
+            elif self.vc_server_uuid_with_mounted_volume.get(self.volume_query) \
+                    and (not self.cinder_os_servers_with_attached_volume.get(self.volume_query)) \
+                    and self.nova_os_servers_with_attached_volume.get(self.volume_query):
+                log.info("- plan (dry-run-for-now) - try to bring back cinder volume attachment for volume %s", self.volume_query)
+                self.gauge_value_no_autofix += 1
+            elif self.vc_server_uuid_with_mounted_volume.get(self.volume_query) \
+                    and self.cinder_os_servers_with_attached_volume.get(self.volume_query) \
+                    and (not self.nova_os_servers_with_attached_volume.get(self.volume_query)):
+                log.info("- plan (dry-run-for-now) - try to bring back nova volume attachment for volume %s", self.volume_query)
+                self.gauge_value_no_autofix += 1
+            elif self.vc_server_uuid_with_mounted_volume.get(self.volume_query) \
+                    and (not self.cinder_os_servers_with_attached_volume.get(self.volume_query)) \
+                    and (not self.nova_os_servers_with_attached_volume.get(self.volume_query)):
+                log.info("- PLEASE CHECK MANUALLY - volume %s attached in vcenter, but not attached in cinder and nova", self.volume_query)
+                self.gauge_value_no_autofix += 1
             else:
                 log.debug("problem_fix_only_partially_attached does not apply")
-                return False
-
             return True
 
         else:
@@ -996,6 +1035,16 @@ class ConsistencyCheck:
                 self.cinder_db_update_volume_status(self.volume_query, 'in-use', 'attached')
             return True
         return False
+
+    def problem_fix_rewrite_uuid(self):
+        for i in self.uuid_rewrite_candidates:
+            log.info("- (dry-run-only) rewriting volume uuid %s to volume uuid %s extracted from its vcenter filename", self.volume_query, i[self.volume_query])
+        return True
+
+    def problem_fix_reload_instance(self):
+        for i in self.instance_reload_candidates:
+            log.info("- (dry-run-only) reloading instance %s to fix zero size volume %s attached to it", i[self.volume_query], self.volume_query)
+        return True
 
     def ask_user_yes_no(self):
         while True:
@@ -1052,6 +1101,7 @@ class ConsistencyCheck:
         self.gauge_value_cinder_volume_in_use_without_attachments = 0
         self.gauge_value_vcenter_volume_uuid_mismatch = 0
         self.gauge_value_vcenter_volume_uuid_missing = 0
+        self.gauge_value_no_autofix = 0
 
 
     def discover_problems(self, iterations):
@@ -1261,6 +1311,7 @@ class ConsistencyCheck:
         self.gauge_vcenter_volume_uuid_missing.set(self.gauge_value_vcenter_volume_uuid_missing)
         self.gauge_vcenter_volume_uuid_adjustment.set(len(self.uuid_rewrite_candidates))
         self.gauge_vcenter_volume_zero_size.set(len(self.instance_reload_candidates))
+        self.gauge_no_autofix.set(self.gauge_value_no_autofix)
 
     def run_tool(self):
         log.info("- INFO - connecting to the vcenter")
@@ -1269,19 +1320,14 @@ class ConsistencyCheck:
         if not self.vc_connection_ok():
             log.error("- PLEASE CHECK MANUALLY - problems connecting to the vcenter - retrying in next loop run")
             sys.exit(1)
-        log.info("- INFO - getting information from the vcenter")
+        log.info("- INFO - getting viewref from the vcenter")
         # exit here in case we get problems getting the viewref from the vcenter
         if not self.vc_get_viewref():
             log.error("- PLEASE CHECK MANUALLY - problems getting the viewref from the vcenter - retrying in next loop run")
             log.info("- INFO - disconnecting from the vcenter")
             self.vc_disconnect()
             sys.exit(1)
-        # exit here in case we get problems getting data from openstack
-        if not self.vc_get_info():
-            log.error("- PLEASE CHECK MANUALLY - problems getting data from the vcenter - retrying in next loop run")
-            log.info("- INFO - disconnecting from the vcenter")
-            self.vc_disconnect()
-            sys.exit(1)
+        # we connect to openstack first, as we need some of those values in the vcenter connect later
         log.info("- INFO - connecting to openstack")
         self.os_connect()
         # exit here in case we get problems connecting to openstack
@@ -1294,6 +1340,13 @@ class ConsistencyCheck:
             log.error("- PLEASE CHECK MANUALLY - problems getting data from openstack - retrying in next loop run")
             log.info("- INFO - disconnecting from openstack")
             self.os_disconnect()
+            sys.exit(1)
+        log.info("- INFO - getting information from the vcenter")
+        # exit here in case we get problems getting data from openstack
+        if not self.vc_get_info():
+            log.error("- PLEASE CHECK MANUALLY - problems getting data from the vcenter - retrying in next loop run")
+            log.info("- INFO - disconnecting from the vcenter")
+            self.vc_disconnect()
             sys.exit(1)
         log.info("- INFO - connecting to the cinder db")
         self.cinder_db_connect()
@@ -1331,19 +1384,14 @@ class ConsistencyCheck:
         if not self.vc_connection_ok():
             log.warn("- PLEASE CHECK MANUALLY - problems connecting to the vcenter - retrying in next loop run")
             return
-        log.info("- INFO - getting information from the vcenter")
+        log.info("- INFO - getting viewref from the vcenter")
         # stop this loop iteration here in case we get problems getting the viewref from the vcenter
         if not self.vc_get_viewref():
             log.warn("- PLEASE CHECK MANUALLY - problems getting the viewref from the vcenter - retrying in next loop run")
             log.info("- INFO - disconnecting from the vcenter")
             self.vc_disconnect()
             return
-        # stop this loop iteration here in case we get problems getting data from openstack
-        if not self.vc_get_info():
-            log.warn("- PLEASE CHECK MANUALLY - problems getting data from the vcenter - retrying in next loop run")
-            log.info("- INFO - disconnecting from the vcenter")
-            self.vc_disconnect()
-            return
+        # we connect to openstack first, as we need some of those values in the vcenter connect later
         log.info("- INFO - connecting to openstack")
         self.os_connect()
         # stop this loop iteration here in case we get problems connecting to openstack
@@ -1359,6 +1407,13 @@ class ConsistencyCheck:
             return
         log.info("- INFO - disconnecting from openstack")
         self.os_disconnect()
+        log.info("- INFO - getting information from the vcenter")
+        # stop this loop iteration here in case we get problems getting data from openstack
+        if not self.vc_get_info():
+            log.warn("- PLEASE CHECK MANUALLY - problems getting data from the vcenter - retrying in next loop run")
+            log.info("- INFO - disconnecting from the vcenter")
+            self.vc_disconnect()
+            return
         # clean the list of canditate volume uuids which are supposed to be fixed automatically
         self.volume_attachment_fix_candidates.clear()
         log.info("- INFO - connecting to the cinder db")
