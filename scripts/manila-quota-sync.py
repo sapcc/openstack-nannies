@@ -37,34 +37,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.expression import false
 from sqlalchemy.ext.declarative import declarative_base
+from manila_nanny import ManilaNanny, get_db_url
 
-class Nanny(object):
-    def __init__(self, db_url, interval, dry_run): 
-        self.makeConnection(db_url)
-        self.interval = interval
-        self.dry_run = dry_run
-
-    def _run(self):
-        raise Exception('not implemented')
-
-    def run(self):
-        while True:
-            self._run()
-            time.sleep(self.interval)
-
-    def makeConnection(self, db_url):
-        "Establish a database connection and return the handle"
-        self.db_url = db_url
-        engine = create_engine(self.db_url)
-        engine.connect()
-        Session = sessionmaker(bind=engine)
-        self.db_session = Session()
-        self.db_metadata = MetaData()
-        self.db_metadata.bind = engine
-        self.db_base = declarative_base()
-
-
-class ManilaQuotaSyncNanny(Nanny):
+class ManilaQuotaSyncNanny(ManilaNanny):
     def __init__(self, db_url, interval, dry_run):
         super(ManilaQuotaSyncNanny, self).__init__(db_url, interval, dry_run)
         self.MANILA_QUOTA_BY_USER_SYNCED = Counter('manila_nanny_user_quota_synced', '')
@@ -164,7 +139,13 @@ class ManilaQuotaSyncNanny(Nanny):
         ptable_user = PrettyTable(["Project ID", "User ID", "Resource", "Quota -> Real", "Sync Status"])
         ptable_type = PrettyTable(["Project ID", "Share Type ID", "Resource", "Quota -> Real", "Sync Status"])
 
-        for project_id in self.get_projects():
+        try:
+            projects = self.get_projects()
+        except sqlalchemy.exc.OperationalError:
+            self.makeConnection()
+            projects = self.get_projects()
+
+        for project_id in projects:
             # get the quota usage of a project
             quota_usages = {}
             for (resource, user, share_type, count) in self.get_quota_usages_project(project_id):

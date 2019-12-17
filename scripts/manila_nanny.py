@@ -7,9 +7,10 @@ from sqlalchemy.ext.declarative import declarative_base
 
 class ManilaNanny(object):
     def __init__(self, db_url, interval, dry_run): 
-        self.makeConnection(db_url)
+        self.db_url = db_url
         self.interval = interval
         self.dry_run = dry_run
+        self.makeConnection()
 
     def _run(self):
         raise Exception('not implemented')
@@ -19,9 +20,8 @@ class ManilaNanny(object):
             self._run()
             time.sleep(self.interval)
 
-    def makeConnection(self, db_url):
+    def makeConnection(self):
         "Establish a database connection and return the handle"
-        self.db_url = db_url
         engine = create_engine(self.db_url)
         engine.connect()
         Session = sessionmaker(bind=engine)
