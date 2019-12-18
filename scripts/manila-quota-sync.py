@@ -23,7 +23,9 @@ import ConfigParser
 import datetime
 import logging
 import time
+import sqlalchemy
 
+from manila_nanny import ManilaNanny, get_db_url
 from prettytable import PrettyTable
 from prometheus_client import start_http_server, Counter
 from sqlalchemy import and_
@@ -37,7 +39,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.expression import false
 from sqlalchemy.ext.declarative import declarative_base
-from manila_nanny import ManilaNanny, get_db_url
 
 class ManilaQuotaSyncNanny(ManilaNanny):
     def __init__(self, db_url, interval, dry_run):
