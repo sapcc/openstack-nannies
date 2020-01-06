@@ -65,8 +65,7 @@ class ConsistencyCheck:
         self.vcpassword = vcpassword
         self.novaconfig = novaconfig
         self.cinderconfig = cinderconfig
-        # self.dry_run = dry_run
-        self.dry_run = True
+        self.dry_run = dry_run
         self.prometheus_port = prometheus_port
         self.interactive = interactive
         if fix_limit:
