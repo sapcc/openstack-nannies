@@ -440,7 +440,7 @@ class ConsistencyCheck:
                                             if filename_uuid_search_result.group(0) != instancename_uuid_search_result.group(0):
                                                 # check that the volume uuid we derived from the filename is in cinder
                                                 if self.cinder_os_volume_status.get(str(filename_uuid_search_result.group(0))):
-                                                    log.warn("- plan (dry-run only for now): setting volume uuid %s to uuid %s extracted from its vcenter filename '%s' (instance uuid='%s')", str(j.backing.uuid), str(filename_uuid_search_result.group(0)), str(j.backing.fileName), str(instancename_uuid_search_result.group(0)))
+                                                    log.warn("- plan (dry-run only for now): setting volume uuid %s to uuid %s extracted from its vcenter filename '%s' (attached to instance %s)", str(j.backing.uuid), str(filename_uuid_search_result.group(0)), str(j.backing.fileName), str(instancename_uuid_search_result.group(0)))
                                                     # build a candidate list of volumes to set uuid field to uuid values extraceted from its vcenter filename
                                                     self.uuid_rewrite_candidates[str(my_volume_uuid)] = str(filename_uuid_search_result.group(0))
                                                 else:
