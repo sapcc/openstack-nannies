@@ -115,7 +115,7 @@ def get_error_deleting_volumes(meta):
     error_deleting_volumes = []
 
     volumes_t = Table('volumes', meta, autoload=True)
-    error_deleting_volumes_q = select(columns=[volumes_t.c.id]).where(volumes_t.c.status == "error_deleting")
+    error_deleting_volumes_q = select(columns=[volumes_t.c.id]).where(and_(volumes_t.c.status == "error_deleting",volumes_t.c.deleted == 0))
 
     # convert the query result into a list
     for i in error_deleting_volumes_q.execute():
@@ -158,7 +158,7 @@ def get_error_deleting_snapshots(meta):
     error_deleting_snapshots = []
 
     snapshots_t = Table('snapshots', meta, autoload=True)
-    error_deleting_snapshots_q = select(columns=[snapshots_t.c.id]).where(snapshots_t.c.status == "error_deleting")
+    error_deleting_snapshots_q = select(columns=[snapshots_t.c.id]).where(and_(snapshots_t.c.status == "error_deleting",snapshots_t.c.deleted == 0))
 
     # convert the query result into a list
     for i in error_deleting_snapshots_q.execute():
