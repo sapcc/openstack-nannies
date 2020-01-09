@@ -156,6 +156,8 @@ class ConsistencyCheck:
                                                   'how many volumes are missing a uuid in the vcenter backing store config')
         self.gauge_vcenter_volume_zero_size = Gauge('vcenter_nanny_consistency_vcenter_volume_zero_size',
                                                   'how many volumes have a size of zero in the vcenter')
+        self.gauge_vcenter_instance_status_gray = Gauge('vcenter_nanny_consistency_vcenter_instance_status_gray',
+                                                  'how many instances have a gray status in the vcenter')
         self.gauge_no_autofix = Gauge('vcenter_nanny_consistency_no_autofix',
                                                   'the number of volume inconsistencies not fixable automatically')
 
@@ -168,6 +170,8 @@ class ConsistencyCheck:
         self.gauge_value_cinder_volume_in_use_without_attachments = 0
         self.gauge_value_vcenter_volume_uuid_mismatch = 0
         self.gauge_value_vcenter_volume_uuid_missing = 0
+        self.gauge_value_vcenter_volume_zero_size = 0
+        self.gauge_value_vcenter_instance_state_gray = 0
         self.gauge_value_no_autofix = 0
 
     # start prometheus exporter if needed
@@ -465,11 +469,13 @@ class ConsistencyCheck:
                                         log.warn("- PLEASE CHECK MANUALLY - volume %s on instance %s with zero size - filename is '%s'", str(j.backing.uuid), str(k['config.instanceUuid']), str(j.backing.fileName))
                                         # build a candidate list of instances to reload to get rid of their buggy zero volume sizes
                                         self.instance_reload_candidates.append(k['config.instanceUuid'])
+                                        self.gauge_value_vcenter_volume_zero_size += 1
                                     # check for vms with overallStatus gray and put the on the reload candidates list as well
                                     if k.get('overallStatus') == 'gray':
                                         log.warn("- PLEASE CHECK MANUALLY - instance %s with overallStatus gray", str(k['config.instanceUuid']))
                                         # build a candidate list of instances to reload to get rid of their gray overallStatus
                                         self.instance_reload_candidates.append(k['config.instanceUuid'])
+                                        self.gauge_value_vcenter_instance_state_gray += 1
                                 # map attached volume id to instance uuid - used later
                                 self.vc_server_uuid_with_mounted_volume[j.backing.uuid] = k['config.instanceUuid']
                                 # map attached volume id to instance name - used later for more detailed logging
@@ -1113,6 +1119,8 @@ class ConsistencyCheck:
         self.gauge_value_cinder_volume_in_use_without_attachments = 0
         self.gauge_value_vcenter_volume_uuid_mismatch = 0
         self.gauge_value_vcenter_volume_uuid_missing = 0
+        self.gauge_value_vcenter_volume_zero_size = 0
+        self.gauge_value_vcenter_instance_state_gray = 0
         self.gauge_value_no_autofix = 0
 
 
@@ -1322,7 +1330,8 @@ class ConsistencyCheck:
         self.gauge_vcenter_volume_uuid_mismatch.set(self.gauge_value_vcenter_volume_uuid_mismatch)
         self.gauge_vcenter_volume_uuid_missing.set(self.gauge_value_vcenter_volume_uuid_missing)
         self.gauge_vcenter_volume_uuid_adjustment.set(len(self.uuid_rewrite_candidates))
-        self.gauge_vcenter_volume_zero_size.set(len(self.instance_reload_candidates))
+        self.gauge_vcenter_volume_zero_size.set(self.gauge_value_vcenter_volume_zero_size))
+        self.gauge_vcenter_instance_state_gray.set(self.gauge_value_vcenter_instance_state_gray))
         self.gauge_no_autofix.set(self.gauge_value_no_autofix)
 
     def run_tool(self):
