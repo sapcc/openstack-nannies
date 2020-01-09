@@ -97,7 +97,7 @@ class ConsistencyCheck:
         self.cinder_db_volume_attachment_attach_status = dict()
         self.volume_attachment_fix_candidates = dict()
         self.uuid_rewrite_candidates = dict()
-        self.instance_reload_candidates = dict()
+        self.instance_reload_candidates = []
 
         # this one has the instance uuid as key
         self.nova_os_volumes_attached_at_server = dict()
@@ -247,6 +247,18 @@ class ConsistencyCheck:
             return False
 
         return vm_handle
+
+    def vc_reload_instance(self,instance_uuid):
+
+        vm_handle = self.vc_get_instance_handle(instance_uuid)
+        try:
+            vm_handle.Reload()
+
+        except Exception as e:
+            log.warn("- PLEASE CHECK MANUALLY - Problem during instance reload in vcenter %s", str(e))
+            return False
+
+        return True
 
     def vc_detach_volume_instance(self,vm_handle,volume_uuid):
 
@@ -434,7 +446,7 @@ class ConsistencyCheck:
                                     #   case it might be a volume being move between bbs or similar ...
                                     if filename_uuid_search_result.group(0):
                                         if  j.backing.uuid != filename_uuid_search_result.group(0):
-                                            log.warn("- PLEASE CHECK MANUALLY - volume uuid mismatch: uuid='%s', filename='%s'", str(j.backing.uuid), str(j.backing.fileName))
+                                            log.warn("- PLEASE CHECK MANUALLY - volume uuid mismatch: uuid=%s, filename='%s'", str(j.backing.uuid), str(j.backing.fileName))
                                             self.gauge_value_vcenter_volume_uuid_mismatch += 1
                                             if filename_uuid_search_result.group(0) != instancename_uuid_search_result.group(0):
                                                 # check that the volume uuid we derived from the filename is in cinder
@@ -450,14 +462,14 @@ class ConsistencyCheck:
                                         log.warn("- PLEASE CHECK MANUALLY - no volume uuid found in filename='%s'", str(j.backing.fileName))
                                     # check for volumes with a size of 0 which should not happen in a perfect world
                                     if j.capacityInBytes == 0 and my_volume_uuid:
-                                        log.warn("- PLEASE CHECK MANUALLY - volume with zero size: uuid='%s' filename='%s'", str(j.backing.uuid), str(j.backing.fileName))
+                                        log.warn("- PLEASE CHECK MANUALLY - volume %s on instance %s with zero size - filename is '%s'", str(j.backing.uuid), str(k['config.instanceUuid']), str(j.backing.fileName))
                                         # build a candidate list of instances to reload to get rid of their buggy zero volume sizes
-                                        self.instance_reload_candidates[str(my_volume_uuid)] = k['config.instanceUuid']
+                                        self.instance_reload_candidates.append(k['config.instanceUuid'])
                                     # check for vms with overallStatus gray and put the on the reload candidates list as well
-                                    if k.get('overallStatus') == 'gray' and my_volume_uuid:
-                                        log.warn("- PLEASE CHECK MANUALLY - volume with overallStatus gray: uuid='%s' filename='%s'", str(j.backing.uuid), str(j.backing.fileName))
+                                    if k.get('overallStatus') == 'gray':
+                                        log.warn("- PLEASE CHECK MANUALLY - instance %s with overallStatus gray", str(k['config.instanceUuid']))
                                         # build a candidate list of instances to reload to get rid of their gray overallStatus
-                                        self.instance_reload_candidates[str(my_volume_uuid)] = k['config.instanceUuid']
+                                        self.instance_reload_candidates.append(k['config.instanceUuid'])
                                 # map attached volume id to instance uuid - used later
                                 self.vc_server_uuid_with_mounted_volume[j.backing.uuid] = k['config.instanceUuid']
                                 # map attached volume id to instance name - used later for more detailed logging
@@ -821,9 +833,6 @@ class ConsistencyCheck:
             # offer this fix in interactive mode only for now
             if self.interactive and self.problem_fix_sync_cinder_status():
                 return True
-            # offer this fix in interactive mode only for now
-            if self.interactive and self.problem_fix_reload_instance():
-                return True
             log.warning("- PLEASE CHECK MANUALLY - looks like everything is good - otherwise i have no idea how to fix this particualr case, then please check by hand")
         else:
             # TODO we should handle his in more detail, as we might have entries for meanwhile no longer existing volumes
@@ -1042,7 +1051,11 @@ class ConsistencyCheck:
 
     def problem_fix_reload_instance(self):
         for i in self.instance_reload_candidates:
-            log.info("- (dry-run-only) reloading instance %s to fix zero size volume %s attached to it", i[self.volume_query], self.volume_query)
+            if self.dry_run:
+                log.info("- dry-run: reloading instance %s to fix zero size volume attached to it or gray status", str(i))
+            else:
+                log.info("- action: reloading instance %s to fix zero size volume attached to it ot gray status", str(i))
+                self.vc_reload_instance(i)
         return True
 
     def ask_user_yes_no(self):
@@ -1374,7 +1387,9 @@ class ConsistencyCheck:
             log.info("- INFO - running in dry run mode")
         # clean the lists of canditates for uuid rewrite and instance reload
         self.uuid_rewrite_candidates.clear()
-        self.instance_reload_candidates.clear()
+        del self.instance_reload_candidates[:]
+        # for python 3 in the future
+        #self.instance_reload_candidates.clear()
         # reset gauge values to zero for this new loop run
         self.reset_gauge_values()
         log.info("- INFO - connecting to vcenter")
@@ -1440,6 +1455,8 @@ class ConsistencyCheck:
         else:
             # TODO create a metric for this case we may alert on
             log.warn("- PLEASE CHECK MANUALLY - too many (more than %s) volume attachment inconsistencies - denying to fix them automatically", str(self.max_automatic_fix))
+        log.info("- INFO - checking for instances with zero size disks or gray state and reload them")
+        self.problem_fix_reload_instance()
         log.info("- INFO - disconnecting from the cinder db")
         self.cinder_db_disconnect()
         log.info("- INFO - disconnecting from the nova db")
