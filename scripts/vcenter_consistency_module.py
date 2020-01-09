@@ -1330,8 +1330,8 @@ class ConsistencyCheck:
         self.gauge_vcenter_volume_uuid_mismatch.set(self.gauge_value_vcenter_volume_uuid_mismatch)
         self.gauge_vcenter_volume_uuid_missing.set(self.gauge_value_vcenter_volume_uuid_missing)
         self.gauge_vcenter_volume_uuid_adjustment.set(len(self.uuid_rewrite_candidates))
-        self.gauge_vcenter_volume_zero_size.set(self.gauge_value_vcenter_volume_zero_size))
-        self.gauge_vcenter_instance_state_gray.set(self.gauge_value_vcenter_instance_state_gray))
+        self.gauge_vcenter_volume_zero_size.set(self.gauge_value_vcenter_volume_zero_size)
+        self.gauge_vcenter_instance_state_gray.set(self.gauge_value_vcenter_instance_state_gray)
         self.gauge_no_autofix.set(self.gauge_value_no_autofix)
 
     def run_tool(self):
