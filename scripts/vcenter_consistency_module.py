@@ -97,7 +97,7 @@ class ConsistencyCheck:
         self.cinder_db_volume_attachment_attach_status = dict()
         self.volume_attachment_fix_candidates = dict()
         self.uuid_rewrite_candidates = dict()
-        self.instance_reload_candidates = []
+        self.instance_reload_candidates = set()
 
         # this one has the instance uuid as key
         self.nova_os_volumes_attached_at_server = dict()
@@ -469,14 +469,14 @@ class ConsistencyCheck:
                                         log.warn("- PLEASE CHECK MANUALLY - volume %s on instance %s with zero size - filename is '%s'", str(j.backing.uuid), str(k['config.instanceUuid']), str(j.backing.fileName))
                                         # build a candidate list of instances to reload to get rid of their buggy zero volume sizes
                                         # disable the automatic reload for now
-                                        #self.instance_reload_candidates.append(k['config.instanceUuid'])
+                                        #self.instance_reload_candidates.add(k['config.instanceUuid'])
                                         self.gauge_value_vcenter_volume_zero_size += 1
                                     # check for vms with overallStatus gray and put the on the reload candidates list as well
                                     if k.get('overallStatus') == 'gray':
                                         log.warn("- PLEASE CHECK MANUALLY - instance %s with overallStatus gray", str(k['config.instanceUuid']))
                                         # build a candidate list of instances to reload to get rid of their gray overallStatus
                                         # i have just learend that reloading gray instances the way i do it will not work, so stick with the alert for now
-                                        #self.instance_reload_candidates.append(k['config.instanceUuid'])
+                                        #self.instance_reload_candidates.add(k['config.instanceUuid'])
                                         self.gauge_value_vcenter_instance_state_gray += 1
                                 # map attached volume id to instance uuid - used later
                                 self.vc_server_uuid_with_mounted_volume[j.backing.uuid] = k['config.instanceUuid']
@@ -1398,9 +1398,7 @@ class ConsistencyCheck:
             log.info("- INFO - running in dry run mode")
         # clean the lists of canditates for uuid rewrite and instance reload
         self.uuid_rewrite_candidates.clear()
-        del self.instance_reload_candidates[:]
-        # for python 3 in the future
-        #self.instance_reload_candidates.clear()
+        self.instance_reload_candidates.clear()
         # reset gauge values to zero for this new loop run
         self.reset_gauge_values()
         log.info("- INFO - connecting to vcenter")
