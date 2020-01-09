@@ -474,7 +474,8 @@ class ConsistencyCheck:
                                     if k.get('overallStatus') == 'gray':
                                         log.warn("- PLEASE CHECK MANUALLY - instance %s with overallStatus gray", str(k['config.instanceUuid']))
                                         # build a candidate list of instances to reload to get rid of their gray overallStatus
-                                        self.instance_reload_candidates.append(k['config.instanceUuid'])
+                                        # i have just learend that reloading gray instances the way i do it will not work, so stick with the alert for now
+                                        #self.instance_reload_candidates.append(k['config.instanceUuid'])
                                         self.gauge_value_vcenter_instance_state_gray += 1
                                 # map attached volume id to instance uuid - used later
                                 self.vc_server_uuid_with_mounted_volume[j.backing.uuid] = k['config.instanceUuid']
@@ -1058,9 +1059,9 @@ class ConsistencyCheck:
     def problem_fix_reload_instance(self):
         for i in self.instance_reload_candidates:
             if self.dry_run:
-                log.info("- dry-run: reloading instance %s to fix zero size volume attached to it or gray status", str(i))
+                log.info("- dry-run: reloading instance %s to fix zero size volume attached to it", str(i))
             else:
-                log.info("- action: reloading instance %s to fix zero size volume attached to it ot gray status", str(i))
+                log.info("- action: reloading instance %s to fix zero size volume attached to it", str(i))
                 self.vc_reload_instance(i)
         return True
 
@@ -1464,7 +1465,7 @@ class ConsistencyCheck:
         else:
             # TODO create a metric for this case we may alert on
             log.warn("- PLEASE CHECK MANUALLY - too many (more than %s) volume attachment inconsistencies - denying to fix them automatically", str(self.max_automatic_fix))
-        log.info("- INFO - checking for instances with zero size disks or gray state and reload them")
+        log.info("- INFO - checking for instances with zero size disks and reload them")
         self.problem_fix_reload_instance()
         log.info("- INFO - disconnecting from the cinder db")
         self.cinder_db_disconnect()
