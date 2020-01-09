@@ -468,7 +468,8 @@ class ConsistencyCheck:
                                     if j.capacityInBytes == 0 and my_volume_uuid:
                                         log.warn("- PLEASE CHECK MANUALLY - volume %s on instance %s with zero size - filename is '%s'", str(j.backing.uuid), str(k['config.instanceUuid']), str(j.backing.fileName))
                                         # build a candidate list of instances to reload to get rid of their buggy zero volume sizes
-                                        self.instance_reload_candidates.append(k['config.instanceUuid'])
+                                        # disable the automatic reload for now
+                                        #self.instance_reload_candidates.append(k['config.instanceUuid'])
                                         self.gauge_value_vcenter_volume_zero_size += 1
                                     # check for vms with overallStatus gray and put the on the reload candidates list as well
                                     if k.get('overallStatus') == 'gray':
