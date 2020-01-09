@@ -156,7 +156,7 @@ class ConsistencyCheck:
                                                   'how many volumes are missing a uuid in the vcenter backing store config')
         self.gauge_vcenter_volume_zero_size = Gauge('vcenter_nanny_consistency_vcenter_volume_zero_size',
                                                   'how many volumes have a size of zero in the vcenter')
-        self.gauge_vcenter_instance_status_gray = Gauge('vcenter_nanny_consistency_vcenter_instance_status_gray',
+        self.gauge_vcenter_instance_state_gray = Gauge('vcenter_nanny_consistency_vcenter_instance_status_gray',
                                                   'how many instances have a gray status in the vcenter')
         self.gauge_no_autofix = Gauge('vcenter_nanny_consistency_no_autofix',
                                                   'the number of volume inconsistencies not fixable automatically')
