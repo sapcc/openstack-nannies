@@ -401,8 +401,8 @@ def main():
     cinder_session, cinder_metadata, cinder_Base = makeConnection(db_url)
 
     # fixing volume attachments at no longer existing instances
-    nova_instances = get_nova_instances(conn)
     orphan_volume_attachments = get_orphan_volume_attachments(cinder_metadata)
+    nova_instances = get_nova_instances(conn)
     wrong_orphan_volume_attachments = get_wrong_orphan_volume_attachments(nova_instances, orphan_volume_attachments)
     if len(wrong_orphan_volume_attachments) != 0:
         log.info("- orphan volume attachments found:")
