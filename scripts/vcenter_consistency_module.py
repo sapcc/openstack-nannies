@@ -148,8 +148,10 @@ class ConsistencyCheck:
                                                   'how many volumes attachments need fixing')
         self.gauge_cinder_volume_attachment_max_fix_count = Gauge('vcenter_nanny_consistency_cinder_volume_attachment_max_fix_count',
                                                   'volumes attachment fixing is denied if there are more than this many attachments to fix')
+        self.gauge_vcenter_volume_backing_uuid_mismatch = Gauge('vcenter_nanny_consistency_vcenter_volume_backing_uuid_mismatch',
+                                                  'how many volumes have a volume backing uuid mismatch in the vcenter')
         self.gauge_vcenter_volume_uuid_mismatch = Gauge('vcenter_nanny_consistency_vcenter_volume_uuid_mismatch',
-                                                  'how many volumes have a uuid mismatch in the vcenter')
+                                                  'how many shadow vms have a uuid to name mismatch in the vcenter')
         self.gauge_vcenter_volume_uuid_adjustment = Gauge('vcenter_nanny_consistency_vcenter_volume_uuid_adjustment',
                                                   'how many volumes got a uuid mismatch adjusted in the vcenter')
         self.gauge_vcenter_volume_uuid_missing = Gauge('vcenter_nanny_consistency_vcenter_volume_uuid_missing',
@@ -168,6 +170,7 @@ class ConsistencyCheck:
         self.gauge_value_cinder_volume_is_in_state_reserved = 0
         self.gauge_value_cinder_volume_available_with_attachments = 0
         self.gauge_value_cinder_volume_in_use_without_attachments = 0
+        self.gauge_value_vcenter_volume_backing_uuid_mismatch = 0
         self.gauge_value_vcenter_volume_uuid_mismatch = 0
         self.gauge_value_vcenter_volume_uuid_missing = 0
         self.gauge_value_vcenter_volume_zero_size = 0
@@ -276,13 +279,13 @@ class ConsistencyCheck:
 
             if not volume_to_detach:
                 log.warn(
-                    "- PLEASE CHECK MANUALLY - the volume %s on server %s does not seem to exist", volume_uuid, vm_handle.config.instanceUuid)
+                    "- PLEASE CHECK MANUALLY - vc_detach_volume_instance: the volume %s on server %s does not seem to exist", volume_uuid, vm_handle.config.instanceUuid)
             if self.dry_run:
-                log.info("- dry-run mode: detaching volume %s from server %s [%s]", volume_uuid, vm_handle.config.instanceUuid, vm_handle.config.name)
+                log.info("- dry-run: detaching volume %s from server %s [%s]", volume_uuid, vm_handle.config.instanceUuid, vm_handle.config.name)
                 return True
 
             else:
-                log.info("- detaching volume  %s from server %s [%s]", volume_uuid, vm_handle.config.instanceUuid, vm_handle.config.name)
+                log.info("- action: detaching volume  %s from server %s [%s]", volume_uuid, vm_handle.config.instanceUuid, vm_handle.config.name)
                 volume_to_detach_spec = vim.vm.device.VirtualDeviceSpec()
                 volume_to_detach_spec.operation = \
                     vim.vm.device.VirtualDeviceSpec.Operation.remove
@@ -306,6 +309,54 @@ class ConsistencyCheck:
 
         except Exception as e:
                 log.info("- PLEASE CHECK MANUALLY - error detaching volume %s from server %s - %s", volume_uuid, vm_handle.config.instanceUuid, str(e))
+
+    # TODO: this function is not used yet, as it will only work if the instance is turned off
+    def vc_rename_volume_backing_uuid(self,instance_uuid,old_volume_uuid,new_volume_uuid):
+
+        vm_handle = self.vc_get_instance_handle(instance_uuid)
+        try:
+            #finding volume_handle here
+            volume_to_rename = None
+            for dev in vm_handle.config.hardware.device:
+                if isinstance(dev, vim.vm.device.VirtualDisk) \
+                        and dev.backing.uuid == old_volume_uuid:
+                    volume_to_rename = dev
+
+            if not volume_to_rename:
+                log.warn(
+                    "- PLEASE CHECK MANUALLY - vc_rename_volume_backing_uuid: the volume %s on server %s does not seem to exist", volume_uuid, vm_handle.config.instanceUuid)
+            if self.dry_run:
+                log.info("- dry-run: renaming volume backing uuid from %s to %s [attached to instance %s]", old_volume_uuid, new_volume_uuid, vm_handle.config.instanceUuid)
+                return True
+
+            else:
+                log.info("- action: renaming volume backing uuid from %s to %s [attached to instance %s]", old_volume_uuid, new_volume_uuid, vm_handle.config.instanceUuid)
+                volume_to_rename_spec = vim.vm.device.VirtualDeviceSpec()
+                volume_to_rename_spec.operation = \
+                    vim.vm.device.VirtualDeviceSpec.Operation.edit
+                volume_to_rename_spec.device = volume_to_rename
+
+                volume_to_rename_spec.device.backing = vim.vm.device.VirtualDisk.FlatVer2BackingInfo()
+                volume_to_rename_spec.device.backing.uuid = new_volume_uuid
+
+                spec = vim.vm.ConfigSpec()
+                spec.deviceChange = [volume_to_rename_spec]
+                task = vm_handle.ReconfigVM_Task(spec=spec)
+                try:
+                    WaitForTask(task, si=self.vc_service_instance)
+                except vmodl.fault.HostNotConnected:
+                    log.warn("- PLEASE CHECK MANUALLY - cannot rename volume backing uuid %s on server %s - the esx host it is running on is disconnected", old_volume_uuid, vm_handle.config.instanceUuid)
+                    return False
+                except vim.fault.InvalidPowerState as e:
+                    log.warn("- PLEASE CHECK MANUALLY - cannot rename volume backing uuid %s on server %s - %s", old_volume_uuid, vm_handle.config.instanceUuid, str(e.msg))
+                    return False
+                except vim.fault.GenericVmConfigFault as e:
+                    log.warn("- PLEASE CHECK MANUALLY - cannot rename volume backing uuid %s on server %s - %s", old_volume_uuid, vm_handle.config.instanceUuid, str(e.msg))
+                    return False
+                return True
+
+        except Exception as e:
+                log.info("- PLEASE CHECK MANUALLY - error renaming volume backing uuid %s on server %s - %s", old_volume_uuid, vm_handle.config.instanceUuid, str(e))
 
     # Shamelessly borrowed from:
     # https://github.com/dnaeon/py-vconnector/blob/master/src/vconnector/core.py
@@ -416,6 +467,8 @@ class ConsistencyCheck:
         for k in self.vc_data:
             # only work with results, which have an instance uuid defined and are openstack vms (i.e. have an annotation set)
             if k.get('config.instanceUuid') and openstack_re.match(k.get('config.annotation')) and not k.get('config.template'):
+                # try to find an openstack uuid in the instance name
+                instancename_uuid_search_result = uuid_re.search(k['config.name'])
                 # build a list of all openstack volumes in the vcenter to later compare it to the volumes in openstack
                 self.vc_all_servers.append(k['config.instanceUuid'])
                 # get the config.hardware.device property out of the data dict and iterate over its elements
@@ -430,8 +483,8 @@ class ConsistencyCheck:
                             if j.backing.fileName.lower().startswith('[vvol_'):
                                 # do the consistency checks only in non interactive mode
                                 if not self.interactive:
+                                    # try to find an openstack uuid in the filename
                                     filename_uuid_search_result = uuid_re.search(j.backing.fileName)
-                                    instancename_uuid_search_result = uuid_re.search(k['config.name'])
                                     # warn about any volumes without a uuid set in the backing store settings
                                     if not j.backing.uuid:
                                         self.gauge_value_vcenter_volume_uuid_missing += 1
@@ -443,27 +496,27 @@ class ConsistencyCheck:
                                             my_volume_uuid = None
                                     else:
                                         my_volume_uuid = j.backing.uuid
-                                    # check if the backing uuid setting is proper and potentially set it porperly:
-                                    # - the uuid should be the same as the uuid in the backing filename
-                                    # - if not the uuid should be set to the uuid extracted from the filename
-                                    #   as long as it is not the uuid in the name of the instance, because in that
-                                    #   case it might be a volume being move between bbs or similar ...
+                                    # check if the backing uuid setting is proper: it should be the same as the uuid extracted from the filename:
+                                    # TODO: in theory this should also be applied to shadow vms, i.e. without a config.annotation
                                     if filename_uuid_search_result.group(0):
-                                        if  j.backing.uuid != filename_uuid_search_result.group(0):
-                                            log.warn("- PLEASE CHECK MANUALLY - volume uuid mismatch: uuid=%s, filename='%s'", str(j.backing.uuid), str(j.backing.fileName))
-                                            self.gauge_value_vcenter_volume_uuid_mismatch += 1
-                                            if filename_uuid_search_result.group(0) != instancename_uuid_search_result.group(0):
-                                                # check that the volume uuid we derived from the filename is in cinder
-                                                if self.cinder_os_volume_status.get(str(filename_uuid_search_result.group(0))):
-                                                    log.warn("- plan (dry-run only for now): setting volume uuid %s to uuid %s extracted from its vcenter filename '%s' (attached to instance %s)", str(j.backing.uuid), str(filename_uuid_search_result.group(0)), str(j.backing.fileName), str(instancename_uuid_search_result.group(0)))
-                                                    # build a candidate list of volumes to set uuid field to uuid values extraceted from its vcenter filename
-                                                    self.uuid_rewrite_candidates[str(my_volume_uuid)] = str(filename_uuid_search_result.group(0))
-                                                else:
-                                                    log.warn("- PLEASE CHECK MANUALLY - volume uuid %s extracted from its vcenter filename '%s' does not exist in cinder - not setting volume uuid to it for safety", str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
-                                            else:
-                                                log.warn("- PLEASE CHECK MANUALLY - instance uuid %s is equal to volume uuid %s extracted from its vcenter filename '%s' - not touching this one for safety", str(instancename_uuid_search_result.group(0)), str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
+                                        if j.backing.uuid != filename_uuid_search_result.group(0):
+                                            log.warn("- PLEASE CHECK MANUALLY - volume backing uuid mismatch: uuid=%s, filename='%s'", str(j.backing.uuid), str(j.backing.fileName))
+                                            self.gauge_value_vcenter_volume_backing_uuid_mismatch += 1
+                                            # lets keep this disabled for now
+                                            # if filename_uuid_search_result.group(0) != instancename_uuid_search_result.group(0):
+                                            #     # check that the volume uuid we derived from the filename is in cinder
+                                            #     if self.cinder_os_volume_status.get(str(filename_uuid_search_result.group(0))):
+                                            #         log.warn("- plan (dry-run only for now): setting volume uuid %s to uuid %s extracted from its vcenter filename '%s' (attached to instance %s)", str(j.backing.uuid), str(filename_uuid_search_result.group(0)), str(j.backing.fileName), str(instancename_uuid_search_result.group(0)))
+                                            #         # build a candidate list of volumes to set uuid field to uuid values extraceted from its vcenter filename
+                                            #         # the arguments below are: index - new uuid, values - instance uuid, old uuid
+                                            #         self.uuid_rewrite_candidates[str(filename_uuid_search_result.group(0))] = (str(k['config.instanceUuid']), str(my_volume_uuid))
+                                            #     else:
+                                            #         log.warn("- PLEASE CHECK MANUALLY - volume uuid %s extracted from its vcenter filename '%s' does not exist in cinder - not setting volume uuid to it for safety", str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
+                                            # else:
+                                            #     log.warn("- PLEASE CHECK MANUALLY - instance uuid %s is equal to volume uuid %s extracted from its vcenter filename '%s' - not touching this one for safety", str(instancename_uuid_search_result.group(0)), str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
                                     else:
                                         log.warn("- PLEASE CHECK MANUALLY - no volume uuid found in filename='%s'", str(j.backing.fileName))
+
                                     # check for volumes with a size of 0 which should not happen in a perfect world
                                     if j.capacityInBytes == 0 and my_volume_uuid:
                                         log.warn("- PLEASE CHECK MANUALLY - volume %s on instance %s with zero size - filename is '%s'", str(j.backing.uuid), str(k['config.instanceUuid']), str(j.backing.fileName))
@@ -471,13 +524,6 @@ class ConsistencyCheck:
                                         # disable the automatic reload for now
                                         #self.instance_reload_candidates.add(k['config.instanceUuid'])
                                         self.gauge_value_vcenter_volume_zero_size += 1
-                                    # check for vms with overallStatus gray and put the on the reload candidates list as well
-                                    if k.get('overallStatus') == 'gray':
-                                        log.warn("- PLEASE CHECK MANUALLY - instance %s with overallStatus gray", str(k['config.instanceUuid']))
-                                        # build a candidate list of instances to reload to get rid of their gray overallStatus
-                                        # i have just learend that reloading gray instances the way i do it will not work, so stick with the alert for now
-                                        #self.instance_reload_candidates.add(k['config.instanceUuid'])
-                                        self.gauge_value_vcenter_instance_state_gray += 1
                                 # map attached volume id to instance uuid - used later
                                 self.vc_server_uuid_with_mounted_volume[j.backing.uuid] = k['config.instanceUuid']
                                 # map attached volume id to instance name - used later for more detailed logging
@@ -488,6 +534,41 @@ class ConsistencyCheck:
                     log.warn("- PLEASE CHECK MANUALLY - instance without hardware - this should not happen!")
                 if not has_volume_attachments.get(k['config.instanceUuid']):
                     self.vcenter_instances_without_mounts[k['config.instanceUuid']] = k['config.name']
+
+            if k.get('config.instanceUuid') and not k.get('config.template'):
+                # try to find an openstack uuid in the instance name
+                instancename_uuid_search_result = uuid_re.search(k['config.name'])
+                # check for vms with overallStatus gray and put the on the reload candidates list as well
+                if k.get('overallStatus') == 'gray':
+                    log.warn("- PLEASE CHECK MANUALLY - instance %s with overallStatus gray", str(k['config.instanceUuid']))
+                    # build a candidate list of instances to reload to get rid of their gray overallStatus
+                    # i have just learend that reloading gray instances the way i do it will not work, so stick with the alert for now
+                    #self.instance_reload_candidates.add(k['config.instanceUuid'])
+                    self.gauge_value_vcenter_instance_state_gray += 1
+
+                # check if the instanceUuid setting is proper: it should be the same as the uuid in the name
+                # only consider instances which have an openstack uuid in their name
+                if instancename_uuid_search_result and instancename_uuid_search_result.group(0):
+                    if k['config.instanceUuid'] != instancename_uuid_search_result.group(0):
+                        log.warn("- PLEASE CHECK MANUALLY - volume uuid to instance name mismatch for shadow vm: instanceUuid=%s, uuid from instance name='%s'", k['config.instanceUuid'], instancename_uuid_search_result.group(0))
+                        self.gauge_value_vcenter_volume_uuid_mismatch += 1
+                        # lets keep this disabled for now
+                        # # check that the volume uuid we derived from the filename is in cinder
+                        # if self.cinder_os_volume_status.get(str(instancename_uuid_search_result.group(0))):
+                        #     log.warn("- plan (dry-run only for now): setting volume uuid %s to uuid %s extracted from its vcenter filename '%s' (attached to instance %s)", str(j.backing.uuid), str(filename_uuid_search_result.group(0)), str(j.backing.fileName), str(instancename_uuid_search_result.group(0)))
+                        #     # build a candidate list of volumes to set uuid field to uuid values extraceted from its vcenter filename
+                        #     # old: self.uuid_rewrite_candidates[str(my_volume_uuid)] = str(filename_uuid_search_result.group(0))
+                        #     #self.uuid_rewrite_candidates[str(filename_uuid_search_result.group(0))] = (str(instancename_uuid_search_result.group(0), str(my_volume_uuid))
+                        #     # the arguments below are: index - new uuid, values - instance uuid, old uuid
+                        #     self.uuid_rewrite_candidates[str(filename_uuid_search_result.group(0))] = (str(k['config.instanceUuid']), str(my_volume_uuid))
+                        # else:
+                        #     log.warn("- PLEASE CHECK MANUALLY - volume uuid %s extracted from its vcenter filename '%s' does not exist in cinder - not setting volume uuid to it for safety", str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
+                        # i think this can go ...
+                        # else:
+                        #     log.warn("- PLEASE CHECK MANUALLY - instance uuid %s is equal to volume uuid %s extracted from its vcenter filename '%s' - not touching this one for safety", str(instancename_uuid_search_result.group(0)), str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
+                # we do not want this as this would hit too many non openstack vm running on the vcenter too
+                # else:
+                #     log.warn("- PLEASE CHECK MANUALLY - no uuid found in instance name='%s'",k['config.name']) 
 
             # build a list of all volumes in the vcenter
             if k.get('config.instanceUuid') and not k.get('config.template'):
@@ -829,9 +910,6 @@ class ConsistencyCheck:
     def problem_fixes(self):
         # only offer fixes if the volume uuid entered is in the az this code is running against
         if self.volume_query in self.cinder_os_all_volumes:
-            # offer this fix in interactive mode only for now - do this one first, as we do not want to do other fixes in this case
-            if self.interactive and self.problem_fix_rewrite_uuid():
-                return True
             if self.problem_fix_volume_status_nothing_attached():
                 return True
             if self.problem_fix_volume_status_all_attached():
@@ -1053,17 +1131,21 @@ class ConsistencyCheck:
         return False
 
     def problem_fix_rewrite_uuid(self):
-        for i in self.uuid_rewrite_candidates:
-            log.info("- (dry-run-only) rewriting volume uuid %s to volume uuid %s extracted from its vcenter filename", self.volume_query, i[self.volume_query])
+        # do nothing here for now
+        # for i in self.uuid_rewrite_candidates:
+        #     log.info("- (dry-run-only) rewriting volume uuid %s to volume uuid %s extracted from its vcenter filename (instance %s)", str(self.uuid_rewrite_candidates[i][1]), str(i), str(self.uuid_rewrite_candidates[i][0]))
+        #     # this does not work if the machine is in powered on state
+        #     #self.vc_rename_volume_backing_uuid(self.uuid_rewrite_candidates[i][0],str(self.uuid_rewrite_candidates[i][1]),str(i))
         return True
 
     def problem_fix_reload_instance(self):
-        for i in self.instance_reload_candidates:
-            if self.dry_run:
-                log.info("- dry-run: reloading instance %s to fix zero size volume attached to it", str(i))
-            else:
-                log.info("- action: reloading instance %s to fix zero size volume attached to it", str(i))
-                self.vc_reload_instance(i)
+        # do nothing here for now
+        # for i in self.instance_reload_candidates:
+        #     if self.dry_run:
+        #         log.info("- dry-run: reloading instance %s to fix zero size volume attached to it", str(i))
+        #     else:
+        #         log.info("- action: reloading instance %s to fix zero size volume attached to it", str(i))
+        #         self.vc_reload_instance(i)
         return True
 
     def ask_user_yes_no(self):
@@ -1119,6 +1201,7 @@ class ConsistencyCheck:
         self.gauge_value_cinder_volume_available_with_attachments = 0
         self.gauge_value_cinder_volume_in_use_without_some_attachments = 0
         self.gauge_value_cinder_volume_in_use_without_attachments = 0
+        self.gauge_value_vcenter_volume_backing_uuid_mismatch = 0
         self.gauge_value_vcenter_volume_uuid_mismatch = 0
         self.gauge_value_vcenter_volume_uuid_missing = 0
         self.gauge_value_vcenter_volume_zero_size = 0
@@ -1329,6 +1412,7 @@ class ConsistencyCheck:
         self.gauge_cinder_volume_in_use_without_attachments.set(self.gauge_value_cinder_volume_in_use_without_attachments)
         self.gauge_cinder_volume_attachment_fix_count.set(len(self.volume_attachment_fix_candidates))
         self.gauge_cinder_volume_attachment_max_fix_count.set(self.max_automatic_fix)
+        self.gauge_vcenter_volume_backing_uuid_mismatch.set(self.gauge_value_vcenter_volume_backing_uuid_mismatch)
         self.gauge_vcenter_volume_uuid_mismatch.set(self.gauge_value_vcenter_volume_uuid_mismatch)
         self.gauge_vcenter_volume_uuid_missing.set(self.gauge_value_vcenter_volume_uuid_missing)
         self.gauge_vcenter_volume_uuid_adjustment.set(len(self.uuid_rewrite_candidates))
@@ -1464,8 +1548,11 @@ class ConsistencyCheck:
         else:
             # TODO create a metric for this case we may alert on
             log.warn("- PLEASE CHECK MANUALLY - too many (more than %s) volume attachment inconsistencies - denying to fix them automatically", str(self.max_automatic_fix))
-        log.info("- INFO - checking for instances with zero size disks and reload them")
-        self.problem_fix_reload_instance()
+        # leave this disabled for now
+        # log.info("- INFO - rename wrong volume uuids in backing store (not implemented yet)")
+        # self.problem_fix_rewrite_uuid()
+        # log.info("- INFO - checking for instances with zero size disks and reload them (not implemented yet)")
+        # self.problem_fix_reload_instance()
         log.info("- INFO - disconnecting from the cinder db")
         self.cinder_db_disconnect()
         log.info("- INFO - disconnecting from the nova db")
