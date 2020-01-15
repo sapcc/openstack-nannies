@@ -1540,7 +1540,7 @@ class ConsistencyCheck:
         self.send_gauge_values()
         # if the dict is lower than a certain threshold (to avoid too big accidental damage), fix them automatically
         if len(self.volume_attachment_fix_candidates) <= self.max_automatic_fix:
-            log.info("- DEBUG - number of fix candidates: %s - max number for automatic fixing: %s", str(len(self.volume_attachment_fix_candidates)), str(self.max_automatic_fix))
+            log.debug("- DEBUG - number of fix candidates: %s - max number for automatic fixing: %s", str(len(self.volume_attachment_fix_candidates)), str(self.max_automatic_fix))
             # TODO this is ugly - maybe better replace the self.volume_query in all the offer_problem fix
             # functions with a regular (non self) paramater
             for self.volume_query in self.volume_attachment_fix_candidates:
