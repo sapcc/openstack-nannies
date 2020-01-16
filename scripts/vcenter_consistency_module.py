@@ -471,7 +471,7 @@ class ConsistencyCheck:
         for k in self.vc_data:
             # only work with results, which have an instance uuid defined and are openstack vms (i.e. have an annotation set)
             if k.get('config.instanceUuid') and openstack_re.match(k.get('config.annotation')) and not k.get('config.template'):
-                # check if name and config.name properties are the same an wanr if not
+                # check if name and config.name properties are the same an warn if not
                 if k.get('name') != k.get('config.name'):
                     log.warn("- PLEASE CHECK MANUALLY - name property '%s' differs from config.name property '%s'", k.get('name'), k.get('config.name'))
                     self.gauge_value_vcenter_instance_name_mismatch += 1
