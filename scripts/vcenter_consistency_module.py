@@ -148,6 +148,8 @@ class ConsistencyCheck:
                                                   'how many volumes attachments need fixing')
         self.gauge_cinder_volume_attachment_max_fix_count = Gauge('vcenter_nanny_consistency_cinder_volume_attachment_max_fix_count',
                                                   'volumes attachment fixing is denied if there are more than this many attachments to fix')
+        self.gauge_vcenter_instance_name_mismatch = Gauge('vcenter_nanny_consistency_vcenter_instance_name_mismatch',
+                                                  'how many shadow vms have a mismatch between name and config.name in the vcenter')
         self.gauge_vcenter_volume_backing_uuid_mismatch = Gauge('vcenter_nanny_consistency_vcenter_volume_backing_uuid_mismatch',
                                                   'how many volumes have a volume backing uuid mismatch in the vcenter')
         self.gauge_vcenter_volume_uuid_mismatch = Gauge('vcenter_nanny_consistency_vcenter_volume_uuid_mismatch',
@@ -170,6 +172,7 @@ class ConsistencyCheck:
         self.gauge_value_cinder_volume_is_in_state_reserved = 0
         self.gauge_value_cinder_volume_available_with_attachments = 0
         self.gauge_value_cinder_volume_in_use_without_attachments = 0
+        self.gauge_value_vcenter_instance_name_mismatch = 0
         self.gauge_value_vcenter_volume_backing_uuid_mismatch = 0
         self.gauge_value_vcenter_volume_uuid_mismatch = 0
         self.gauge_value_vcenter_volume_uuid_missing = 0
@@ -453,7 +456,8 @@ class ConsistencyCheck:
             "config.instanceUuid",
             "config.template",
             "config.annotation",
-            "overallStatus"
+            "overallStatus",
+            "name"
         ]
 
         # collect the properties for all vms
@@ -467,8 +471,12 @@ class ConsistencyCheck:
         for k in self.vc_data:
             # only work with results, which have an instance uuid defined and are openstack vms (i.e. have an annotation set)
             if k.get('config.instanceUuid') and openstack_re.match(k.get('config.annotation')) and not k.get('config.template'):
+                # check if name and config.name properties are the same an wanr if not
+                if k.get('name') != k.get('config.name'):
+                    log.warn("- PLEASE CHECK MANUALLY - name property '%s' differs from config.name property '%s'", k.get('name'), k.get('config.name'))
+                    self.gauge_value_vcenter_instance_name_mismatch += 1
                 # try to find an openstack uuid in the instance name
-                instancename_uuid_search_result = uuid_re.search(k['config.name'])
+                instancename_uuid_search_result = uuid_re.search(k['name'])
                 # build a list of all openstack volumes in the vcenter to later compare it to the volumes in openstack
                 self.vc_all_servers.append(k['config.instanceUuid'])
                 # get the config.hardware.device property out of the data dict and iterate over its elements
@@ -537,7 +545,7 @@ class ConsistencyCheck:
 
             if k.get('config.instanceUuid') and not k.get('config.template'):
                 # try to find an openstack uuid in the instance name
-                instancename_uuid_search_result = uuid_re.search(k['config.name'])
+                instancename_uuid_search_result = uuid_re.search(k['name'])
                 # check for vms with overallStatus gray and put the on the reload candidates list as well
                 if k.get('overallStatus') == 'gray':
                     log.warn("- PLEASE CHECK MANUALLY - instance %s with overallStatus gray", str(k['config.instanceUuid']))
@@ -550,7 +558,7 @@ class ConsistencyCheck:
                 # only consider instances which have an openstack uuid in their name
                 if instancename_uuid_search_result and instancename_uuid_search_result.group(0):
                     if k['config.instanceUuid'] != instancename_uuid_search_result.group(0):
-                        log.warn("- PLEASE CHECK MANUALLY - volume uuid to instance name mismatch for shadow vm: instanceUuid=%s, uuid from instance name='%s'", k['config.instanceUuid'], instancename_uuid_search_result.group(0))
+                        log.warn("- PLEASE CHECK MANUALLY - instanceUuid to instance name mismatch for shadow vm: instanceUuid=%s, uuid from instance name='%s'", k['config.instanceUuid'], instancename_uuid_search_result.group(0))
                         self.gauge_value_vcenter_volume_uuid_mismatch += 1
                         # lets keep this disabled for now
                         # # check that the volume uuid we derived from the filename is in cinder
@@ -1201,6 +1209,7 @@ class ConsistencyCheck:
         self.gauge_value_cinder_volume_available_with_attachments = 0
         self.gauge_value_cinder_volume_in_use_without_some_attachments = 0
         self.gauge_value_cinder_volume_in_use_without_attachments = 0
+        self.gauge_value_vcenter_instance_name_mismatch = 0
         self.gauge_value_vcenter_volume_backing_uuid_mismatch = 0
         self.gauge_value_vcenter_volume_uuid_mismatch = 0
         self.gauge_value_vcenter_volume_uuid_missing = 0
@@ -1412,6 +1421,7 @@ class ConsistencyCheck:
         self.gauge_cinder_volume_in_use_without_attachments.set(self.gauge_value_cinder_volume_in_use_without_attachments)
         self.gauge_cinder_volume_attachment_fix_count.set(len(self.volume_attachment_fix_candidates))
         self.gauge_cinder_volume_attachment_max_fix_count.set(self.max_automatic_fix)
+        self.gauge_vcenter_instance_name_mismatch.set(self.gauge_value_vcenter_instance_name_mismatch)
         self.gauge_vcenter_volume_backing_uuid_mismatch.set(self.gauge_value_vcenter_volume_backing_uuid_mismatch)
         self.gauge_vcenter_volume_uuid_mismatch.set(self.gauge_value_vcenter_volume_uuid_mismatch)
         self.gauge_vcenter_volume_uuid_missing.set(self.gauge_value_vcenter_volume_uuid_missing)
