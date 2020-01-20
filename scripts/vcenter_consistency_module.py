@@ -548,7 +548,7 @@ class ConsistencyCheck:
                 instancename_uuid_search_result = uuid_re.search(k['name'])
                 # check for vms with overallStatus gray and put the on the reload candidates list as well
                 if k.get('overallStatus') == 'gray':
-                    log.warn("- PLEASE CHECK MANUALLY - instance %s with overallStatus gray", str(k['config.instanceUuid']))
+                    log.warn("- PLEASE CHECK MANUALLY - instance %s (name='%s') with overallStatus gray", str(k['config.instanceUuid']), str(k['name']))
                     # build a candidate list of instances to reload to get rid of their gray overallStatus
                     # i have just learend that reloading gray instances the way i do it will not work, so stick with the alert for now
                     #self.instance_reload_candidates.add(k['config.instanceUuid'])
