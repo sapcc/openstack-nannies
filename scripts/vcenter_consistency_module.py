@@ -359,7 +359,35 @@ class ConsistencyCheck:
                 return True
 
         except Exception as e:
-                log.info("- PLEASE CHECK MANUALLY - error renaming volume backing uuid %s on server %s - %s", old_volume_uuid, vm_handle.config.instanceUuid, str(e))
+                log.info("- PLEASE CHECK MANUALLY - error renaming volume backing uuid %s on server %s - %s", old_volume_uuid, vm_handle.config.instanceUuid, str(e.msg))
+
+    def vc_rename_instance_uuid(self,instance_uuid,uuid_from_instance_name):
+
+        vm_handle = self.vc_get_instance_handle(instance_uuid)
+
+        if self.dry_run:
+            log.info("- dry-run: renaming instanceUuid %s to uuid %s extracted from instance name ('%s')", instance_uuid, uuid_from_instance_name, vm_handle.config.name)
+            return True
+
+        else:
+            log.info("- action: renaming instanceUuid %s to uuid %s extracted from instance name ('%s')", instance_uuid, uuid_from_instance_name, vm_handle.config.name)
+            spec = vim.vm.ConfigSpec()
+            spec.instanceUuid = uuid_from_instance_name
+            task = vm_handle.ReconfigVM_Task(spec=spec)
+            try:
+                WaitForTask(task, si=self.vc_service_instance)
+            except vmodl.fault.HostNotConnected:
+                log.warn("- PLEASE CHECK MANUALLY - cannot rename instanceUuid %s to uuid %s - the esx host it is running on is disconnected", old_volume_uuid, vm_handle.config.instanceUuid)
+                return False
+            except vim.fault.InvalidPowerState as e:
+                log.warn("- PLEASE CHECK MANUALLY - cannot rename instanceUuid %s to uuid %s - %s", instance_uuid, uuid_from_instance_name, str(e.msg))
+                return False
+            except vim.fault.GenericVmConfigFault as e:
+                log.warn("- PLEASE CHECK MANUALLY - cannot rename instanceUuid %s to uuid %s - %s", instance_uuid, uuid_from_instance_name, str(e.msg))
+                return False
+            except Exception as e:
+                log.info("- PLEASE CHECK MANUALLY - cannot rename instanceUuid %s to uuid %s - %s", instance_uuid, uuid_from_instance_name, str(e.msg))
+            return True
 
     # Shamelessly borrowed from:
     # https://github.com/dnaeon/py-vconnector/blob/master/src/vconnector/core.py
@@ -558,8 +586,20 @@ class ConsistencyCheck:
                 # only consider instances which have an openstack uuid in their name
                 if instancename_uuid_search_result and instancename_uuid_search_result.group(0):
                     if k['config.instanceUuid'] != instancename_uuid_search_result.group(0):
-                        log.warn("- PLEASE CHECK MANUALLY - instanceUuid to instance name mismatch for shadow vm: instanceUuid=%s, uuid from instance name='%s'", k['config.instanceUuid'], instancename_uuid_search_result.group(0))
+                        #log.warn("- PLEASE CHECK MANUALLY - instanceUuid to instance name mismatch for shadow vm: instanceUuid=%s,\
+                        # uuid from instance name='%s'", k['config.instanceUuid'], instancename_uuid_search_result.group(0))
                         self.gauge_value_vcenter_volume_uuid_mismatch += 1
+                        if self.cinder_os_volume_status.get(str(instancename_uuid_search_result.group(0))):
+                            if not self.cinder_os_volume_status.get(str(k['config.instanceUuid'])):
+
+                                log.warn("- plan: rewrite instanceUuid %s with uuid from instance name %s", str(k['config.instanceUuid']),\
+                                    str(instancename_uuid_search_result.group(0)))
+                                self.uuid_rewrite_candidates[str(instancename_uuid_search_result.group(0))] = str(k['config.instanceUuid'])
+                            else:
+                                log.warn("- PLEASE CHECK MANUALLY - instanceUuid to instance name mismatch for shadow vm with instanceUuid still in cinder: instanceUuid=%s, uuid from instance name='%s'", k['config.instanceUuid'], instancename_uuid_search_result.group(0))
+                        else:
+                            log.warn("- PLEASE CHECK MANUALLY - instanceUuid to instance name mismatch for shadow vm with instance name uuid not in cinder: instanceUuid=%s, uuid from instance name='%s'", k['config.instanceUuid'], instancename_uuid_search_result.group(0))
+
                         # lets keep this disabled for now
                         # # check that the volume uuid we derived from the filename is in cinder
                         # if self.cinder_os_volume_status.get(str(instancename_uuid_search_result.group(0))):
@@ -1138,12 +1178,9 @@ class ConsistencyCheck:
             return True
         return False
 
-    def problem_fix_rewrite_uuid(self):
-        # do nothing here for now
-        # for i in self.uuid_rewrite_candidates:
-        #     log.info("- (dry-run-only) rewriting volume uuid %s to volume uuid %s extracted from its vcenter filename (instance %s)", str(self.uuid_rewrite_candidates[i][1]), str(i), str(self.uuid_rewrite_candidates[i][0]))
-        #     # this does not work if the machine is in powered on state
-        #     #self.vc_rename_volume_backing_uuid(self.uuid_rewrite_candidates[i][0],str(self.uuid_rewrite_candidates[i][1]),str(i))
+    def problem_fix_rename_instanceuuid(self):
+        for i in self.uuid_rewrite_candidates:
+            self.vc_rename_instance_uuid(self.uuid_rewrite_candidates[i],i)
         return True
 
     def problem_fix_reload_instance(self):
@@ -1559,8 +1596,8 @@ class ConsistencyCheck:
             # TODO create a metric for this case we may alert on
             log.warn("- PLEASE CHECK MANUALLY - too many (more than %s) volume attachment inconsistencies - denying to fix them automatically", str(self.max_automatic_fix))
         # leave this disabled for now
-        # log.info("- INFO - rename wrong volume uuids in backing store (not implemented yet)")
-        # self.problem_fix_rewrite_uuid()
+        log.info("- INFO - fix wrong instanceUuid based on uuid extracted from instance name")
+        self.problem_fix_rename_instanceuuid()
         # log.info("- INFO - checking for instances with zero size disks and reload them (not implemented yet)")
         # self.problem_fix_reload_instance()
         log.info("- INFO - disconnecting from the cinder db")
