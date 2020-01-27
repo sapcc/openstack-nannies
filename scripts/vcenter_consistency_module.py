@@ -365,7 +365,8 @@ class ConsistencyCheck:
 
         vm_handle = self.vc_get_instance_handle(instance_uuid)
 
-        if self.dry_run:
+        # if self.dry_run:
+        if True:
             log.info("- dry-run: renaming instanceUuid %s to uuid %s extracted from instance name ('%s')", instance_uuid, uuid_from_instance_name, vm_handle.config.name)
             return True
 
