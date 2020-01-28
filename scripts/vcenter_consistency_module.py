@@ -79,7 +79,6 @@ class ConsistencyCheck:
 
         self.nova_os_all_servers = []
         self.cinder_os_all_volumes = []
-        self.vc_all_servers = []
         self.vc_all_volumes = []
 
         # initialize some dicts - those have a volume uuid as key
@@ -470,7 +469,6 @@ class ConsistencyCheck:
         # TODO better exception handling
 
         # clear the old lists
-        self.vc_all_servers *= 0
         self.vc_all_volumes *= 0
 
         # clean all old dicts
@@ -510,10 +508,6 @@ class ConsistencyCheck:
                     self.gauge_value_vcenter_instance_name_mismatch += 1
                 # try to find an openstack uuid in the instance name
                 instancename_uuid_search_result = uuid_re.search(k['name'])
-                # build a list of all openstack volumes (which should have an openstack annotation)
-                # in the vcenter to later compare it to the volumes in openstack
-                if openstack_re.match(k.get('config.annotation')):
-                    self.vc_all_servers.append(k['config.instanceUuid'])
                 # get the config.hardware.device property out of the data dict and iterate over its elements
                 # this check seems to be required as in one bb i got a key error otherwise - looks like a vm without that property
                 if k.get('config.hardware.device'):
@@ -582,18 +576,6 @@ class ConsistencyCheck:
                                         if j.backing.uuid != filename_uuid_search_result.group(1):
                                             log.warn("- PLEASE CHECK MANUALLY - volume backing uuid mismatch: backing uuid=%s, filename='%s', instance name='%s'", str(j.backing.uuid), str(j.backing.fileName), str(k['config.name']))
                                             self.gauge_value_vcenter_volume_backing_uuid_mismatch += 1
-                                            # lets keep this disabled for now
-                                            # if filename_uuid_search_result.group(0) != instancename_uuid_search_result.group(0):
-                                            #     # check that the volume uuid we derived from the filename is in cinder
-                                            #     if self.cinder_os_volume_status.get(str(filename_uuid_search_result.group(0))):
-                                            #         log.warn("- plan (dry-run only for now): setting volume uuid %s to uuid %s extracted from its vcenter filename '%s' (attached to instance %s)", str(j.backing.uuid), str(filename_uuid_search_result.group(0)), str(j.backing.fileName), str(instancename_uuid_search_result.group(0)))
-                                            #         # build a candidate list of volumes to set uuid field to uuid values extraceted from its vcenter filename
-                                            #         # the arguments below are: index - new uuid, values - instance uuid, old uuid
-                                            #         self.uuid_rewrite_candidates[str(filename_uuid_search_result.group(0))] = (str(k['config.instanceUuid']), str(my_volume_uuid))
-                                            #     else:
-                                            #         log.warn("- PLEASE CHECK MANUALLY - volume uuid %s extracted from its vcenter filename '%s' does not exist in cinder - not setting volume uuid to it for safety", str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
-                                            # else:
-                                            #     log.warn("- PLEASE CHECK MANUALLY - instance uuid %s is equal to volume uuid %s extracted from its vcenter filename '%s' - not touching this one for safety", str(instancename_uuid_search_result.group(0)), str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
                                     else:
                                         log.warn("- PLEASE CHECK MANUALLY - no shadow volume uuid found in filename='%s' on instance '%s'", str(j.backing.fileName), str(k['config.name']))
 
@@ -616,8 +598,6 @@ class ConsistencyCheck:
                                     log.debug("==> mount - instance: %s - volume: %s", str(k['config.instanceUuid']), str(my_volume_uuid))
                                     has_volume_attachments[k['config.instanceUuid']] = True
 
-            # this can go soon ...
-            # if k.get('config.instanceUuid') and not k.get('config.template'):
                     # try to find an openstack uuid in the instance name
                     instancename_uuid_search_result = uuid_re.search(k['name'])
                     # check for vms with overallStatus gray and put the on the reload candidates list as well
@@ -656,25 +636,6 @@ class ConsistencyCheck:
                                 # do the consistency check logging only in non interactive mode
                                 if not self.interactive:
                                     log.warn("- PLEASE CHECK MANUALLY - instanceUuid to instance name mismatch for shadow vm with instance name uuid not in cinder: instanceUuid=%s, uuid from instance name=%s, instance name='%s'", k['config.instanceUuid'], instancename_uuid_search_result.group(0), str(k['config.name']))
-
-                            # lets keep this disabled for now
-                            # # check that the volume uuid we derived from the filename is in cinder
-                            # if self.cinder_os_volume_status.get(str(instancename_uuid_search_result.group(0))):
-                            #     log.warn("- plan (dry-run only for now): setting volume uuid %s to uuid %s extracted from its vcenter filename '%s' (attached to instance %s)", str(j.backing.uuid), str(filename_uuid_search_result.group(0)), str(j.backing.fileName), str(instancename_uuid_search_result.group(0)))
-                            #     # build a candidate list of volumes to set uuid field to uuid values extraceted from its vcenter filename
-                            #     # old: self.uuid_rewrite_candidates[str(my_volume_uuid)] = str(filename_uuid_search_result.group(0))
-                            #     #self.uuid_rewrite_candidates[str(filename_uuid_search_result.group(0))] = (str(instancename_uuid_search_result.group(0), str(my_volume_uuid))
-                            #     # the arguments below are: index - new uuid, values - instance uuid, old uuid
-                            #     self.uuid_rewrite_candidates[str(filename_uuid_search_result.group(0))] = (str(k['config.instanceUuid']), str(my_volume_uuid))
-                            # else:
-                            #     log.warn("- PLEASE CHECK MANUALLY - volume uuid %s extracted from its vcenter filename '%s' does not exist in cinder - not setting volume uuid to it for safety", str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
-                            # i think this can go ...
-                            # else:
-                            #     log.warn("- PLEASE CHECK MANUALLY - instance uuid %s is equal to volume uuid %s extracted from its vcenter filename '%s' - not touching this one for safety", str(instancename_uuid_search_result.group(0)), str(filename_uuid_search_result.group(0)), str(j.backing.fileName))
-                    # we do not want this as this would hit too many non openstack vm running on the vcenter too
-                    # else:
-                    #     log.warn("- PLEASE CHECK MANUALLY - no uuid found in instance name='%s'",k['config.name']) 
-
                 else:
                     log.warn("- PLEASE CHECK MANUALLY - instance without hardware - this should not happen!")
                 if not has_volume_attachments.get(k['config.instanceUuid']):
