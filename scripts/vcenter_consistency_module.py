@@ -621,10 +621,11 @@ class ConsistencyCheck:
                                 if not self.cinder_os_volume_status.get(str(k['config.instanceUuid'])):
                                     # do the instance uuid fixing only in non interactive mode
                                     if not self.interactive:
-                                        if my_volume_uuid and (cinder_db_get_volume_status(my_volume_uuid) in ['backing-up','restoring-backup']):
+                                        my_volume_status = self.cinder_db_get_volume_status(my_volume_uuid)
+                                        if my_volume_uuid and (my_volume_status in ['backing-up','restoring-backup']):
                                             log.info("- plan: renaming instanceUuid %s to uuid %s extracted from instance name ('%s') - delayed as the attached volume %s is in state '%s'", \
                                                 str(k['config.instanceUuid']),str(instancename_uuid_search_result.group(0)), str(k['config.name']), str(my_volume_uuid), \
-                                                    str(cinder_db_get_volume_status(my_volume_uuid)))
+                                                    str(my_volume_status))
                                         else:
                                             self.vc_rename_instance_uuid(str(k['config.instanceUuid']),str(instancename_uuid_search_result.group(0)))
                                             self.gauge_value_vcenter_volume_uuid_adjustment += 1
@@ -719,7 +720,7 @@ class ConsistencyCheck:
         cinder_db_volumes_t = Table('volumes', self.cinder_metadata, autoload=True)
         cinder_db_volume_status_q = select(columns=[cinder_db_volumes_t.c.status],whereclause=and_(cinder_db_volumes_t.c.id == volume_uuid, cinder_db_volumes_t.c.deleted == 0))
 
-        result = cinder_db_volume_attach_status_q.execute().fetchone()
+        result = cinder_db_volume_status_q.execute().fetchone()
         return result['status']
 
     def cinder_db_get_volume_attach_status(self):
@@ -1496,6 +1497,11 @@ class ConsistencyCheck:
         self.gauge_no_autofix.set(self.gauge_value_no_autofix)
 
     def run_tool(self):
+        log.info("- INFO - connecting to the cinder db")
+        self.cinder_db_connect()
+        if not self.cinder_db_connection_ok():
+            log.error("problems connecting to the cinder db")
+            sys.exit(1)
         log.info("- INFO - connecting to the vcenter")
         self.vc_connect()
         # exit here in case we get problems connecting to the vcenter
@@ -1530,11 +1536,6 @@ class ConsistencyCheck:
             log.info("- INFO - disconnecting from the vcenter")
             self.vc_disconnect()
             sys.exit(1)
-        log.info("- INFO - connecting to the cinder db")
-        self.cinder_db_connect()
-        if not self.cinder_db_connection_ok():
-            log.error("problems connecting to the cinder db")
-            sys.exit(1)
         log.info("- INFO - getting information from the cinder db")
         self.cinder_db_get_info()
         log.info("- INFO - connecting to the nova db")
@@ -1559,6 +1560,11 @@ class ConsistencyCheck:
         self.instance_reload_candidates.clear()
         # reset gauge values to zero for this new loop run
         self.reset_gauge_values()
+        log.info("- INFO - connecting to the cinder db")
+        self.cinder_db_connect()
+        if not self.cinder_db_connection_ok():
+            log.error("- PLEASE CHECK MANUALLY - problems connecting to the cinder db - retrying in next loop run")
+            return
         log.info("- INFO - connecting to vcenter")
         self.vc_connect()
         # stop this loop iteration here in case we get problems connecting to the vcenter
@@ -1597,11 +1603,6 @@ class ConsistencyCheck:
             return
         # clean the list of canditate volume uuids which are supposed to be fixed automatically
         self.volume_attachment_fix_candidates.clear()
-        log.info("- INFO - connecting to the cinder db")
-        self.cinder_db_connect()
-        if not self.cinder_db_connection_ok():
-            log.error("- PLEASE CHECK MANUALLY - problems connecting to the cinder db - retrying in next loop run")
-            return
         log.info("- INFO - connecting to the nova db")
         self.nova_db_connect()
         if not self.nova_db_connection_ok():
