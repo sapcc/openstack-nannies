@@ -513,7 +513,7 @@ class ConsistencyCheck:
                     for j in k.get('config.hardware.device'):
                         # we are only interested in disks for ghost volumes ...
                         # old test was: if 2000 <= j.key < 3000:
-                        if isinstance(k.get('config.hardware.device'), vim.vm.device.VirtualDisk):
+                        if isinstance(j, vim.vm.device.VirtualDisk):
                             # we only care for vvols - in the past we checked starting with 2001 as 2000 usual was the eph
                             # storage, but it looks like eph can also be on another id and 2000 could be a vvol as well ...
                             if j.backing.fileName.lower().startswith('[vvol_'):
@@ -647,7 +647,7 @@ class ConsistencyCheck:
                     for j in k.get('config.hardware.device'):
                         # we are only interested in disks ...
                         # old test was: if 2000 <= j.key < 3000:
-                        if isinstance(k.get('config.hardware.device'), vim.vm.device.VirtualDisk):
+                        if isinstance(j, vim.vm.device.VirtualDisk):
                             # we only care for vvols - in the past we checked starting with 2001 as 2000 usual was the eph
                             # storage, but it looks like eph can also be on another id and 2000 could be a vvol as well ...
                             if j.backing.fileName.lower().startswith('[vvol_'):
