@@ -512,8 +512,8 @@ class ConsistencyCheck:
                 if k.get('config.hardware.device'):
                     for j in k.get('config.hardware.device'):
                         # we are only interested in disks for ghost volumes ...
-                        # TODO: maybe? if isinstance(k.get('config.hardware.device'), vim.vm.device.VirtualDisk):
-                        if 2000 <= j.key < 3000:
+                        # old test was: if 2000 <= j.key < 3000:
+                        if isinstance(k.get('config.hardware.device'), vim.vm.device.VirtualDisk):
                             # we only care for vvols - in the past we checked starting with 2001 as 2000 usual was the eph
                             # storage, but it looks like eph can also be on another id and 2000 could be a vvol as well ...
                             if j.backing.fileName.lower().startswith('[vvol_'):
@@ -576,7 +576,7 @@ class ConsistencyCheck:
                                             log.warn("- PLEASE CHECK MANUALLY - volume backing uuid mismatch: backing uuid=%s, filename='%s', instance name='%s'", str(j.backing.uuid), str(j.backing.fileName), str(k['config.name']))
                                             self.gauge_value_vcenter_volume_backing_uuid_mismatch += 1
                                     else:
-                                        log.warn("- PLEASE CHECK MANUALLY - no shadow volume uuid found in filename='%s' on instance '%s'", str(j.backing.fileName), str(k['config.name']))
+                                        log.warn("- PLEASE CHECK MANUALLY - no shadow vm uuid found in filename='%s' on instance '%s'", str(j.backing.fileName), str(k['config.name']))
 
                                     # check for volumes with a size of 0 which should not happen in a perfect world
                                     if my_volume_uuid and (j.capacityInBytes == 0):
@@ -646,8 +646,8 @@ class ConsistencyCheck:
                 if k.get('config.hardware.device'):
                     for j in k.get('config.hardware.device'):
                         # we are only interested in disks ...
-                        # TODO: maybe? if isinstance(k.get('config.hardware.device'), vim.vm.device.VirtualDisk):
-                        if 2000 <= j.key < 3000:
+                        # old test was: if 2000 <= j.key < 3000:
+                        if isinstance(k.get('config.hardware.device'), vim.vm.device.VirtualDisk):
                             # we only care for vvols - in the past we checked starting with 2001 as 2000 usual was the eph
                             # storage, but it looks like eph can also be on another id and 2000 could be a vvol as well ...
                             if j.backing.fileName.lower().startswith('[vvol_'):
