@@ -73,10 +73,10 @@ class ManilaShareSyncNanny(ManilaNanny):
                                  v.get('manila_size'),
                                  v.get('size'))
             elif v.get('manila_size') is not None and v.get('size') is None:
-                log.warn("ShareNotExistOnBackend: id=%s" % share_id)
                 if self._non_exist_shares.get(share_id, 0) == 0:
                     self._non_exist_shares[share_id] = 1
                     self.MANILA_SHARE_NOT_EXIST.inc()
+                    log.warn("ShareNotExistOnBackend: id=%s" % share_id)
 
     def get_shares_from_netapp(self):
         payloads = {
