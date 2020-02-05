@@ -21,6 +21,7 @@ import sys
 import datetime
 import time
 import requests
+import logging
 
 # from prettytable import PrettyTable
 from sqlalchemy import and_
@@ -31,6 +32,9 @@ from sqlalchemy import Table
 from sqlalchemy.sql.expression import false
 from prometheus_client import start_http_server, Counter
 from manila_nanny import ManilaNanny, get_db_url
+
+log = logging.getLogger('nanny-manila-share-sync')
+logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
 query = 'netapp_capacity_svm{metric="size_total"} + ignoring(metric) netapp_capacity_svm{metric="size_reserved_by_snapshots"}'
 onegb = 1073741824
@@ -55,17 +59,21 @@ class ManilaShareSyncNanny(ManilaNanny):
             if v.get('manila_size') is not None and v.get('size') is not None:
                 if v.get('manila_size') != v.get('size'):
                     if not self.dry_run:
-                        print("share %s: manila share size (%d) does not " + \
-                              "match share size (%d) on backend, fixing ...") % (\
-                              share_id, v.get('manila_size'), v.get('size'))
+                        log.info("share %s: manila share size (%d) does not " + \
+                                 "match share size (%d) on backend",
+                                 share_id,
+                                 v.get('manila_size'),
+                                 v.get('size'))
                         self.set_share_size(share_id, v.get('size'))
                         self.MANILA_SHARE_SIZE_SYNCED.inc()
                     else:
-                        print("share %s: manila share size (%d) does not " + \
-                              "match share size (%d) on backend") % (\
-                              share_id, v.get('manila_size'), v.get('size'))
+                        log.info("dry run: share %s: manila share size (%d) does not " + \
+                                 "match share size (%d) on backend",
+                                 share_id,
+                                 v.get('manila_size'),
+                                 v.get('size'))
             elif v.get('manila_size') is not None and v.get('size') is None:
-                print("[WARNING] ShareNotExistOnBackend: id=%s" % share_id)
+                log.warn("ShareNotExistOnBackend: id=%s" % share_id)
                 if self._non_exist_shares.get(share_id, 0) == 0:
                     self._non_exist_shares[share_id] = 1
                     self.MANILA_SHARE_NOT_EXIST.inc()
