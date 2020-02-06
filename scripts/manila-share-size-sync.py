@@ -164,7 +164,8 @@ def parse_cmdline_args():
 def main():
     try:
         args = parse_cmdline_args()
-        print(args)
+        log.info("command line arguments...")
+        log.info(args)
     except Exception as e:
         sys.stdout.write("parse command line arguments (%s)" % e.strerror)
 
