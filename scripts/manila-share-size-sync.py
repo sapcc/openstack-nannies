@@ -22,6 +22,7 @@ import datetime
 import time
 import requests
 import logging
+from datetime import datetime
 
 # from prettytable import PrettyTable
 from sqlalchemy import and_
@@ -74,9 +75,13 @@ class ManilaShareSyncNanny(ManilaNanny):
                                  v.get('size'))
             elif v.get('manila_size') is not None and v.get('size') is None:
                 if self._non_exist_shares.get(share_id, 0) == 0:
-                    self._non_exist_shares[share_id] = 1
-                    self.MANILA_SHARE_NOT_EXIST.inc()
-                    log.warn("ShareNotExistOnBackend: id=%s" % share_id)
+                    self._non_exist_shares[share_id] = datetime.now()
+                else:
+                    t0 = self._non_exist_shares.get(share_id)
+                    delta = datetime.now() - t0
+                    if delta.total_seconds() > 600:
+                        self.MANILA_SHARE_NOT_EXIST.inc()
+                        log.warn("ShareNotExistOnBackend: id=%s" % share_id)
 
     def get_shares_from_netapp(self):
         payloads = {
