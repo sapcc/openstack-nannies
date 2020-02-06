@@ -37,7 +37,8 @@ from manila_nanny import ManilaNanny, get_db_url
 log = logging.getLogger('nanny-manila-share-sync')
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
-query = 'netapp_capacity_svm{metric="size_total"} + ignoring(metric) netapp_capacity_svm{metric="size_reserved_by_snapshots"}'
+# query = 'netapp_capacity_svm{metric="size_total"} + ignoring(metric) netapp_capacity_svm{metric="size_reserved_by_snapshots"}'
+query = 'netapp_volume_total_bytes{app="netapp-capacity-exporter-manila"} + netapp_volume_snapshot_reserved_bytes'
 onegb = 1073741824
 
 class ManilaShareSyncNanny(ManilaNanny):
