@@ -18,7 +18,6 @@
 
 import argparse
 import sys
-import datetime
 import time
 import requests
 import logging
@@ -129,7 +128,7 @@ class ManilaShareSyncNanny(ManilaNanny):
         return q
 
     def set_share_size(self, share_id, share_size):
-        now = datetime.datetime.utcnow()
+        now = datetime.utcnow()
         shares_t = Table('shares', self.db_metadata, autoload=True)
         share_instances_t = Table('share_instances', self.db_metadata, autoload=True)
         shares_t.update() \
