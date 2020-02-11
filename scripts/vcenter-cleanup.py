@@ -299,6 +299,9 @@ def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, pow
             gauge_value[('plan', what_to_do)] += 1
         to_be_dict[id] = to_be_dict.get(id, default) + 1
 
+def vc_short_name(vchost):
+    # return a shortened vc hostname - i.e. vc-a-0 from vc-a-0.some-domain.com for example
+    return vchost.split(".")[0]
 
 # Shamelessly borrowed from:
 # https://github.com/dnaeon/py-vconnector/blob/master/src/vconnector/core.py
@@ -520,31 +523,31 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     # get all servers, volumes, snapshots and images from openstack to compare the resources we find on the vcenter against
     try:
         service = "nova"
-        temporary_server_list = conn.compute.servers(details=False, all_projects=1)
+        temporary_server_list = list(conn.compute.servers(details=False, all_projects=1))
         if not temporary_server_list:
             raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any nova instances back from the nova api - this should in theory never happen ...')
         for server in temporary_server_list:
             known[server.id] = 'server'
         service = "cinder"
-        temporary_volume_list = conn.block_store.volumes(details=False, all_projects=1)
+        temporary_volume_list = list(conn.block_store.volumes(details=False, all_projects=1))
         if not temporary_volume_list:
             raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any cinder volumes back from the cinder api - this should in theory never happen ...')
         for volume in temporary_volume_list:
             known[volume.id] = 'volume'
         service = "cinder"
-        temporary_snapshot_list = conn.block_store.snapshots(details=False, all_projects=1)
+        temporary_snapshot_list = list(conn.block_store.snapshots(details=False, all_projects=1))
         if not temporary_snapshot_list:
             raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any cinder snapshots back from the cinder api - this should in theory never happen ...')
         for snapshot in temporary_snapshot_list:
             known[snapshot.id] = 'snapshot'
         service = "glance"
-        temporary_image_list = conn.image.images()
+        temporary_image_list = list(conn.image.images())
         if not temporary_image_list:
             raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any glance images back from the glance api - this should in theory never happen ...')
         for image in temporary_image_list:
             known[image.id] = 'image'
         service = "neutron"
-        temporary_port_list = conn.network.ports()
+        temporary_port_list = list(conn.network.ports())
         if not temporary_port_list:
             raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any neutron ports back from the neutron api - this should in theory never happen ...')
         # build a dict of ports related to the network interfaces on the servers on the vcenter
@@ -1128,13 +1131,27 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
 
     # get all servers, volumes, snapshots and images from openstack to compare the resources we find on the vcenter against
     try:
+        service = "keystone"
+        temporary_project_list = list(conn.identity.projects())
+        if not temporary_project_list:
+            raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any projects back from the keystone api - this should in theory never happen ...')
+        # build a dict of the projects and their vcenters used to find the proper shard
+        project_in_shard = dict()
+        for project in temporary_project_list:
+            try:
+                project_in_shard[project.id] = project.tags
+                log.debug("project %s - tags: %s)", project.id, str(project.tags))
+            except Exception as e:
+                log.debug("project %s most probably has no tags defined (exception %s)", project.id, str(e))
         service = "nova"
-        temporary_server_list = conn.compute.servers(details=True, all_projects=1)
+        temporary_server_list = list(conn.compute.servers(details=True, all_projects=1))
         if not temporary_server_list:
             raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any nova instances back from the nova api - this should in theory never happen ...')
         for server in temporary_server_list:
-            # we only care about servers from the vcenter this nanny is taking care of
-            if server.availability_zone.lower() == vcenter_name:
+            # we only care about instances from the vcenter (shard) this nanny is taking care of
+            # we either have a vc set in the project tags or if not we check against the az name
+            if (project_in_shard[server.project_id] and (vc_short_name(host) in project_in_shard[server.project_id])) \
+                or (not project_in_shard[server.project_id] and (server.availability_zone.lower() == vcenter_name)):
                 os_all_servers.append(server.id)
                 if server.attached_volumes:
                     for attachment in server.attached_volumes:
@@ -1143,12 +1160,14 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
                         else:
                             os_volumes_attached_at_server[server.id] = [attachment['id']]
         service = "cinder"
-        temporary_volume_list = conn.block_store.volumes(details=True, all_projects=1)
+        temporary_volume_list = list(conn.block_store.volumes(details=True, all_projects=1))
         if not temporary_volume_list:
             raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any cinder volumes back from the cinder api - this should in theory never happen ...')
         for volume in temporary_volume_list:
-            # we only care about volumes from the vcenter this nanny is taking care of
-            if volume.availability_zone.lower() == vcenter_name:
+            # we only care about volumes from the vcenter (shard) this nanny is taking care of
+            # we either have a vc set in the project tags or if not we check against the az name
+            if (project_in_shard[volume.project_id] and (vc_short_name(host) in project_in_shard[volume.project_id])) \
+                or (not project_in_shard[volume.project_id] and (volume.availability_zone.lower() == vcenter_name)):
                 os_all_volumes.append(volume.id)
                 if volume.attachments:
                     for attachment in volume.attachments:
