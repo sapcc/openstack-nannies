@@ -955,8 +955,8 @@ class ConsistencyCheck:
             for server in temporary_server_list:
                 # we only care about instances from the vcenter (shard) this nanny is taking care of
                 # we either have a vc set in the project tags or if not we check against the az name
-                if (project_in_shard[server.project_id] and (self.vc_short_name() in project_in_shard[server.project_id])) \
-                    or (not project_in_shard[server.project_id] and (server.availability_zone.lower() == self.vcenter_name)):
+                if (project_in_shard.get(server.project_id) and (self.vc_short_name() in project_in_shard.get(server.project_id))) \
+                    or ((not project_in_shard.get(server.project_id)) and (server.availability_zone.lower() == self.vcenter_name)):
                     self.nova_os_all_servers.append(server.id)
                     if server.attached_volumes:
                         for attachment in server.attached_volumes:
@@ -972,8 +972,8 @@ class ConsistencyCheck:
             for volume in temporary_volume_list:
                 # we only care about volumes from the vcenter (shard) this nanny is taking care of
                 # we either have a vc set in the project tags or if not we check against the az name
-                if (project_in_shard[volume.project_id] and (self.vc_short_name() in project_in_shard[volume.project_id])) \
-                    or (not project_in_shard[volume.project_id] and (volume.availability_zone.lower() == self.vcenter_name)):
+                if (project_in_shard.get(volume.project_id) and (self.vc_short_name() in project_in_shard.get(volume.project_id))) \
+                    or ((not project_in_shard.get(volume.project_id)) and (volume.availability_zone.lower() == self.vcenter_name)):
                     self.cinder_os_all_volumes.append(volume.id.encode('ascii'))
                     self.cinder_os_volume_status[volume.id.encode('ascii')] = volume.status.encode('ascii')
                     self.cinder_os_volume_project_id[volume.id.encode('ascii')] = volume.project_id.encode('ascii')

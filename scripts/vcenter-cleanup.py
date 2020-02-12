@@ -1150,8 +1150,8 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
         for server in temporary_server_list:
             # we only care about instances from the vcenter (shard) this nanny is taking care of
             # we either have a vc set in the project tags or if not we check against the az name
-            if (project_in_shard[server.project_id] and (vc_short_name(host) in project_in_shard[server.project_id])) \
-                or (not project_in_shard[server.project_id] and (server.availability_zone.lower() == vcenter_name)):
+            if (project_in_shard.get(server.project_id) and (vc_short_name(host) in project_in_shard.get(server.project_id))) \
+                or ((not project_in_shard.get(server.project_id)) and (server.availability_zone.lower() == vcenter_name)):
                 os_all_servers.append(server.id)
                 if server.attached_volumes:
                     for attachment in server.attached_volumes:
@@ -1166,8 +1166,8 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
         for volume in temporary_volume_list:
             # we only care about volumes from the vcenter (shard) this nanny is taking care of
             # we either have a vc set in the project tags or if not we check against the az name
-            if (project_in_shard[volume.project_id] and (vc_short_name(host) in project_in_shard[volume.project_id])) \
-                or (not project_in_shard[volume.project_id] and (volume.availability_zone.lower() == vcenter_name)):
+            if (project_in_shard.get(volume.project_id) and (vc_short_name(host) in project_in_shard.get(volume.project_id))) \
+                or ((not project_in_shard.get(volume.project_id)) and (volume.availability_zone.lower() == vcenter_name)):
                 os_all_volumes.append(volume.id)
                 if volume.attachments:
                     for attachment in volume.attachments:
