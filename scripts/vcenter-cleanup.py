@@ -300,8 +300,12 @@ def now_or_later(id, to_be_dict, seen_dict, what_to_do, iterations, dry_run, pow
         to_be_dict[id] = to_be_dict.get(id, default) + 1
 
 def vc_short_name(vchost):
-    # return a shortened vc hostname - i.e. vc-a-0 from vc-a-0.some-domain.com for example
+    # return a shortened vc hostname - i.e. vc-a-0 from vc-a-0.cc.region.some-domain.com for example
     return vchost.split(".")[0]
+
+def vc_region_name(vchost):
+    # return the region name extracted from the vc hostname - i.e. region from vc-a-0.cc.region.some-domain.com for example
+    return vchost.split(".")[2]
 
 # Shamelessly borrowed from:
 # https://github.com/dnaeon/py-vconnector/blob/master/src/vconnector/core.py
@@ -1137,9 +1141,19 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
             raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any projects back from the keystone api - this should in theory never happen ...')
         # build a dict of the projects and their vcenters used to find the proper shard
         project_in_shard = dict()
+        # build the az name from vc_short_name and vc_region_name because we have the az defined for
+        # volumes and instances and want to compare against that later - az = region name + letter (qa-de-1a)
+        az = str(vc_region_name()) + str(vc_short_name().split('-')[1])
         for project in temporary_project_list:
             try:
-                project_in_shard[project.id] = project.tags
+                # check if the vcenter this nanny is connected to is in the shards tag list for each
+                # project - if yes then assign the constructed az name to it in the dict to compare
+                # against the az of the instances and volumes later - otherwise set it to None for
+                # the comparision to not be true later
+                if vc_short_name() in project.tags:
+                    project_in_shard[project.id] = az
+                else:
+                    project_in_shard[project.id] = None
                 log.debug("project %s - tags: %s)", project.id, str(project.tags))
             except Exception as e:
                 log.debug("project %s most probably has no tags defined (exception %s)", project.id, str(e))
@@ -1149,8 +1163,8 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
             raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any nova instances back from the nova api - this should in theory never happen ...')
         for server in temporary_server_list:
             # we only care about instances from the vcenter (shard) this nanny is taking care of
-            # we either have a vc set in the project tags or if not we check against the az name
-            if (project_in_shard.get(server.project_id) and (vc_short_name(host) in project_in_shard.get(server.project_id))) \
+            # compare the az of the server to the az value based on the shard tags above
+            if (project_in_shard.get(server.project_id) and (server.availability_zone.lower() ==  project_in_shard.get(server.project_id))) \
                 or ((not project_in_shard.get(server.project_id)) and (server.availability_zone.lower() == vcenter_name)):
                 os_all_servers.append(server.id)
                 if server.attached_volumes:
@@ -1165,8 +1179,8 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
             raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any cinder volumes back from the cinder api - this should in theory never happen ...')
         for volume in temporary_volume_list:
             # we only care about volumes from the vcenter (shard) this nanny is taking care of
-            # we either have a vc set in the project tags or if not we check against the az name
-            if (project_in_shard.get(volume.project_id) and (vc_short_name(host) in project_in_shard.get(volume.project_id))) \
+            # compare the az of the volume to the az value based on the shard tags above
+            if (project_in_shard.get(volume.project_id) and (volume.availability_zone.lower() ==  project_in_shard.get(volume.project_id))) \
                 or ((not project_in_shard.get(volume.project_id)) and (volume.availability_zone.lower() == vcenter_name)):
                 os_all_volumes.append(volume.id)
                 if volume.attachments:
