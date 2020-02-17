@@ -1143,7 +1143,7 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
         project_in_shard = dict()
         # build the az name from vc_short_name and vc_region_name because we have the az defined for
         # volumes and instances and want to compare against that later - az = region name + letter (qa-de-1a)
-        az = str(vc_region_name()) + str(vc_short_name().split('-')[1])
+        az = str(vc_region_name(host)) + str(vc_short_name(host).split('-')[1])
         for project in temporary_project_list:
             try:
                 # check if the vcenter this nanny is connected to is in the shards tag list for each
