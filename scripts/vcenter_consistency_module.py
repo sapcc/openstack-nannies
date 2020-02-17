@@ -689,7 +689,7 @@ class ConsistencyCheck:
         try:
             db_url = self.get_db_url(self.cinderconfig)
 
-            self.cinder_engine = create_engine(db_url)
+            self.cinder_engine = create_engine(db_url, pool_pre_ping=True)
             self.cinder_connection = self.cinder_engine.connect()
             Session = sessionmaker(bind=self.cinder_engine)
             self.cinder_thisSession = Session()
@@ -831,7 +831,7 @@ class ConsistencyCheck:
         try:
             db_url = self.get_db_url(self.novaconfig)
             
-            self.nova_engine = create_engine(db_url)
+            self.nova_engine = create_engine(db_url, pool_pre_ping=True)
             self.nova_connection = self.nova_engine.connect()
             Session = sessionmaker(bind=self.nova_engine)
             self.nova_thisSession = Session()
@@ -938,10 +938,17 @@ class ConsistencyCheck:
         self.cinder_os_volume_project_id.clear()
 
         try:
-            service = "keystone"
+
             temporary_project_list = list(self.os_conn.identity.projects())
             if not temporary_project_list:
                 raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any projects back from the keystone api - this should in theory never happen ...')
+            temporary_volume_list = list(self.os_conn.block_store.volumes(details=True, all_projects=1))
+            if not temporary_volume_list:
+                raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any cinder volumes back from the cinder api - this should in theory never happen ...')
+            temporary_server_list = list(self.os_conn.compute.servers(details=True, all_projects=1))
+            if not temporary_server_list:
+                raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any nova instances back from the nova api - this should in theory never happen ...')
+            service = "keystone"
             # build a dict of the projects and their vcenters used to find the proper shard
             project_in_shard = dict()
             # build the az name from vc_short_name and vc_region_name because we have the az defined for
@@ -962,30 +969,11 @@ class ConsistencyCheck:
                 except Exception as e:
                     # this will move to debug later
                     log.debug("project %s most probably has no tags defined (exception %s)", project.id, str(e))
-            service = "nova"
-            temporary_server_list = list(self.os_conn.compute.servers(details=True, all_projects=1))
-            if not temporary_server_list:
-                raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any nova instances back from the nova api - this should in theory never happen ...')
-            for server in temporary_server_list:
-                # we only care about instances from the vcenter (shard) this nanny is taking care of
-                # compare the az of the server to the az value based on the shard tags above
-                if (project_in_shard.get(server.project_id) and (server.availability_zone.lower() ==  project_in_shard.get(server.project_id))) \
-                    or ((not project_in_shard.get(server.project_id)) and (server.availability_zone.lower() == self.vcenter_name)):
-                    self.nova_os_all_servers.append(server.id)
-                    if server.attached_volumes:
-                        for attachment in server.attached_volumes:
-                            if self.nova_os_volumes_attached_at_server.get(server.id):
-                                self.nova_os_volumes_attached_at_server[server.id].append(attachment['id'].encode('ascii'))
-                            else:
-                                self.nova_os_volumes_attached_at_server[server.id] = [attachment['id'].encode('ascii')]
-                            self.nova_os_servers_with_attached_volume[attachment['id'].encode('ascii')] = server.id.encode('ascii')
             service = "cinder"
-            temporary_volume_list = list(self.os_conn.block_store.volumes(details=True, all_projects=1))
-            if not temporary_volume_list:
-                raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any cinder volumes back from the cinder api - this should in theory never happen ...')
             for volume in temporary_volume_list:
                 # we only care about volumes from the vcenter (shard) this nanny is taking care of
                 # compare the az of the volume to the az value based on the shard tags above
+                log.debug('==> p: %s - p-sh: %s - v: %s - v-az: %s - vc: %s', volume.project_id, project_in_shard.get(volume.project_id), volume.id, volume.availability_zone.lower(), self.vcenter_name)
                 if (project_in_shard.get(volume.project_id) and (volume.availability_zone.lower() ==  project_in_shard.get(volume.project_id))) \
                     or ((not project_in_shard.get(volume.project_id)) and (volume.availability_zone.lower() == self.vcenter_name)):
                     self.cinder_os_all_volumes.append(volume.id.encode('ascii'))
@@ -997,6 +985,21 @@ class ConsistencyCheck:
                                 self.cinder_os_servers_with_attached_volume[volume.id.encode('ascii')].append(attachment['server_id'].encode('ascii'))
                             else:
                                 self.cinder_os_servers_with_attached_volume[volume.id.encode('ascii')] = [attachment['server_id'].encode('ascii')]
+            service = "nova"
+            for server in temporary_server_list:
+                # we only care about instances from the vcenter (shard) this nanny is taking care of
+                # compare the az of the server to the az value based on the shard tags above
+                log.debug('==> p: %s - p-sh: %s - s: %s - s-az: %s - vc: %s', server.project_id, project_in_shard.get(server.project_id), server.id, server.availability_zone.lower(), self.vcenter_name)
+                if (project_in_shard.get(server.project_id) and (server.availability_zone.lower() ==  project_in_shard.get(server.project_id))) \
+                    or ((not project_in_shard.get(server.project_id)) and (server.availability_zone.lower() == self.vcenter_name)):
+                    self.nova_os_all_servers.append(server.id)
+                    if server.attached_volumes:
+                        for attachment in server.attached_volumes:
+                            if self.nova_os_volumes_attached_at_server.get(server.id):
+                                self.nova_os_volumes_attached_at_server[server.id].append(attachment['id'].encode('ascii'))
+                            else:
+                                self.nova_os_volumes_attached_at_server[server.id] = [attachment['id'].encode('ascii')]
+                            self.nova_os_servers_with_attached_volume[attachment['id'].encode('ascii')] = server.id.encode('ascii')
 
         except exceptions.HttpException as e:
             log.warn(
