@@ -714,8 +714,10 @@ class ConsistencyCheck:
     # disconnect from the cinder db
     def cinder_db_disconnect(self):
         self.cinder_thisSession.close()
-        self.cinder_connection.close()
-
+        try:
+            self.cinder_connection.close()
+        except Exception:
+            pass
 
     def cinder_db_get_info(self):
         self.cinder_db_get_volume_attach_status()
@@ -939,12 +941,15 @@ class ConsistencyCheck:
 
         try:
 
+            log.info("- INFO - getting project information from keystone")
             temporary_project_list = list(self.os_conn.identity.projects())
             if not temporary_project_list:
                 raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any projects back from the keystone api - this should in theory never happen ...')
+            log.info("- INFO - getting volume information from cinder")
             temporary_volume_list = list(self.os_conn.block_store.volumes(details=True, all_projects=1))
             if not temporary_volume_list:
                 raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any cinder volumes back from the cinder api - this should in theory never happen ...')
+            log.info("- INFO - getting server information from nova")
             temporary_server_list = list(self.os_conn.compute.servers(details=True, all_projects=1))
             if not temporary_server_list:
                 raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any nova instances back from the nova api - this should in theory never happen ...')
@@ -958,12 +963,12 @@ class ConsistencyCheck:
                 try:
                     # check if the vcenter this nanny is connected to is in the shards tag list for each
                     # project - if yes then assign the constructed az name to it in the dict to compare
-                    # against the az of the instances and volumes later - otherwise set it to None for
-                    # the comparision to not be true later
-                    if self.vc_short_name() in project.tags:
+                    # against the az of the instances and volumes later - otherwise set it to the special
+                    # string "no_shards" if there is no project.tags defined (i.e. no shards enabled here)
+                    if project.tags and (self.vc_short_name() in project.tags):
                         project_in_shard[project.id] = az
-                    else:
-                        project_in_shard[project.id] = None
+                    if not project.tags:
+                        project_in_shard[project.id] = 'no_shard'
                     # this will move to debug later
                     log.debug("project %s - tags: %s)", project.id, str(project.tags))
                 except Exception as e:
@@ -975,7 +980,7 @@ class ConsistencyCheck:
                 # compare the az of the volume to the az value based on the shard tags above
                 log.debug('==> p: %s - p-sh: %s - v: %s - v-az: %s - vc: %s', volume.project_id, project_in_shard.get(volume.project_id), volume.id, volume.availability_zone.lower(), self.vcenter_name)
                 if (project_in_shard.get(volume.project_id) and (volume.availability_zone.lower() ==  project_in_shard.get(volume.project_id))) \
-                    or ((not project_in_shard.get(volume.project_id)) and (volume.availability_zone.lower() == self.vcenter_name)):
+                    or ((project_in_shard.get(volume.project_id) == 'no_shard') and (volume.availability_zone.lower() == self.vcenter_name)):
                     self.cinder_os_all_volumes.append(volume.id.encode('ascii'))
                     self.cinder_os_volume_status[volume.id.encode('ascii')] = volume.status.encode('ascii')
                     self.cinder_os_volume_project_id[volume.id.encode('ascii')] = volume.project_id.encode('ascii')
@@ -991,7 +996,7 @@ class ConsistencyCheck:
                 # compare the az of the server to the az value based on the shard tags above
                 log.debug('==> p: %s - p-sh: %s - s: %s - s-az: %s - vc: %s', server.project_id, project_in_shard.get(server.project_id), server.id, server.availability_zone.lower(), self.vcenter_name)
                 if (project_in_shard.get(server.project_id) and (server.availability_zone.lower() ==  project_in_shard.get(server.project_id))) \
-                    or ((not project_in_shard.get(server.project_id)) and (server.availability_zone.lower() == self.vcenter_name)):
+                    or ((project_in_shard.get(server.project_id) == 'no_shard') and (server.availability_zone.lower() == self.vcenter_name)):
                     self.nova_os_all_servers.append(server.id)
                     if server.attached_volumes:
                         for attachment in server.attached_volumes:
@@ -1560,7 +1565,7 @@ class ConsistencyCheck:
         if not self.os_connection_ok():
             log.error("- PLEASE CHECK MANUALLY - problems connecting to openstack - retrying in next loop run")
             sys.exit(1)
-        log.info("- INFO - getting information from openstack (this may take a moment)")
+        log.info("- INFO - getting information from openstack (this may take a moment - see the next lines for details)")
         # exit here in case we get problems getting data from openstack
         if not self.os_get_info():
             log.error("- PLEASE CHECK MANUALLY - problems getting data from openstack - retrying in next loop run")
@@ -1623,7 +1628,7 @@ class ConsistencyCheck:
         if not self.os_connection_ok():
             log.warn("- PLEASE CHECK MANUALLY - problems connecting to openstack - retrying in next loop run")
             return
-        log.info("- INFO - getting information from openstack (this may take a moment)")
+        log.info("- INFO - getting information from openstack (this may take a moment - see the next lines for details)")
         # stop this loop iteration here in case we get problems getting data from openstack
         if not self.os_get_info():
             log.warn("- PLEASE CHECK MANUALLY - problems getting data from openstack - retrying in next loop run")
