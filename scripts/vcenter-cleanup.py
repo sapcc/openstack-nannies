@@ -1166,7 +1166,7 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
             # compare the az of the server to the az value based on the shard tags above
             log.debug('==> p: %s - p-sh: %s - s: %s - s-az: %s - vc: %s', server.project_id, project_in_shard.get(server.project_id), server.id, server.availability_zone.lower(), vcenter_name)
             if (project_in_shard.get(server.project_id) and (server.availability_zone.lower() ==  project_in_shard.get(server.project_id))) \
-                or ((project_in_shard.get(server.project_id) == 'no_shard')) and (server.availability_zone.lower() == vcenter_name)):
+                or ((project_in_shard.get(server.project_id) == 'no_shard') and (server.availability_zone.lower() == vcenter_name)):
                 os_all_servers.append(server.id)
                 if server.attached_volumes:
                     for attachment in server.attached_volumes:
@@ -1183,7 +1183,7 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
             # compare the az of the volume to the az value based on the shard tags above
             log.debug('==> p: %s - p-sh: %s - v: %s - v-az: %s - vc: %s', volume.project_id, project_in_shard.get(volume.project_id), volume.id, volume.availability_zone.lower(), vcenter_name)
             if (project_in_shard.get(volume.project_id) and (volume.availability_zone.lower() ==  project_in_shard.get(volume.project_id))) \
-                or ((project_in_shard.get(volume.project_id) == 'no_shard')) and (volume.availability_zone.lower() == vcenter_name)):
+                or ((project_in_shard.get(volume.project_id) == 'no_shard') and (volume.availability_zone.lower() == vcenter_name)):
                 os_all_volumes.append(volume.id)
                 if volume.attachments:
                     for attachment in volume.attachments:
