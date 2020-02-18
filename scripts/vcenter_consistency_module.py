@@ -714,10 +714,11 @@ class ConsistencyCheck:
     # disconnect from the cinder db
     def cinder_db_disconnect(self):
         self.cinder_thisSession.close()
-        try:
-            self.cinder_connection.close()
-        except Exception:
-            pass
+        # if we close the connection here explicitely then we might run into a
+        # "MySQL server has gone away" error as it seems to timeout inside of
+        # sqlalchemy when running long - trying to fix it by catching the exception
+        # or via pool_pre_ping on create_engine plus some dummy query did not help
+        #self.cinder_connection.close()
 
     def cinder_db_get_info(self):
         self.cinder_db_get_volume_attach_status()
