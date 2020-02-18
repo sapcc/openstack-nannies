@@ -689,8 +689,9 @@ class ConsistencyCheck:
         try:
             db_url = self.get_db_url(self.cinderconfig)
 
-            self.cinder_engine = create_engine(db_url, pool_pre_ping=True)
-            self.cinder_connection = self.cinder_engine.connect()
+            self.cinder_engine = create_engine(db_url, pool_pre_ping=True, pool_recycle=300, echo_pool=True)
+            # do not connecte explicitely - the sqlalchemy pooling will take care of this for us
+            #self.cinder_connection = self.cinder_engine.connect()
             Session = sessionmaker(bind=self.cinder_engine)
             self.cinder_thisSession = Session()
             self.cinder_metadata = MetaData()
@@ -714,7 +715,8 @@ class ConsistencyCheck:
     # disconnect from the cinder db
     def cinder_db_disconnect(self):
         self.cinder_thisSession.close()
-        self.cinder_connection.close()
+        # do not connecte explicitely - the sqlalchemy pooling will take care of this for us
+        #self.cinder_connection.close()
 
     def cinder_db_get_info(self):
         self.cinder_db_get_volume_attach_status()
