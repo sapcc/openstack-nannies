@@ -628,7 +628,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
             # check if this instance is a vcenter template
             if k.get('config.template'):
                 template[k['config.instanceUuid']] = k['config.template']
-                log.debug("uuid: %s - template: %s", str(k['config.instanceUuid']), str(k['config.template']))
+                log.debug("==> uuid: %s - template: %s", str(k['config.instanceUuid']), str(k['config.template']))
             # get the config.hardware.device property out of the data dict and iterate over its elements
             # for j in k['config.hardware.device']:
             # this check seems to be required as in one bb i got a key error otherwise - looks like a vm without that property
@@ -681,11 +681,11 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                         elif server_to_mac.get(k['config.instanceUuid']):
                             mac_address_found = False
                             for i in server_to_mac[k['config.instanceUuid']]:
-                                log.debug("- instance %s - mac %s", k['config.instanceUuid'], i)
+                                log.debug("==> instance %s - mac %s", k['config.instanceUuid'], i)
                                 if str(j.macAddress) == i:
                                     mac_address_found = True
                             if mac_address_found:
-                                log.debug("- port with mac %s on %s [%s] is in sync between vcenter and neutron", str(j.macAddress), str(k['config.instanceUuid']), k['config.name'])
+                                log.debug("==> port with mac %s on %s [%s] is in sync between vcenter and neutron", str(j.macAddress), str(k['config.instanceUuid']), k['config.name'])
                             else:
                                 log.warn("- discovered ghost port with mac %s on %s [%s] in vcenter", str(j.macAddress), str(k['config.instanceUuid']), k['config.name'])
                                 gauge_value_ghost_ports += 1
@@ -706,30 +706,6 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                     ghost_port_detach_candidates[k['config.instanceUuid']].append(str(j.macAddress))
                                 else:
                                     ghost_port_detach_candidates[k['config.instanceUuid']] = [str(j.macAddress)]
-                        
-                        # TODO - remove this old code at some point
-                        # old style code - replaced by the code above as the mac address is not always unique and this leads to trouble
-                        # # skip everything with a non unique mac address, otherwise this might be calling for trouble
-                        # if non_unique_mac.get(str(j.macAddress)):
-                        #     log.warn("OLD STYLE: - discovered port with a non unique mac %s within the vcenter on %s [%s] - ignoring it", str(j.macAddress), str(k['config.instanceUuid']), k['config.name'])
-                        #     gauge_value_non_unique_mac += 1
-                        # elif k['config.instanceUuid'] == mac_to_server.get(str(j.macAddress)):
-                        #     log.debug("OLD STYLE: - port with mac %s on %s is in sync between vcenter and neutron", str(j.macAddress), str(k['config.instanceUuid']))
-                        # elif template.get(k['config.instanceUuid']):
-                        #     log.warn("OLD STYLE: - discovered ghost port with mac %s attached to vcenter template %s [%s] - ignoring it", str(j.macAddress), k['config.instanceUuid'], k['config.name'])
-                        #     gauge_value_ghost_ports += 1
-                        #     gauge_value_template_ports += 1
-                        #     gauge_value_ghost_ports_ignored += 1
-                        # else:
-                        #     log.warn("OLD STYLE: - discovered ghost port with mac %s on %s [%s] in vcenter", str(j.macAddress), str(k['config.instanceUuid']), k['config.name'])
-                        #     gauge_value_ghost_ports += 1
-                        #     # if we plan to delete ghost ports, collect them in a dict of mac addresses by instance uuid
-                        #     if detach_ghost_ports:
-                        #         # multiple ghost ports are possible for one instance, thus we need to put the ghost ports into a list
-                        #         if ghost_port_detach_candidates.get(k['config.instanceUuid']):
-                        #             ghost_port_detach_candidates[k['config.instanceUuid']].append(str(j.macAddress))
-                        #         else:
-                        #             ghost_port_detach_candidates[k['config.instanceUuid']] = [str(j.macAddress)]
 
     # do the check from the other end: see for which vms or volumes in the vcenter we do not have any openstack info
     missing = dict()
@@ -1150,13 +1126,13 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
                 # project - if yes then assign the constructed az name to it in the dict to compare
                 # against the az of the instances and volumes later - otherwise set it to the special
                 # string "no_shards" if there is no project.tags defined (i.e. no shards enabled here)
-                if project.tags and (vc_short_name() in project.tags):
+                if project.tags and (vc_short_name(host) in project.tags):
                     project_in_shard[project.id] = az
                 if not project.tags:
                     project_in_shard[project.id] = 'no_shard'
-                log.debug("project %s - tags: %s)", project.id, str(project.tags))
+                log.debug("==> project %s - tags: %s)", project.id, str(project.tags))
             except Exception as e:
-                log.debug("project %s most probably has no tags defined (exception %s)", project.id, str(e))
+                log.debug("==> project %s most probably has no tags defined (exception %s)", project.id, str(e))
         service = "nova"
         temporary_server_list = list(conn.compute.servers(details=True, all_projects=1))
         if not temporary_server_list:
@@ -1168,12 +1144,15 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
             if (project_in_shard.get(server.project_id) and (server.availability_zone.lower() ==  project_in_shard.get(server.project_id))) \
                 or ((project_in_shard.get(server.project_id) == 'no_shard') and (server.availability_zone.lower() == vcenter_name)):
                 os_all_servers.append(server.id)
+                log.debug("==> os_all_servers added: %s",str(server.id))
                 if server.attached_volumes:
                     for attachment in server.attached_volumes:
                         if os_volumes_attached_at_server.get(server.id):
                             os_volumes_attached_at_server[server.id].append(attachment['id'])
                         else:
                             os_volumes_attached_at_server[server.id] = [attachment['id']]
+            else:
+                log.debug("==> os_all_servers not added: %s",str(server.id))
         service = "cinder"
         temporary_volume_list = list(conn.block_store.volumes(details=True, all_projects=1))
         if not temporary_volume_list:
@@ -1185,12 +1164,15 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
             if (project_in_shard.get(volume.project_id) and (volume.availability_zone.lower() ==  project_in_shard.get(volume.project_id))) \
                 or ((project_in_shard.get(volume.project_id) == 'no_shard') and (volume.availability_zone.lower() == vcenter_name)):
                 os_all_volumes.append(volume.id)
+                log.debug("==> os_all_volumes added: %s",str(volume.id))
                 if volume.attachments:
                     for attachment in volume.attachments:
                         if os_servers_with_attached_volume.get(volume.id):
                             os_servers_with_attached_volume[volume.id].append(attachment['server_id'])
                         else:
                             os_servers_with_attached_volume[volume.id] = [attachment['server_id']]
+            else:
+                log.debug("==> os_all_volumes not added: %s",str(volume.id))
 
     except exceptions.HttpException as e:
         log.warn(
@@ -1238,7 +1220,7 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
             # # check if this instance is a vcenter template
             # if k.get('config.template'):
             #     template[k['config.instanceUuid']] = k['config.template']
-            # log.debug("uuid: %s - template: %s", str(k['config.instanceUuid']), str(k['config.template']))
+            # log.debug("==> uuid: %s - template: %s", str(k['config.instanceUuid']), str(k['config.template']))
             # get the config.hardware.device property out of the data dict and iterate over its elements
             # for j in k['config.hardware.device']:
             # this check seems to be required as in one bb i got a key error otherwise - looks like a vm without that property
@@ -1289,7 +1271,7 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
             cinder_is_attached = False
             # for each volume attached in cinder, check if it is also attached according to the vcenter
             if os_servers_with_attached_volume.get(i):
-                log.debug("volume: %s", str(i))
+                log.debug("==> volume: %s", str(i))
                 for j in os_servers_with_attached_volume[i]:
                     log.debug("==> server: %s", str(j))
                     if j == vc_server_uuid_with_mounted_volume[i]:
@@ -1298,7 +1280,7 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
                     elif not os_volumes_attached_at_server.get(j):
                         log.warn("- PLEASE CHECK MANUALLY - instance: %s - in cinder attached volume uuid: %s - but not attached in vcenter", os_servers_with_attached_volume[i], j)
                 if cinder_is_attached:
-                    log.debug("- instance: %s [%s] - volume: %s - cinder: yes", vc_server_uuid_with_mounted_volume[i], vc_server_name_with_mounted_volume[i], i)
+                    log.debug("==> instance: %s [%s] - volume: %s - cinder: yes", vc_server_uuid_with_mounted_volume[i], vc_server_name_with_mounted_volume[i], i)
                 else:
                     # the cinder attachment check warning only makes sense for instances, which actually exist in openstack
                     # otherwise the cinder nanny will take care to clean them up
@@ -1319,7 +1301,7 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
             nova_is_attached = False
             # for each volume attached in nova, check if it is also attached according to the vcenter
             if os_volumes_attached_at_server.get(vc_server_uuid_with_mounted_volume[i]):
-                log.debug("server: %s", str(vc_server_uuid_with_mounted_volume[i]))
+                log.debug("==> server: %s", str(vc_server_uuid_with_mounted_volume[i]))
                 for j in os_volumes_attached_at_server[vc_server_uuid_with_mounted_volume[i]]:
                     log.debug("==> volume: %s", str(j))
                     if j == i:
@@ -1328,7 +1310,7 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
                     elif not os_servers_with_attached_volume.get(j):
                         log.warn("- PLEASE CHECK MANUALLY - instance: %s - in nova attached volume uuid: %s - but not attached in vcenter", vc_server_uuid_with_mounted_volume[i], j)
                 if nova_is_attached:
-                    log.debug("- instance: %s [%s] - volume: %s - nova: yes", vc_server_uuid_with_mounted_volume[i], vc_server_name_with_mounted_volume[i], i)
+                    log.debug("==> instance: %s [%s] - volume: %s - nova: yes", vc_server_uuid_with_mounted_volume[i], vc_server_name_with_mounted_volume[i], i)
                 else:
                     # the nova attachment check warning only makes sense for volumes, which actually exist in openstack
                     # otherwise the nova nanny will take care to clean them up
@@ -1352,7 +1334,7 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
                 log.warn("- PLEASE CHECK MANUALLY - instance: %s [%s] - no volumes attached - nova: volume %s seems to be attached anyway", i, vcenter_instances_without_mounts[i], j)
                 gauge_value_volume_attachment_inconsistencies += 1
         else:
-            log.debug("- instance: %s [%s] - no volumes attached - nova: no attachments - good", i, vcenter_instances_without_mounts[i])
+            log.debug("==> instance: %s [%s] - no volumes attached - nova: no attachments - good", i, vcenter_instances_without_mounts[i])
         cinder_is_attached = False
         for j in os_servers_with_attached_volume:
             # complain if a volume without attachments in the vcenter has attachments according to cinder
@@ -1362,7 +1344,7 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
                     log.warn("- PLEASE CHECK MANUALLY - instance: %s [%s] - no volumes attached - cinder: volume %s seems to be attached anyway", i, vcenter_instances_without_mounts[i], j)
                     gauge_value_volume_attachment_inconsistencies += 1
         if not cinder_is_attached:
-            log.debug("- instance: %s [%s] - no volumes attached - cinder: no attachments - good", i, vcenter_instances_without_mounts[i])
+            log.debug("==> instance: %s [%s] - no volumes attached - cinder: no attachments - good", i, vcenter_instances_without_mounts[i])
 
     # log.info("- checking if all openstack servers exist in the vcenter")
     # for i in os_all_servers:
