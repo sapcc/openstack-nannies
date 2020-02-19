@@ -665,7 +665,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                     if isinstance(j, vim.vm.device.VirtualDisk):
                         # we only care for vvols - in the past we checked starting with 2001 as 2000 usual was the eph
                         # storage, but it looks like eph can also be on another id and 2000 could be a vvol as well ...
-                        if j.backing.fileName.lower().startswith('[vvol_'):
+                        if j.backing.fileName.lower().startswith('[vvol_') or j.backing.fileName.lower().startswith('[vmfs_'):
                             vc_server_uuid_with_mounted_volume[j.backing.uuid] = k['config.instanceUuid']
                             vc_server_name_with_mounted_volume[j.backing.uuid] = k['config.name']
                             log.debug("==> mount - instance: %s - volume: %s", str(k['config.instanceUuid']), str(j.backing.uuid))
@@ -776,7 +776,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     # iterate through all datastores in the vcenter
     for ds in dc.datastore:
         # only consider eph and vvol datastores
-        if ds.name.lower().startswith('eph') or ds.name.lower().startswith('vvol'):
+        if ds.name.lower().startswith('eph') or ds.name.lower().startswith('vvol') or ds.name.lower().startswith('vmfs'):
             log.info("- datacenter / datastore: %s / %s", dc.name, ds.name)
 
             # get all files and folders recursively from the datastore
@@ -875,7 +875,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                         vm_moid = str(vm).strip('"\'').split(":")[1]
                         power_state = vm.runtime.powerState
                         # is the vm located on vvol storage - needed later to check if its a volume shadow vm
-                        if vm.config.files.vmPathName.lower().startswith('[vvol'):
+                        if vm.config.files.vmPathName.lower().startswith('[vvol') or vm.config.files.vmPathName.lower().startswith('[vmfs'):
                             is_vvol = True
                         else:
                             is_vvol = False
@@ -973,7 +973,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                         now_or_later(str(path), files_to_be_renamed, files_seen, "rename_ds_path",
                                      iterations, dry_run, power_off, unregister, delete, None, dc, content, filename)
                 # vvol storage case - we work file by file as we can't rename or delete the vvol folders
-                elif path.lower().startswith("[vvol") and not vvolmarked.get(fullpath, False):
+                elif (path.lower().startswith("[vvol") or path.lower().startswith("[vmfs")) and not vvolmarked.get(fullpath, False):
                     # vvol storage
                     if fullpath.endswith(".renamed_by_vcenter_nanny"):
                         now_or_later(str(fullpath), files_to_be_deleted, files_seen, "delete_ds_path",
@@ -1249,7 +1249,7 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
                     if isinstance(j, vim.vm.device.VirtualDisk):
                         # we only care for vvols - in the past we checked starting with 2001 as 2000 usual was the eph
                         # storage, but it looks like eph can also be on another id and 2000 could be a vvol as well ...
-                        if j.backing.fileName.lower().startswith('[vvol_'):
+                        if j.backing.fileName.lower().startswith('[vvol_') or j.backing.fileName.lower().startswith('[vmfs_'):
                             # map attached volume id to instance uuid - used later
                             vc_server_uuid_with_mounted_volume[j.backing.uuid] = k['config.instanceUuid']
                             # map attached volume id to instance name - used later for more detailed logging
@@ -1270,7 +1270,7 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
                     if isinstance(j, vim.vm.device.VirtualDisk):
                         # we only care for vvols - in the past we checked starting with 2001 as 2000 usual was the eph
                         # storage, but it looks like eph can also be on another id and 2000 could be a vvol as well ...
-                        if j.backing.fileName.lower().startswith('[vvol_'):
+                        if j.backing.fileName.lower().startswith('[vvol_') or j.backing.fileName.lower().startswith('[vmfs_'):
                             # build a list of all openstack volumes in the vcenter to later compare it to the volumes in openstack
                             # it looks like we have to put both the uuid of the shadow vm and the uuid of the backing
                             # storage onto the list, as otherwise we would miss out some volumes really existing in the vcenter

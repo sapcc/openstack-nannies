@@ -524,7 +524,7 @@ class ConsistencyCheck:
                         if isinstance(j, vim.vm.device.VirtualDisk):
                             # we only care for vvols - in the past we checked starting with 2001 as 2000 usual was the eph
                             # storage, but it looks like eph can also be on another id and 2000 could be a vvol as well ...
-                            if j.backing.fileName.lower().startswith('[vvol_'):
+                            if j.backing.fileName.lower().startswith('[vvol_') or j.backing.fileName.lower().startswith('[vmfs_'):
                                 # try to find an openstack uuid in the filename
                                 filename_uuid_search_result = filename_uuid_re.search(j.backing.fileName)
                                 # warn about any volumes without a uuid set in the backing store config
@@ -658,7 +658,7 @@ class ConsistencyCheck:
                         if isinstance(j, vim.vm.device.VirtualDisk):
                             # we only care for vvols - in the past we checked starting with 2001 as 2000 usual was the eph
                             # storage, but it looks like eph can also be on another id and 2000 could be a vvol as well ...
-                            if j.backing.fileName.lower().startswith('[vvol_'):
+                            if j.backing.fileName.lower().startswith('[vvol_') or j.backing.fileName.lower().startswith('[vmfs_'):
                                 # build a list of all openstack volumes in the vcenter to later compare it to the volumes in openstack
                                 # it looks like we have to put both the uuid of the shadow vm and the uuid of the backing
                                 # storage onto the list, as otherwise we would miss out some volumes really existing in the vcenter
@@ -690,7 +690,7 @@ class ConsistencyCheck:
             db_url = self.get_db_url(self.cinderconfig)
 
             self.cinder_engine = create_engine(db_url, pool_pre_ping=True, pool_recycle=300, echo_pool=True)
-            # do not connecte explicitely - the sqlalchemy pooling will take care of this for us
+            # do not connect explicitely - the sqlalchemy pooling will take care of this for us
             #self.cinder_connection = self.cinder_engine.connect()
             Session = sessionmaker(bind=self.cinder_engine)
             self.cinder_thisSession = Session()
@@ -715,7 +715,7 @@ class ConsistencyCheck:
     # disconnect from the cinder db
     def cinder_db_disconnect(self):
         self.cinder_thisSession.close()
-        # do not connecte explicitely - the sqlalchemy pooling will take care of this for us
+        # do not connect explicitely - the sqlalchemy pooling will take care of this for us
         #self.cinder_connection.close()
 
     def cinder_db_get_info(self):
