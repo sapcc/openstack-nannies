@@ -657,8 +657,8 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                             vc_server_name_with_mounted_volume[j.backing.uuid] = k['config.name']
                             log.debug("==> mount - instance: %s - volume: %s", str(k['config.instanceUuid']), str(j.backing.uuid))
                     # ... and network interfaces for ghost ports
-                    # TODO: maybe? if isinstance(k.get('config.hardware.device'), vim.vm.device.VirtualEthernetCard):
-                    if 4000 <= j.key < 5000:
+                    # old test was: if 4000 <= j.key < 5000:
+                    if isinstance(j, vim.vm.device.VirtualEthernetCard):
                         # new style code - build the comparision around the instance uuid instead of the mac address as it is definitely unique per region
                         if template.get(k['config.instanceUuid']):
                             log.warn("- discovered ghost port with mac %s attached to vcenter template %s [%s] - ignoring it", str(j.macAddress), k['config.instanceUuid'], k['config.name'])
