@@ -525,6 +525,9 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     gauge_value_big_vm_memory_shares_high = 0
 
     # get all servers, volumes, snapshots and images from openstack to compare the resources we find on the vcenter against
+    # TODO: this should be filtered by the current vc like below - it works without as we only check if some resource is in
+    #       openstack or not and we do not really care about the vcenter here (although we might overlook cases where
+    #       something got moved from one vc to another)
     try:
         service = "nova"
         temporary_server_list = list(conn.compute.servers(details=False, all_projects=1))
@@ -1111,38 +1114,85 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
 
     # get all servers, volumes, snapshots and images from openstack to compare the resources we find on the vcenter against
     try:
-        service = "keystone"
-        temporary_project_list = list(conn.identity.projects())
-        if not temporary_project_list:
-            raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any projects back from the keystone api - this should in theory never happen ...')
-        # build a dict of the projects and their vcenters used to find the proper shard
-        project_in_shard = dict()
-        # build the az name from vc_short_name and vc_region_name because we have the az defined for
-        # volumes and instances and want to compare against that later - az = region name + letter (qa-de-1a)
-        az = str(vc_region_name(host)) + str(vc_short_name(host).split('-')[1])
-        for project in temporary_project_list:
-            try:
-                # check if the vcenter this nanny is connected to is in the shards tag list for each
-                # project - if yes then assign the constructed az name to it in the dict to compare
-                # against the az of the instances and volumes later - otherwise set it to the special
-                # string "no_shards" if there is no project.tags defined (i.e. no shards enabled here)
-                if project.tags and (vc_short_name(host) in project.tags):
-                    project_in_shard[project.id] = az
-                if not project.tags:
-                    project_in_shard[project.id] = 'no_shard'
-                log.debug("==> project %s - tags: %s)", project.id, str(project.tags))
-            except Exception as e:
-                log.debug("==> project %s most probably has no tags defined (exception %s)", project.id, str(e))
+
+        # we are not getting the vc volumes and instances are running on from the project tags
+        # as there might be cases there this is not true (i.e. blackbox tests etc.)
+        # service = "keystone"
+        # temporary_project_list = list(conn.identity.projects())
+        # if not temporary_project_list:
+        #     raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any projects back from the keystone api - this should in theory never happen ...')
+
+        service = "cinder"
+        temporary_volume_list = list(conn.block_store.volumes(details=True, all_projects=1))
+        if not temporary_volume_list:
+            raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any cinder volumes back from the cinder api - this should in theory never happen ...')
         service = "nova"
         temporary_server_list = list(conn.compute.servers(details=True, all_projects=1))
         if not temporary_server_list:
             raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any nova instances back from the nova api - this should in theory never happen ...')
+        temporary_aggregate_list = list(conn.compute.aggregates())
+        if not temporary_aggregate_list:
+            raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any nova aggregates back from the nova api - this should in theory never happen ...')
+
+        # we are not getting the vc volumes and instances are running on from the project tags
+        # as there might be cases there this is not true (i.e. blackbox tests etc.)
+        # # build a dict of the projects and their vcenters used to find the proper shard
+        # project_in_shard = dict()
+        # # build the az name from vc_short_name and vc_region_name because we have the az defined for
+        # # volumes and instances and want to compare against that later - az = region name + letter (qa-de-1a)
+        # az = str(vc_region_name(host)) + str(vc_short_name(host).split('-')[1])
+        # for project in temporary_project_list:
+        #     try:
+        #         # check if the vcenter this nanny is connected to is in the shards tag list for each
+        #         # project - if yes then assign the constructed az name to it in the dict to compare
+        #         # against the az of the instances and volumes later - otherwise set it to the special
+        #         # string "no_shards" if there is no project.tags defined (i.e. no shards enabled here)
+        #         if project.tags and (vc_short_name(host) in project.tags):
+        #             project_in_shard[project.id] = az
+        #         if not project.tags:
+        #             project_in_shard[project.id] = 'no_shard'
+        #         log.debug("==> project %s - tags: %s)", project.id, str(project.tags))
+        #     except Exception as e:
+        #         log.debug("==> project %s most probably has no tags defined (exception %s)", project.id, str(e))
+
+        # build dicts to map servers and volumes to the vc they are running on to filter by it later
+        hosts_per_vc = dict()
+        for aggregate in temporary_aggregate_list:
+            if aggregate.name:
+                match = re.search(r"^vc-[a-z]-[0-9]$", aggregate.name)
+                if match:
+                    hosts_per_vc[aggregate.name] = aggregate.hosts
+
+        host_from_server_uuid = dict()
         for server in temporary_server_list:
+            if server.compute_host:
+                host_from_server_uuid[server.id] = server.compute_host
+
+        vc_from_server_uuid = dict()
+        for server in host_from_server_uuid:
+            for vcenter in hosts_per_vc:
+                if host_from_server_uuid[server] in hosts_per_vc[vcenter]:
+                    vc_from_server_uuid[server] = vcenter
+
+        vc_from_volume_uuid = dict()
+        for volume in temporary_volume_list:
+            if volume.host:
+                match = re.search(r"(vc-[a-z]-[0-9])", volume.host)
+                if match:
+                    vc_from_volume_uuid[volume.id] = match.groups(1)
+
+        for server in temporary_server_list:
+
+            # we are not getting the vc volumes and instances are running on from the project tags
+            # as there might be cases there this is not true (i.e. blackbox tests etc.)
+            # # compare the az of the server to the az value based on the shard tags above
+            # log.debug('==> p: %s - p-sh: %s - s: %s - s-az: %s - vc: %s', server.project_id, project_in_shard.get(server.project_id), server.id, server.availability_zone.lower(), vcenter_name)
+            # if (project_in_shard.get(server.project_id) and (server.availability_zone.lower() ==  project_in_shard.get(server.project_id))) \
+            #     or ((project_in_shard.get(server.project_id) == 'no_shard') and (server.availability_zone.lower() == vcenter_name)):
+
             # we only care about instances from the vcenter (shard) this nanny is taking care of
-            # compare the az of the server to the az value based on the shard tags above
-            log.debug('==> p: %s - p-sh: %s - s: %s - s-az: %s - vc: %s', server.project_id, project_in_shard.get(server.project_id), server.id, server.availability_zone.lower(), vcenter_name)
-            if (project_in_shard.get(server.project_id) and (server.availability_zone.lower() ==  project_in_shard.get(server.project_id))) \
-                or ((project_in_shard.get(server.project_id) == 'no_shard') and (server.availability_zone.lower() == vcenter_name)):
+            log.debug('==> p: %s - s: %s - s-vc: %s', server.project_id, server.id, vc_from_server_uuid.get(server.id))
+            if vc_from_server_uuid.get(server.id) == vc_short_name(host):
                 os_all_servers.append(server.id)
                 log.debug("==> os_all_servers added: %s",str(server.id))
                 if server.attached_volumes:
@@ -1153,16 +1203,19 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
                             os_volumes_attached_at_server[server.id] = [attachment['id']]
             else:
                 log.debug("==> os_all_servers not added: %s",str(server.id))
-        service = "cinder"
-        temporary_volume_list = list(conn.block_store.volumes(details=True, all_projects=1))
-        if not temporary_volume_list:
-            raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any cinder volumes back from the cinder api - this should in theory never happen ...')
         for volume in temporary_volume_list:
-            # we only care about volumes from the vcenter (shard) this nanny is taking care of
-            # compare the az of the volume to the az value based on the shard tags above
-            log.debug('==> p: %s - p-sh: %s - v: %s - v-az: %s - vc: %s', volume.project_id, project_in_shard.get(volume.project_id), volume.id, volume.availability_zone.lower(), vcenter_name)
-            if (project_in_shard.get(volume.project_id) and (volume.availability_zone.lower() ==  project_in_shard.get(volume.project_id))) \
-                or ((project_in_shard.get(volume.project_id) == 'no_shard') and (volume.availability_zone.lower() == vcenter_name)):
+
+            # we are not getting the vc volumes and instances are running on from the project tags
+            # as there might be cases there this is not true (i.e. blackbox tests etc.)
+            # # we only care about volumes from the vcenter (shard) this nanny is taking care of
+            # # compare the az of the volume to the az value based on the shard tags above
+            # log.debug('==> p: %s - p-sh: %s - v: %s - v-az: %s - vc: %s', volume.project_id, project_in_shard.get(volume.project_id), volume.id, volume.availability_zone.lower(), vcenter_name)
+            # if (project_in_shard.get(volume.project_id) and (volume.availability_zone.lower() ==  project_in_shard.get(volume.project_id))) \
+            #     or ((project_in_shard.get(volume.project_id) == 'no_shard') and (volume.availability_zone.lower() == vcenter_name)):
+
+            # we only care about instances from the vcenter (shard) this nanny is taking care of
+            log.debug('==> p: %s - v: %s - v-vc: %s', volume.project_id, volume.id, vc_from_volume_uuid.get(volume.id))
+            if vc_from_volume_uuid.get(volume.id) == vc_short_name(host):
                 os_all_volumes.append(volume.id)
                 log.debug("==> os_all_volumes added: %s",str(volume.id))
                 if volume.attachments:
