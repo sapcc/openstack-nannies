@@ -1180,29 +1180,6 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
                 match = re.search(r"(vc-[a-z]-[0-9])", volume.host)
                 if match:
                     vc_from_volume_uuid[volume.id] = match.groups(1)
-
-        for server in temporary_server_list:
-
-            # we are not getting the vc volumes and instances are running on from the project tags
-            # as there might be cases there this is not true (i.e. blackbox tests etc.)
-            # # compare the az of the server to the az value based on the shard tags above
-            # log.debug('==> p: %s - p-sh: %s - s: %s - s-az: %s - vc: %s', server.project_id, project_in_shard.get(server.project_id), server.id, server.availability_zone.lower(), vcenter_name)
-            # if (project_in_shard.get(server.project_id) and (server.availability_zone.lower() ==  project_in_shard.get(server.project_id))) \
-            #     or ((project_in_shard.get(server.project_id) == 'no_shard') and (server.availability_zone.lower() == vcenter_name)):
-
-            # we only care about instances from the vcenter (shard) this nanny is taking care of
-            log.debug('==> p: %s - s: %s - s-vc: %s', server.project_id, server.id, vc_from_server_uuid.get(server.id))
-            if vc_from_server_uuid.get(server.id) == vc_short_name(host):
-                os_all_servers.append(server.id)
-                log.debug("==> os_all_servers added: %s",str(server.id))
-                if server.attached_volumes:
-                    for attachment in server.attached_volumes:
-                        if os_volumes_attached_at_server.get(server.id):
-                            os_volumes_attached_at_server[server.id].append(attachment['id'])
-                        else:
-                            os_volumes_attached_at_server[server.id] = [attachment['id']]
-            else:
-                log.debug("==> os_all_servers not added: %s",str(server.id))
         for volume in temporary_volume_list:
 
             # we are not getting the vc volumes and instances are running on from the project tags
@@ -1226,6 +1203,28 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
                             os_servers_with_attached_volume[volume.id] = [attachment['server_id']]
             else:
                 log.debug("==> os_all_volumes not added: %s",str(volume.id))
+        for server in temporary_server_list:
+
+            # we are not getting the vc volumes and instances are running on from the project tags
+            # as there might be cases there this is not true (i.e. blackbox tests etc.)
+            # # compare the az of the server to the az value based on the shard tags above
+            # log.debug('==> p: %s - p-sh: %s - s: %s - s-az: %s - vc: %s', server.project_id, project_in_shard.get(server.project_id), server.id, server.availability_zone.lower(), vcenter_name)
+            # if (project_in_shard.get(server.project_id) and (server.availability_zone.lower() ==  project_in_shard.get(server.project_id))) \
+            #     or ((project_in_shard.get(server.project_id) == 'no_shard') and (server.availability_zone.lower() == vcenter_name)):
+
+            # we only care about instances from the vcenter (shard) this nanny is taking care of
+            log.debug('==> p: %s - s: %s - s-vc: %s', server.project_id, server.id, vc_from_server_uuid.get(server.id))
+            if vc_from_server_uuid.get(server.id) == vc_short_name(host):
+                os_all_servers.append(server.id)
+                log.debug("==> os_all_servers added: %s",str(server.id))
+                if server.attached_volumes:
+                    for attachment in server.attached_volumes:
+                        if os_volumes_attached_at_server.get(server.id):
+                            os_volumes_attached_at_server[server.id].append(attachment['id'])
+                        else:
+                            os_volumes_attached_at_server[server.id] = [attachment['id']]
+            else:
+                log.debug("==> os_all_servers not added: %s",str(server.id))
 
     except exceptions.HttpException as e:
         log.warn(
