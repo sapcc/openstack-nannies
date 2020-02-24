@@ -1160,7 +1160,8 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
             if volume.host:
                 match = re.search(r"(vc-[a-z]-[0-9])", volume.host)
                 if match:
-                    vc_from_volume_uuid[volume.id] = match.groups(1)
+                    vc_from_volume_uuid[volume.id] = match.groups(1)[0]
+
         for volume in temporary_volume_list:
 
             # we are not getting the vc volumes and instances are running on from the project tags
@@ -1172,7 +1173,7 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
             #     or ((project_in_shard.get(volume.project_id) == 'no_shard') and (volume.availability_zone.lower() == vcenter_name)):
 
             # we only care about instances from the vcenter (shard) this nanny is taking care of
-            log.debug('==> p: %s - v: %s - v-vc: %s', volume.project_id, volume.id, vc_from_volume_uuid.get(volume.id))
+            log.debug('==> p: %s - v: %s - v-vc: %s - vc-sn: %s', volume.project_id, volume.id, vc_from_volume_uuid.get(volume.id), vc_short_name(host))
             if vc_from_volume_uuid.get(volume.id) == vc_short_name(host):
                 os_all_volumes.append(volume.id)
                 log.debug("==> os_all_volumes added: %s",str(volume.id))
@@ -1194,7 +1195,7 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
             #     or ((project_in_shard.get(server.project_id) == 'no_shard') and (server.availability_zone.lower() == vcenter_name)):
 
             # we only care about instances from the vcenter (shard) this nanny is taking care of
-            log.debug('==> p: %s - s: %s - s-vc: %s', server.project_id, server.id, vc_from_server_uuid.get(server.id))
+            log.debug('==> p: %s - s: %s - s-vc: %s - vc-sn: %s', server.project_id, server.id, vc_from_server_uuid.get(server.id), vc_short_name(host))
             if vc_from_server_uuid.get(server.id) == vc_short_name(host):
                 os_all_servers.append(server.id)
                 log.debug("==> os_all_servers added: %s",str(server.id))
