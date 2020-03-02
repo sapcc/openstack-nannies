@@ -32,7 +32,7 @@ while true; do
     if [ "$GLANCE_DB_PURGE_ENABLED" = "True" ] || [ "$GLANCE_DB_PURGE_ENABLED" = "true" ]; then
         echo -n "INFO: purging at max $GLANCE_DB_PURGE_MAX_NUMBER deleted glance entities older than $GLANCE_DB_PURGE_OLDER_THAN days from the glance db - "
         date
-        /var/lib/kolla/venv/bin/glance-manage db purge --age_in_days $GLANCE_DB_PURGE_OLDER_THAN --max_rows $GLANCE_DB_PURGE_MAX_NUMBER
+        /var/lib/openstack/bin/glance-manage db purge --age_in_days $GLANCE_DB_PURGE_OLDER_THAN --max_rows $GLANCE_DB_PURGE_MAX_NUMBER
     fi
     echo -n "INFO: waiting $GLANCE_NANNY_INTERVAL minutes before starting the next loop run - "
     date
