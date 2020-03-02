@@ -37,17 +37,17 @@ while true; do
             fi
             echo -n "INFO: checking and fixing cinder db consistency - "
             date
-            /var/lib/kolla/venv/bin/python /scripts/cinder-consistency.py --config /etc/cinder/cinder.conf $FIX_LIMIT
+            /var/lib/openstack/bin/python /scripts/cinder-consistency.py --config /etc/cinder/cinder.conf $FIX_LIMIT
         else
             echo -n "INFO: checking cinder db consistency - "
             date
-            /var/lib/kolla/venv/bin/python /scripts/cinder-consistency.py --config /etc/cinder/cinder.conf --dry-run
+            /var/lib/openstack/bin/python /scripts/cinder-consistency.py --config /etc/cinder/cinder.conf --dry-run
         fi
     fi
     if [ "$CINDER_DB_PURGE_ENABLED" = "True" ] || [ "$CINDER_DB_PURGE_ENABLED" = "true" ]; then
         echo -n "INFO: purging deleted cinder entities older than $CINDER_DB_PURGE_OLDER_THAN days from the cinder db - "
         date
-        /var/lib/kolla/venv/bin/cinder-manage db purge $CINDER_DB_PURGE_OLDER_THAN
+        /var/lib/openstack/bin/cinder-manage db purge $CINDER_DB_PURGE_OLDER_THAN
     fi
     echo -n "INFO: waiting $CINDER_NANNY_INTERVAL minutes before starting the next loop run - "
     date

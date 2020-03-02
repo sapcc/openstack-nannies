@@ -30,4 +30,4 @@ if [ "$CINDER_DB_CLEANUP_DRY_RUN" = "False" ] || [ "$CINDER_DB_CLEANUP_DRY_RUN" 
 else
     DRY_RUN="--dry-run"
 fi
-/var/lib/kolla/venv/bin/python /scripts/db-cleanup.py $DRY_RUN --iterations $CINDER_DB_CLEANUP_ITERATIONS --interval $CINDER_DB_CLEANUP_INTERVAL --cinder
+/var/lib/openstack/bin/python /scripts/db-cleanup.py $DRY_RUN --iterations $CINDER_DB_CLEANUP_ITERATIONS --interval $CINDER_DB_CLEANUP_INTERVAL --cinder

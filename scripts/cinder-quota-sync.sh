@@ -39,7 +39,7 @@ while true; do
         fi
         for i in `/var/lib/kolla/venv/bin/python /scripts/cinder-quota-sync.py --config /etc/cinder/cinder.conf --list_projects`; do
             echo project: $i
-            /var/lib/kolla/venv/bin/python /scripts/cinder-quota-sync.py --config /etc/cinder/cinder.conf $SYNC_MODE --project_id $i
+            /var/lib/openstack/bin/python /scripts/cinder-quota-sync.py --config /etc/cinder/cinder.conf $SYNC_MODE --project_id $i
         done
     fi
     echo -n "INFO: waiting $CINDER_NANNY_INTERVAL minutes before starting the next loop run - "
