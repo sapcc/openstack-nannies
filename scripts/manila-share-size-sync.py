@@ -36,18 +36,17 @@ from manila_nanny import ManilaNanny
 log = logging.getLogger('nanny-manila-share-sync')
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
-# query = 'netapp_capacity_svm{metric="size_total"} + ignoring(metric) netapp_capacity_svm{metric="size_reserved_by_snapshots"}'
-query = 'netapp_volume_total_bytes{app="netapp-capacity-exporter-manila"} + netapp_volume_snapshot_reserved_bytes'
+NETAPP_VOLUME_QUERY = "netapp_volume_total_bytes{app='netapp-capacity-exporter-manila'} + " \
+                      "netapp_volume_snapshot_reserved_bytes"
 onegb = 1073741824
 
 class ManilaShareSyncNanny(ManilaNanny):
     _shares = {}
     _non_exist_shares = {}
 
-    def __init__(self, config_file, prom_host, prom_query, interval, dry_run):
+    def __init__(self, config_file, prom_host, interval, dry_run):
         super(ManilaShareSyncNanny, self).__init__(config_file, interval, dry_run)
         self.prom_host = prom_host+"/api/v1/query"
-        self.prom_query = prom_query
         self.MANILA_SHARE_SIZE_SYNCED = Counter('manila_nanny_share_size_synced', '')
         self.MANILA_SHARE_NOT_EXIST = Counter('manila_nanny_share_not_exist', '')
 
@@ -86,7 +85,7 @@ class ManilaShareSyncNanny(ManilaNanny):
     def get_shares_from_netapp(self):
         try:
             r = requests.get(self.prom_host, params={
-                'query': self.prom_query,
+                'query': NETAPP_VOLUME_QUERY,
                 'time': time.time()
             })
         except Exception as e:
@@ -147,9 +146,6 @@ def parse_cmdline_args():
                         help='configuration file')
     parser.add_argument("--netapp-prom-host",
                         help="never sync resources (no interactive check)")
-    parser.add_argument("--netapp-prom-query",
-                        default=query,
-                        help="always sync resources (no interactive check)")
     parser.add_argument("--dry-run",
                        action="store_true",
                        help='print only what would be done without actually doing it')
@@ -180,7 +176,6 @@ def main():
 
     ManilaShareSyncNanny(args.config,
                          args.netapp_prom_host,
-                         args.netapp_prom_query,
                          args.interval,
                          args.dry_run
                          ).run()
