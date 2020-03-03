@@ -84,11 +84,14 @@ class ManilaShareSyncNanny(ManilaNanny):
                         log.warn("ShareNotExistOnBackend: id=%s" % share_id)
 
     def get_shares_from_netapp(self):
-        payloads = {
-            'query': self.prom_query,
-            'time': time.time()
-        }
-        r = requests.get(self.prom_host, params=payloads)
+        try:
+            r = requests.get(self.prom_host, params={
+                'query': self.prom_query,
+                'time': time.time()
+            })
+        except Exception as e:
+            log.error("get_shares_from_netapp(): " + str(e))
+            return
 
         if r.status_code != 200:
             return
