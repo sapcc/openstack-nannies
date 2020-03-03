@@ -31,7 +31,7 @@ from sqlalchemy import select
 from sqlalchemy import Table
 from sqlalchemy.sql.expression import false
 from prometheus_client import start_http_server, Counter
-from manila_nanny import ManilaNanny, get_db_url
+from manila_nanny import ManilaNanny
 
 log = logging.getLogger('nanny-manila-share-sync')
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
@@ -44,8 +44,8 @@ class ManilaShareSyncNanny(ManilaNanny):
     _shares = {}
     _non_exist_shares = {}
 
-    def __init__(self, db_url, prom_host, prom_query, interval, dry_run):
-        super(ManilaShareSyncNanny, self).__init__(db_url, interval, dry_run)
+    def __init__(self, config_file, prom_host, prom_query, interval, dry_run):
+        super(ManilaShareSyncNanny, self).__init__(config_file, interval, dry_run)
         self.prom_host = prom_host+"/api/v1/query"
         self.prom_query = prom_query
         self.MANILA_SHARE_SIZE_SYNCED = Counter('manila_nanny_share_size_synced', '')
@@ -155,7 +155,7 @@ def parse_cmdline_args():
                         type=float,
                         help="interval")
     parser.add_argument("--prom-port",
-                        default=9456,
+                        default=9457,
                         type=int,
                         help="prometheus port")
     return parser.parse_args()
@@ -175,9 +175,7 @@ def main():
         sys.stdout.write("start_http_server: " + str(e) + "\n")
         sys.exit(-1)
 
-    # connect to the DB
-    db_url = get_db_url(args.config)
-    ManilaShareSyncNanny(db_url, 
+    ManilaShareSyncNanny(args.config,
                          args.netapp_prom_host,
                          args.netapp_prom_query,
                          args.interval,
