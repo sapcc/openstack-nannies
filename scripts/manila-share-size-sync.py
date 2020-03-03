@@ -51,38 +51,40 @@ class ManilaShareSyncNanny(ManilaNanny):
         self.MANILA_SHARE_NOT_EXIST = Counter('manila_nanny_share_not_exist', '')
 
     def _run(self):
-        self._shares = {}
-        self.get_shares_from_netapp()
-        self.get_shares_from_manila()
+        volumes = self.get_netapp_volumes()
+        shares = self.get_manila_shares()
 
-        for share_id, v in self._shares.items():
-            if v.get('manila_size') is not None and v.get('size') is not None:
-                if v.get('manila_size') != v.get('size'):
-                    if not self.dry_run:
-                        log.info("share %s: manila share size (%d) does not " + \
-                                 "match share size (%d) on backend",
-                                 share_id,
-                                 v.get('manila_size'),
-                                 v.get('size'))
-                        self.set_share_size(share_id, v.get('size'))
-                        self.MANILA_SHARE_SIZE_SYNCED.inc()
+        # Don't correct anything when fetching netapp volumes fails
+        if volumes is None:
+            return
+
+        for share_id, share in shares.iteritems():
+            ssize = share['size']
+            utime = share['updated_at']
+
+            # Backend volume exists, but size does not match
+            vol = volumes.get(share_id)
+            if vol:
+                vsize = vol['size']
+                if vsize != ssize:
+                    msg = "share %s: manila share size != netapp volume size " \
+                          "(%d != %d)".format(share_id, ssize, vsize )
+                    if self.dry_run:
+                        log.info("Dry run: " + msg)
                     else:
-                        log.info("dry run: share %s: manila share size (%d) does not " + \
-                                 "match share size (%d) on backend",
-                                 share_id,
-                                 v.get('manila_size'),
-                                 v.get('size'))
-            elif v.get('manila_size') is not None and v.get('size') is None:
-                if self._non_exist_shares.get(share_id, 0) == 0:
-                    self._non_exist_shares[share_id] = datetime.now()
-                else:
-                    t0 = self._non_exist_shares.get(share_id)
-                    delta = datetime.now() - t0
-                    if delta.total_seconds() > 600:
-                        self.MANILA_SHARE_NOT_EXIST.inc()
-                        log.warn("ShareNotExistOnBackend: id=%s" % share_id)
+                        log.info(msg)
+                        self.set_share_size(share_id, vsize)
+                        self.MANILA_SHARE_SIZE_SYNCED.inc()
 
-    def get_shares_from_netapp(self):
+            # Backend volume does NOT exist
+            else:
+                # The comparison must between utcnow() and utime, since utime is utc time.
+                delta = datetime.utcnow() - utime
+                if delta.total_seconds() > 300:
+                    self.MANILA_SHARE_NOT_EXIST.inc()
+                    log.warn("ShareNotExistOnBackend: id=%s" % share_id)
+
+    def get_netapp_volumes(self):
         try:
             r = requests.get(self.prom_host, params={
                 'query': NETAPP_VOLUME_QUERY,
@@ -90,44 +92,37 @@ class ManilaShareSyncNanny(ManilaNanny):
             })
         except Exception as e:
             log.error("get_shares_from_netapp(): " + str(e))
-            return
+            return None
 
         if r.status_code != 200:
-            return
-        for s in r.json()['data']['result']:
-            if not s['metric'].get('share_id'):
-                continue
-            x = {
-                'share_id': s['metric']['share_id'],
-                'vserver': s['metric']['vserver'],
-                'volume': s['metric']['volume'],
-                'size': int(s['value'][1])/onegb
-            }
-            if x['share_id'] not in self._shares.keys():
-                self._shares[x['share_id']] = x
-            else:
-                self._shares[x['share_id']].update(x)
+            return None
 
-    def get_shares_from_manila(self):
+        for s in r.json()['data']['result']:
+            share_id = s['metric'].get('share_id')
+            if share_id is not None:
+                vols[share_id] = {
+                    'share_id': share_id,
+                    'vserver': s['metric']['vserver'],
+                    'volume': s['metric']['volume'],
+                    'size': int(s['value'][1])/onegb,
+                }
+        return vols
+
+    def get_manila_shares(self):
         shares_t = Table('shares', self.db_metadata, autoload=True)
         share_instances_t = Table('share_instances', self.db_metadata, autoload=True)
         shares_join = shares_t.join(share_instances_t, shares_t.c.id == share_instances_t.c.share_id)
         q = select(columns=[shares_t.c.id, shares_t.c.size, share_instances_t.c.updated_at]) \
             .select_from(shares_join) \
             .where(and_(shares_t.c.deleted=='False', share_instances_t.c.status=='available'))
+        shares = {}
         for (share_id, share_size, updated_at) in q.execute():
-            if share_id not in self._shares.keys():
-                self._shares[share_id] = {
+            shares[share_id] = {
                     'share_id': share_id,
-                    'manila_size': share_size,
+                    'size': share_size,
                     'updated_at': updated_at
-                }
-            else:
-                self._shares[share_id].update({
-                    'manila_size': share_size,
-                    'updated_at': updated_at
-                })
-        return q
+            }
+        return shares
 
     def set_share_size(self, share_id, share_size):
         now = datetime.utcnow()
