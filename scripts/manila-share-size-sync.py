@@ -144,7 +144,7 @@ class ManilaShareSyncNanny(ManilaNanny):
         shares_t = Table('shares', self.db_metadata, autoload=True)
         share_instances_t = Table('share_instances', self.db_metadata, autoload=True)
         shares_join = shares_t.join(share_instances_t, shares_t.c.id == share_instances_t.c.share_id)
-        q = select(columns=[shares_t.c.id, shares_t.c.size, share_t.c.updated_at]) \
+        q = select(columns=[shares_t.c.id, shares_t.c.size, shares_t.c.updated_at]) \
             .select_from(shares_join) \
             .where(and_(shares_t.c.deleted=='False', share_instances_t.c.status=='available'))
         shares = {}
