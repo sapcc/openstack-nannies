@@ -38,6 +38,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
 NETAPP_VOLUME_QUERY = "netapp_volume_total_bytes{app='netapp-capacity-exporter-manila'} + " \
                       "netapp_volume_snapshot_reserved_bytes"
+NETAPP_VOLUME_STATE_QUERY = "netapp_volume_state{app='netapp-capacity-exporter-manila'}"
 onegb = 1073741824
 
 class ManilaShareSyncNanny(ManilaNanny):
@@ -53,10 +54,17 @@ class ManilaShareSyncNanny(ManilaNanny):
     def _run(self):
         volumes = self.get_netapp_volumes()
         shares = self.get_manila_shares()
+        vstates = self.get_netapp_volume_states()
 
         # Don't correct anything when fetching netapp volumes fails
-        if volumes is None:
+        if volumes is None or shares is None or vstates is None:
+            log.warning("Skip nanny run because queries have failed.")
             return
+
+        for share_id, vol in vstates.iteritems():
+            if vol['state'] == 0:
+                self._resset_share_state(share_id, "error")
+                log.info("reset status of share %s to 'error'".format(share_id))
 
         for share_id, share in shares.iteritems():
             ssize = share['size']
@@ -85,19 +93,11 @@ class ManilaShareSyncNanny(ManilaNanny):
                     log.warn("ShareNotExistOnBackend: id=%s" % share_id)
 
     def get_netapp_volumes(self):
-        try:
-            r = requests.get(self.prom_host, params={
-                'query': NETAPP_VOLUME_QUERY,
-                'time': time.time()
-            })
-        except Exception as e:
-            log.error("get_shares_from_netapp(): " + str(e))
+        results = self._fetch_prom_metrics(NETAPP_VOLUME_QUERY)
+        if results is None:
             return None
-
-        if r.status_code != 200:
-            return None
-
-        for s in r.json()['data']['result']:
+        vols = {}
+        for s in results:
             share_id = s['metric'].get('share_id')
             if share_id is not None:
                 vols[share_id] = {
@@ -107,6 +107,33 @@ class ManilaShareSyncNanny(ManilaNanny):
                     'size': int(s['value'][1])/onegb,
                 }
         return vols
+
+    def get_netapp_volume_states(self):
+        results = self._fetch_prom_metrics(NETAPP_VOLUME_STATE_QUERY)
+        if results is None:
+            return None
+        vols = {}
+        for s in results:
+            share_id = s['metric'].get('share_id')
+            if share_id is not None:
+                vols[share_id] = {
+                    'share_id': share_id,
+                    'state': int(s['value'][1]),
+                }
+        return vols
+
+    def _fetch_prom_metrics(self, query):
+        try:
+            r = requests.get(self.prom_host, params={
+                'query': query,
+                'time': time.time()
+            })
+        except Exception as e:
+            log.error("_fetch_prom_metrics({}): ".format(query) + str(e))
+            return None
+        if r.status_code != 200:
+            return None
+        return r.json()['data']['result']
 
     def get_manila_shares(self):
         shares_t = Table('shares', self.db_metadata, autoload=True)
@@ -133,6 +160,12 @@ class ManilaShareSyncNanny(ManilaNanny):
                 .where(shares_t.c.id == share_instances_t.c.share_id) \
                 .where(and_(shares_t.c.id == share_id, share_instances_t.c.status == 'available')) \
                 .execute()
+
+    def _reset_share_state(self, share_id, state):
+        try:
+            self.manilaclient.shares.reset_state(share_id, state)
+        except Exception as e:
+            log.exception("_reset_share_state(): %s", e)
 
 def parse_cmdline_args():
     parser = argparse.ArgumentParser()

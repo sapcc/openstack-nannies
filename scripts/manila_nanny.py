@@ -48,7 +48,7 @@ class ManilaNanny(object):
             sys.exit(2)
         return db_url
 
-def create_manila_client(config_file):
+def create_manila_client(config_file, version="2.7"):
     """  Parse config file and create manila client
 
         :param string config_file:
@@ -68,15 +68,15 @@ def create_manila_client(config_file):
         sys.exit(2)
 
     auth = v3.Password(
-        user_domain_name = user_domain,
         username = username,
         password = password,
+        user_domain_name = user_domain,
         project_domain_name= prj_domain,
         project_name= prj_name,
         auth_url= auth_url,
     )
     sess = session.Session(auth=auth)
-    manila = client.Client("2.0", session=sess)
+    manila = client.Client(version, session=sess)
     return manila
 
 
