@@ -63,9 +63,9 @@ class ManilaShareSyncNanny(ManilaNanny):
 
         for share_id, vol in vstates.iteritems():
             if vol['state'] == 0:
-                self._resset_share_state(share_id, "error")
                 log.info("Volume %s on filer %s is offline. Reset status of share %s to 'error'",
                          vol.get('volume'), vol.get('filer'), share_id)
+                self._resset_share_state(share_id, "error")
 
         for share_id, share in shares.iteritems():
             ssize = share['size']
@@ -144,7 +144,7 @@ class ManilaShareSyncNanny(ManilaNanny):
         shares_t = Table('shares', self.db_metadata, autoload=True)
         share_instances_t = Table('share_instances', self.db_metadata, autoload=True)
         shares_join = shares_t.join(share_instances_t, shares_t.c.id == share_instances_t.c.share_id)
-        q = select(columns=[shares_t.c.id, shares_t.c.size, share_instances_t.c.updated_at]) \
+        q = select(columns=[shares_t.c.id, shares_t.c.size, share_t.c.updated_at]) \
             .select_from(shares_join) \
             .where(and_(shares_t.c.deleted=='False', share_instances_t.c.status=='available'))
         shares = {}
