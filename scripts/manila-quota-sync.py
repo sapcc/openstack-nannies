@@ -25,7 +25,7 @@ import logging
 import time
 import sqlalchemy
 
-from manila_nanny import ManilaNanny, get_db_url
+from manila_nanny import ManilaNanny
 from prettytable import PrettyTable
 from prometheus_client import start_http_server, Counter
 from sqlalchemy import and_
@@ -41,8 +41,8 @@ from sqlalchemy.sql.expression import false
 from sqlalchemy.ext.declarative import declarative_base
 
 class ManilaQuotaSyncNanny(ManilaNanny):
-    def __init__(self, db_url, interval, dry_run):
-        super(ManilaQuotaSyncNanny, self).__init__(db_url, interval, dry_run)
+    def __init__(self, config_file, interval, dry_run):
+        super(ManilaQuotaSyncNanny, self).__init__(config_file, interval, dry_run)
         self.MANILA_QUOTA_BY_USER_SYNCED = Counter('manila_nanny_user_quota_synced', '')
         self.MANILA_QUOTA_BY_TYPE_SYNCED = Counter('manila_nanny_share_type_quota_synced', '')
 
@@ -255,8 +255,7 @@ def main():
         sys.exit(-1)
 
     # args.dry_run = True
-    db_url = get_db_url(args.config)
-    ManilaQuotaSyncNanny(db_url, args.interval, args.dry_run).run()
+    ManilaQuotaSyncNanny(args.config, args.interval, args.dry_run).run()
 
 if __name__ == "__main__":
     main()

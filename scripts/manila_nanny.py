@@ -15,7 +15,7 @@ class ManilaNanny(object):
         self.config_file = config_file
         self.interval = interval
         self.dry_run = dry_run
-        self.initDBConnection()
+        self.init_db_connection()
         self.manilaclient = create_manila_client(config_file)
 
     def _run(self):
@@ -26,7 +26,7 @@ class ManilaNanny(object):
             self._run()
             time.sleep(self.interval)
 
-    def initDBConnection(self):
+    def init_db_connection(self):
         """Establish a database connection"""
         db_url = self.get_db_url()
         engine = create_engine(db_url)
