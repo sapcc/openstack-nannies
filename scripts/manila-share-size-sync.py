@@ -64,7 +64,8 @@ class ManilaShareSyncNanny(ManilaNanny):
         for share_id, vol in vstates.iteritems():
             if vol['state'] == 0:
                 self._resset_share_state(share_id, "error")
-                log.info("reset status of share %s to 'error'".format(share_id))
+                log.info("Volume %s on filer %s is offline. Reset status of share %s to 'error'",
+                         vol.get('volume'), vol.get('filer'), share_id)
 
         for share_id, share in shares.iteritems():
             ssize = share['size']
@@ -114,11 +115,15 @@ class ManilaShareSyncNanny(ManilaNanny):
             return None
         vols = {}
         for s in results:
-            share_id = s['metric'].get('share_id')
+            labels = s['metric']
+            value = s['value']
+            share_id = labels.get('share_id')
             if share_id is not None:
                 vols[share_id] = {
                     'share_id': share_id,
-                    'state': int(s['value'][1]),
+                    'volume': labels['volume'],
+                    'filer': labels['filer'],
+                    'state': int(value[1]),
                 }
         return vols
 
