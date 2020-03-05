@@ -178,6 +178,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                 shares.extend(data)
         except Exception as e:
             log.exception("_get_shares(): %s", e)
+            return None
         return {s.id: s for s in shares}
 
     def _reset_share_state(self, share_id, state):
