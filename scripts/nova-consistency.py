@@ -224,8 +224,8 @@ def main():
         purge_reservations(nova_metadata, args.older_than)
     if args.max_instance_faults and not args.dry_run:
         purge_instance_faults(nova_session, nova_metadata, args.max_instance_faults)
-    cinder_volumes = get_cinder_volumes(conn)
     block_device_mappings = get_block_device_mappings(nova_metadata)
+    cinder_volumes = get_cinder_volumes(conn)
     wrong_block_device_mappings = get_wrong_block_device_mappings(cinder_volumes, block_device_mappings)
     if len(wrong_block_device_mappings) != 0:
         log.info("- block device mapping inconsistencies found:")
