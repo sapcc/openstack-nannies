@@ -158,8 +158,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                 'time': time.time()
             })
         except Exception as e:
-            e.message = "_fetch_prom_metrics(query=\"%s\"): %s".format(query, e.message)
-            raise e
+            raise type(e)("_fetch_prom_metrics(query=\"%s\"): %s".format(query, e.message))
         if r.status_code != 200:
             return None
         return r.json()['data']['result']
@@ -202,8 +201,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                 data = self.manilaclient.shares.list(search_opts=opts)
                 shares.extend(data)
         except Exception as e:
-            e.message = "get_shares(): %s".format(e.message)
-            raise e
+            raise type(e)("get_shares(): " + str(e))
         return {s.id: s for s in shares}
 
     def _reset_share_state(self, share_id, state):
