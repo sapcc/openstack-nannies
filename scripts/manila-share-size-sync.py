@@ -64,10 +64,15 @@ class ManilaShareSyncNanny(ManilaNanny):
             return
 
         for share_id, vol in vstates.iteritems():
-            if vol['state'] == 0:
-                log.info("Volume %s on filer %s is offline. Reset status of share %s to 'error'",
-                         vol.get('volume'), vol.get('filer'), share_id)
-                self._reset_share_state(share_id, "error")
+            if vol['state'] != 1:
+                s = self.manilaclient.shares.get(share_id)
+                if s.status == 'available':
+                    log.info("Volume %s on filer %s is offline. Reset status of share %s from '%s' to 'error'",
+                             vol.get('volume'), vol.get('filer'), share_id, s.status)
+                    self._reset_share_state(share_id, "error")
+                else:
+                    log.info("Volume %s on filer %s is offline. Status of share %s is '%s'",
+                             vol.get('volume'), vol.get('filer'), share_id, s.status)
 
         # clear metrics
         self.MANILA_SHARE_NOT_EXIST_GAUGE._metrics.clear()
