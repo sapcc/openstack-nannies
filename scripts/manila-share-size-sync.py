@@ -66,6 +66,9 @@ class ManilaShareSyncNanny(ManilaNanny):
             log.warning("Skip nanny run because queries have failed.")
             return
 
+        # clear metrics
+        self.MANILA_SHARE_MISSING_BACKEND_GAUGE._metrics.clear()
+
         # Volume is offline
         for share_id, vol in vstates.iteritems():
             if vol['state'] != 1:
@@ -83,11 +86,8 @@ class ManilaShareSyncNanny(ManilaNanny):
                     log.info("Volume %s on filer %s is offline. Status of share %s is '%s'",
                              vol.get('volume'), vol.get('filer'), share_id, s.status)
 
-        # clear metrics
-        self.MANILA_SHARE_MISSING_BACKEND_GAUGE._metrics.clear()
-
         for share_id, share in shares.iteritems():
-            # Backend volume exists, but size does not match
+            # Backend volume exists, but share size does not match
             vol = volumes.get(share_id)
             if vol:
                 vsize = vol['size']
@@ -100,13 +100,13 @@ class ManilaShareSyncNanny(ManilaNanny):
                         self.set_share_size(share_id, vsize)
                         self.MANILA_SYNC_SHARE_SIZE_COUNTER.inc()
 
-            # Backend volume does NOT exist
+            # Backend volume doesn't exist
             else:
                 if share.status == 'available':
                     # Only when share is NOT created very recent.
                     # It should be compared using utc time.
                     c = datetime.strptime(share.created_at, '%Y-%m-%dT%H:%M:%S.%f')
-                    if (datetime.utcnow - c).total_seconds() > 600:
+                    if (datetime.utcnow() - c).total_seconds() > 600:
                         log.warn("ShareMissingBackend: id=%s, status=%s, created_at=%s: Set status to error",
                                  share_id, share.status, share.created_at)
                         self._reset_share_state(share_id, 'error')
