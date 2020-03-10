@@ -32,6 +32,7 @@ from sqlalchemy import Table
 from sqlalchemy.sql.expression import false
 from prometheus_client import start_http_server, Counter, Gauge
 from manila_nanny import ManilaNanny
+import manilaclient
 
 log = logging.getLogger('nanny-manila-share-sync')
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
