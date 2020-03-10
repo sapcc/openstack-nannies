@@ -48,6 +48,7 @@ class ManilaShareSyncNanny(ManilaNanny):
     def __init__(self, config_file, prom_host, interval, dry_run):
         super(ManilaShareSyncNanny, self).__init__(config_file, interval, dry_run)
         self.prom_host = prom_host+"/api/v1/query"
+        self.MANILA_NANNY_SHARE_SYNC_FAILURE = Counter('manila_nanny_share_sync_failure', '')
         self.MANILA_SHARE_MISSING_BACKEND_GAUGE = Gauge('manila_nanny_share_missing_backend',
                                                   'Backend volume for manila share does not exist',
                                                   ['id', 'name', 'status', 'project'])
@@ -63,6 +64,7 @@ class ManilaShareSyncNanny(ManilaNanny):
             shares = self.get_shares()
         except Exception as e:
             log.warning("Skip nanny run because queries have failed: %s", e)
+            self.MANILA_NANNY_SHARE_SYNC_FAILURE.inc()
             return
 
         # clear metrics
