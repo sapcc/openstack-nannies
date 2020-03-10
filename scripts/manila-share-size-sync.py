@@ -100,7 +100,8 @@ class ManilaShareSyncNanny(ManilaNanny):
                 if share.status == 'available':
                     # Only when share is NOT created very recent.
                     # It should be compared using utc time.
-                    if (datetime.utcnow() - share.created_at).total_seconds() > 600:
+                    c = datetime.strptime(share.created_at, '%Y-%m-%dT%H:%M:%S.%f')
+                    if (datetime.utcnow - c).total_seconds() > 600:
                         log.warn("ShareMissingBackend: id=%s, status=%s, created_at=%s: Set status to error",
                                  share_id, share.status, share.created_at)
                         self._reset_share_state(share_id, 'error')
