@@ -57,13 +57,12 @@ class ManilaShareSyncNanny(ManilaNanny):
                                                       'manila nanny reset share status to error')
 
     def _run(self):
-        volumes = self.get_netapp_volumes()
-        shares = self.get_shares()
-        vstates = self.get_netapp_volume_states()
-
-        # Don't correct anything when fetching netapp volumes fails
-        if volumes is None or shares is None or vstates is None:
-            log.warning("Skip nanny run because queries have failed.")
+        try:
+            volumes = self.get_netapp_volumes()
+            vstates = self.get_netapp_volume_states()
+            shares = self.get_shares()
+        except Exception as e:
+            log.warning("Skip nanny run because queries have failed: %s", e)
             return
 
         # clear metrics
@@ -125,8 +124,6 @@ class ManilaShareSyncNanny(ManilaNanny):
 
     def get_netapp_volumes(self):
         results = self._fetch_prom_metrics(NETAPP_VOLUME_QUERY)
-        if results is None:
-            return None
         vols = {}
         for s in results:
             share_id = s['metric'].get('share_id')
@@ -139,8 +136,6 @@ class ManilaShareSyncNanny(ManilaNanny):
 
     def get_netapp_volume_states(self):
         results = self._fetch_prom_metrics(NETAPP_VOLUME_STATE_QUERY)
-        if results is None:
-            return None
         vols = {}
         for s in results:
             labels = s['metric']
@@ -160,8 +155,8 @@ class ManilaShareSyncNanny(ManilaNanny):
                 'time': time.time()
             })
         except Exception as e:
-            log.error("_fetch_prom_metrics(query=\"%s\"): %s", query,e)
-            return None
+            e.message = "_fetch_prom_metrics(query=\"%s\"): %s".format(query, e.message)
+            raise e
         if r.status_code != 200:
             return None
         return r.json()['data']['result']
@@ -204,8 +199,8 @@ class ManilaShareSyncNanny(ManilaNanny):
                 data = self.manilaclient.shares.list(search_opts=opts)
                 shares.extend(data)
         except Exception as e:
-            log.exception("_get_shares(): %s", e)
-            return None
+            e.message = "get_shares(): %s".format(e.message)
+            raise e
         return {s.id: s for s in shares}
 
     def _reset_share_state(self, share_id, state):
