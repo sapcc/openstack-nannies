@@ -52,9 +52,9 @@ class ManilaShareSyncNanny(ManilaNanny):
                                                   'Backend volume for manila share does not exist',
                                                   ['id', 'name', 'status', 'project'])
         self.MANILA_SYNC_SHARE_SIZE_COUNTER = Counter('manila_nanny_sync_share_size',
-                                                        'manila nanny sync share size')
+                                                      'manila nanny sync share size')
         self.MANILA_SET_SHARE_ERROR_COUNTER = Counter('manila_nanny_set_share_error',
-                                                            'manila nanny set share status to error')
+                                                      'manila nanny set share status to error')
 
     def _run(self):
         volumes = self.get_netapp_volumes()
