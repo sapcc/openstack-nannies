@@ -48,10 +48,13 @@ class ManilaShareSyncNanny(ManilaNanny):
     def __init__(self, config_file, prom_host, interval, dry_run):
         super(ManilaShareSyncNanny, self).__init__(config_file, interval, dry_run)
         self.prom_host = prom_host+"/api/v1/query"
-        self.MANILA_SHARE_SIZE_SYNCED_COUNTER = Counter('manila_nanny_share_size_synced', '')
-        self.MANILA_SHARE_NOT_EXIST_GAUGE = Gauge('manila_nanny_share_not_exist_on_backend',
+        self.MANILA_SHARE_MISSING_BACKEND_GAUGE = Gauge('manila_nanny_share_missing_backend',
                                                   'Backend volume for manila share does not exist',
                                                   ['id', 'name', 'status', 'project'])
+        self.MANILA_SYNC_SHARE_SIZE_COUNTER = Counter('manila_nanny_sync_share_size',
+                                                        'manila nanny sync share size')
+        self.MANILA_SET_SHARE_ERROR_COUNTER = Counter('manila_nanny_set_share_error',
+                                                            'manila nanny set share status to error')
 
     def _run(self):
         volumes = self.get_netapp_volumes()
@@ -70,12 +73,13 @@ class ManilaShareSyncNanny(ManilaNanny):
                     log.info("Volume %s on filer %s is offline. Reset status of share %s from '%s' to 'error'",
                              vol.get('volume'), vol.get('filer'), share_id, s.status)
                     self._reset_share_state(share_id, "error")
+                    self.MANILA_SET_SHARE_ERROR_COUNTER.inc()
                 else:
                     log.info("Volume %s on filer %s is offline. Status of share %s is '%s'",
                              vol.get('volume'), vol.get('filer'), share_id, s.status)
 
         # clear metrics
-        self.MANILA_SHARE_NOT_EXIST_GAUGE._metrics.clear()
+        self.MANILA_SHARE_MISSING_BACKEND_GAUGE._metrics.clear()
 
         for share_id, share in shares.iteritems():
             # Backend volume exists, but size does not match
@@ -89,16 +93,24 @@ class ManilaShareSyncNanny(ManilaNanny):
                     else:
                         log.info(msg, share_id, share.size, vsize)
                         self.set_share_size(share_id, vsize)
-                        self.MANILA_SHARE_SIZE_SYNCED_COUNTER.inc()
+                        self.MANILA_SYNC_SHARE_SIZE_COUNTER.inc()
 
             # Backend volume does NOT exist
             else:
-                if share.status in ['error', 'available']:
-                    self.MANILA_SHARE_NOT_EXIST_GAUGE.labels(
+                if share.status == 'error':
+                    self.MANILA_SHARE_MISSING_BACKEND_GAUGE.labels(
                         id=share.id, name=share.name, status=share.status, project=share.project_id
                     ).set(1)
+                elif share.status == 'available':
+                   self.MANILA_SHARE_MISSING_BACKEND_GAUGE.labels(
+                       id=share.id, name=share.name, status=share.status, project=share.project_id
+                   ).set(1)
+                   log.warn("ShareMissingBackend: id=%s, status=%s, created_at=%s: Set status to error",
+                            share_id, share.status, share.created_at)
+                   self._reset_share_state(share_id, 'error')
+                   self.MANILA_SET_SHARE_ERROR_COUNTER.inc()
                 else:
-                    log.warn("ShareNotExistOnBackend: id=%s, status=%s, created_at=%s",
+                    log.warn("ShareMissingBackend: id=%s, status=%s, created_at=%s",
                              share_id, share.status, share.created_at)
 
     def get_netapp_volumes(self):
