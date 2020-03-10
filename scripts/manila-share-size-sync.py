@@ -66,9 +66,14 @@ class ManilaShareSyncNanny(ManilaNanny):
             log.warning("Skip nanny run because queries have failed.")
             return
 
+        # Volume is offline
         for share_id, vol in vstates.iteritems():
             if vol['state'] != 1:
-                s = self.manilaclient.shares.get(share_id)
+                try:
+                    s = self.manilaclient.shares.get(share_id)
+                except manilaclient.common.apiclient.exceptions.NotFound:
+                    # share can be deleted meanwhile
+                    continue
                 if s.status == 'available':
                     log.info("Volume %s on filer %s is offline. Reset status of share %s from '%s' to 'error'",
                              vol.get('volume'), vol.get('filer'), share_id, s.status)
