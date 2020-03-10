@@ -53,8 +53,8 @@ class ManilaShareSyncNanny(ManilaNanny):
                                                   ['id', 'name', 'status', 'project'])
         self.MANILA_SYNC_SHARE_SIZE_COUNTER = Counter('manila_nanny_sync_share_size',
                                                       'manila nanny sync share size')
-        self.MANILA_SET_SHARE_ERROR_COUNTER = Counter('manila_nanny_set_share_error',
-                                                      'manila nanny set share status to error')
+        self.MANILA_RESET_SHARE_ERROR_COUNTER = Counter('manila_nanny_reset_share_error',
+                                                      'manila nanny reset share status to error')
 
     def _run(self):
         volumes = self.get_netapp_volumes()
@@ -73,7 +73,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                     log.info("Volume %s on filer %s is offline. Reset status of share %s from '%s' to 'error'",
                              vol.get('volume'), vol.get('filer'), share_id, s.status)
                     self._reset_share_state(share_id, "error")
-                    self.MANILA_SET_SHARE_ERROR_COUNTER.inc()
+                    self.MANILA_RESET_SHARE_ERROR_COUNTER.inc()
                 else:
                     log.info("Volume %s on filer %s is offline. Status of share %s is '%s'",
                              vol.get('volume'), vol.get('filer'), share_id, s.status)
@@ -97,18 +97,22 @@ class ManilaShareSyncNanny(ManilaNanny):
 
             # Backend volume does NOT exist
             else:
-                if share.status == 'error':
+                if share.status == 'available':
+                    # Only when share is NOT created very recent.
+                    # It should be compared using utc time.
+                    if (datetime.utcnow() - share.created_at).total_seconds() > 600:
+                        log.warn("ShareMissingBackend: id=%s, status=%s, created_at=%s: Set status to error",
+                                 share_id, share.status, share.created_at)
+                        self._reset_share_state(share_id, 'error')
+                        self.MANILA_RESET_SHARE_ERROR_COUNTER.inc()
+                        self.MANILA_SHARE_MISSING_BACKEND_GAUGE.labels(
+                            id=share.id, name=share.name, status=share.status, project=share.project_id
+                        ).set(1)
+
+                elif share.status == 'error':
                     self.MANILA_SHARE_MISSING_BACKEND_GAUGE.labels(
                         id=share.id, name=share.name, status=share.status, project=share.project_id
                     ).set(1)
-                elif share.status == 'available':
-                   self.MANILA_SHARE_MISSING_BACKEND_GAUGE.labels(
-                       id=share.id, name=share.name, status=share.status, project=share.project_id
-                   ).set(1)
-                   log.warn("ShareMissingBackend: id=%s, status=%s, created_at=%s: Set status to error",
-                            share_id, share.status, share.created_at)
-                   self._reset_share_state(share_id, 'error')
-                   self.MANILA_SET_SHARE_ERROR_COUNTER.inc()
                 else:
                     log.warn("ShareMissingBackend: id=%s, status=%s, created_at=%s",
                              share_id, share.status, share.created_at)
