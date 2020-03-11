@@ -53,10 +53,13 @@ class ManilaShareSyncNanny(ManilaNanny):
         self.MANILA_SHARE_MISSING_BACKEND_GAUGE = Gauge('manila_nanny_share_missing_backend',
                                                   'Backend volume for manila share does not exist',
                                                   ['id', 'name', 'status', 'project'])
+        self.MANILA_ORPHAN_VOLUMES_GAUGE = Gauge('manila_nanny_orphan_volumes',
+                                                 'Orphan backedn volumes of Manila service',
+                                                 ['share_id', 'filer', 'vserver', 'volume'])
         self.MANILA_SYNC_SHARE_SIZE_COUNTER = Counter('manila_nanny_sync_share_size',
                                                       'manila nanny sync share size')
         self.MANILA_RESET_SHARE_ERROR_COUNTER = Counter('manila_nanny_reset_share_error',
-                                                      'manila nanny reset share status to error')
+                                                        'manila nanny reset share status to error')
 
     def _run(self):
         try:
@@ -125,6 +128,20 @@ class ManilaShareSyncNanny(ManilaNanny):
                     log.warn("ShareMissingBackend: id=%s, status=%s, created_at=%s",
                              share_id, share.status, share.created_at)
 
+        # Orphan volumes
+        share_ids = shares.keys()
+        for id, vol in volumes.iteritems():
+            share_id = vol.get('share_id')
+            if share_id is not None and share_id not in share_ids:
+                try:
+                    s = self.manilaclient.shares.get(share_id)
+                except manilaclient.common.apiclient.exceptions.NotFound:
+                    # set gauge value to 0: orphan volume found but not corrected
+                    self.MANILA_ORPHAN_VOLUMES_GAUGE.labels(
+                        share_id=share_id, filer=vol['filer'], vserver=vol['vserver'], volume=vol['volume'],
+                    ).set(0)
+                    log.warning("Orphan volume: %s is found on filer %s", id, vol.get('filer'))
+
     def get_netapp_volumes(self):
         results = self._fetch_prom_metrics(NETAPP_VOLUME_QUERY)
         vols = {}
@@ -132,6 +149,7 @@ class ManilaShareSyncNanny(ManilaNanny):
             share_id = s['metric'].get('share_id')
             if share_id is not None:
                 vols[share_id] = dict(share_id=share_id,
+                                      filer=s['metric']['filer'],
                                       vserver=s['metric']['vserver'],
                                       volume=s['metric']['volume'],
                                       size=int(s['value'][1]) / onegb)
