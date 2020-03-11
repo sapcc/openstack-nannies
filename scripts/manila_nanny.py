@@ -48,6 +48,9 @@ class ManilaNanny(object):
             sys.exit(2)
         return db_url
 
+    def renew_manila_client(self):
+        self.manilaclient = create_manila_client(self.config_file, "2.7")
+
 def create_manila_client(config_file, version="2.7"):
     """  Parse config file and create manila client
 

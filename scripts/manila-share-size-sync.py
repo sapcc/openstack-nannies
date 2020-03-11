@@ -32,7 +32,7 @@ from sqlalchemy import Table
 from sqlalchemy.sql.expression import false
 from prometheus_client import start_http_server, Counter, Gauge
 from manila_nanny import ManilaNanny
-import manilaclient
+from manilaclient.common.apiclient import exceptions as manilaApiExceptions
 
 log = logging.getLogger('nanny-manila-share-sync')
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
@@ -62,6 +62,9 @@ class ManilaShareSyncNanny(ManilaNanny):
                                                         'manila nanny reset share status to error')
 
     def _run(self):
+        # Need to recreate manila client each run, because of session timeout
+        self.renew_manila_client()
+
         try:
             volumes = self.get_netapp_volumes()
             vstates = self.get_netapp_volume_states()
@@ -79,7 +82,7 @@ class ManilaShareSyncNanny(ManilaNanny):
             if vol['state'] != 1:
                 try:
                     s = self.manilaclient.shares.get(share_id)
-                except manilaclient.common.apiclient.exceptions.NotFound:
+                except manilaApiExceptions.NotFound:
                     # share can be deleted meanwhile
                     continue
                 if s.status == 'available':
@@ -135,7 +138,7 @@ class ManilaShareSyncNanny(ManilaNanny):
             if share_id is not None and share_id not in share_ids:
                 try:
                     s = self.manilaclient.shares.get(share_id)
-                except manilaclient.common.apiclient.exceptions.NotFound:
+                except manilaApiExceptions.NotFound:
                     # set gauge value to 0: orphan volume found but not corrected
                     self.MANILA_ORPHAN_VOLUMES_GAUGE.labels(
                         share_id=share_id, filer=vol['filer'], vserver=vol['vserver'], volume=vol['volume'],
