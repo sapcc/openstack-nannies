@@ -25,14 +25,14 @@ cp -v /manila-etc/* /etc/manila
 
 if [ "$MANILA_SHARE_SIZE_SYNC_ENABLED" = "True" ] || [ "$MANILA_SHARE_SIZE_SYNC_ENABLED" = "true" ]; then
     if [ "$MANILA_SHARE_SIZE_SYNC_DRY_RUN" = "False" ] || [ "$MANILA_SHARE_SIZE_SYNC_DRY_RUN" = "false" ]; then
-        echo "INFO: syncing manila db share size - "
+        echo "INFO: syncing between manila share and backend"
         /var/lib/openstack/bin/python /scripts/manila-share-size-sync.py \
             --config /etc/manila/manila.conf \
             --netapp-prom-host $PROMETHEUS_HOST \
             --prom-port 9457 \
             --interval $MANILA_NANNY_INTERVAL
     else
-        echo "INFO: DRY-RUN: syncing manila db share size - "
+        echo "INFO: DRY-RUN: syncing between manila share and backend"
         /var/lib/openstack/bin/python /scripts/manila-share-size-sync.py \
             --config /etc/manila/manila.conf \
             --netapp-prom-host $PROMETHEUS_HOST \
