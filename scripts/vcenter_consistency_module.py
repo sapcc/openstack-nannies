@@ -965,16 +965,22 @@ class ConsistencyCheck:
 
             # build dicts to map servers and volumes to the vc they are running on to filter by it later
             hosts_per_vc = dict()
+            all_hosts_in_vc_aggregates = set()
             for aggregate in temporary_aggregate_list:
                 if aggregate.name:
                     match = re.search(r"^vc-[a-z]-[0-9]$", aggregate.name)
                     if match:
                         hosts_per_vc[aggregate.name] = aggregate.hosts
+                        all_hosts_in_vc_aggregates.update(aggregate.hosts)
 
             host_from_server_uuid = dict()
             for server in temporary_server_list:
                 if server.compute_host:
                     host_from_server_uuid[server.id] = server.compute_host
+
+            for host in set(host_from_server_uuid.values()):
+                if host not in all_hosts_in_vc_aggregates:
+                    log.error("- PLEASE CHECK MANUALLY - host %s has instances on it, but is not referenced in the vc-* aggregates!", host)
 
             vc_from_server_uuid = dict()
             for server in host_from_server_uuid:
