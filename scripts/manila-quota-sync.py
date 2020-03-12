@@ -25,7 +25,7 @@ import logging
 import time
 import sqlalchemy
 
-from manila_nanny import ManilaNanny
+from manilananny import ManilaNanny
 from prettytable import PrettyTable
 from prometheus_client import start_http_server, Counter
 from sqlalchemy import and_

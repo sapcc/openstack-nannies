@@ -31,7 +31,7 @@ from sqlalchemy import select
 from sqlalchemy import Table
 from sqlalchemy.sql.expression import false
 from prometheus_client import start_http_server, Counter, Gauge
-from manila_nanny import ManilaNanny
+from manilananny import ManilaNanny
 from manilaclient.common.apiclient import exceptions as manilaApiExceptions
 
 log = logging.getLogger('nanny-manila-share-sync')
