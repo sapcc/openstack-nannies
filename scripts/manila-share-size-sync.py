@@ -133,17 +133,26 @@ class ManilaShareSyncNanny(ManilaNanny):
 
         # Orphan volumes
         share_ids = shares.keys()
-        for id, vol in volumes.iteritems():
-            share_id = vol.get('share_id')
-            if share_id is not None and share_id not in share_ids:
+        orphan_volumes = {}
+        for share_id, vol in volumes.iteritems():
+            if share_id not in share_ids:
                 try:
                     s = self.manilaclient.shares.get(share_id)
                 except manilaApiExceptions.NotFound:
-                    # set gauge value to 0: orphan volume found but not corrected
-                    self.MANILA_ORPHAN_VOLUMES_GAUGE.labels(
-                        share_id=share_id, filer=vol['filer'], vserver=vol['vserver'], volume=vol['volume'],
-                    ).set(0)
-                    log.warning("Orphan volume: %s is found on filer %s", id, vol.get('filer'))
+                    orphan_volumes[share_id] = vol
+        # Double check orphan volumes in manila db, if they are deleted by manila recently,
+        # It may take backend some time to delete the shares
+        for s in self.query_shares_by_ids(orphan_volumes.keys()):
+            if s['deleted_at'] is not None:
+                if (datetime.utcnow() - s['deleted_at']).total_seconds() < 600:
+                    orphan_volumes[s['id']] = None
+        for share_id, vol in filter(lambda (_, v): v is not None, orphan_volumes.iteritems()):
+            # set gauge value to 0: orphan volume found but not corrected
+            self.MANILA_ORPHAN_VOLUMES_GAUGE.labels(
+                share_id=share_id, filer=vol['filer'], vserver=vol['vserver'], volume=vol['volume'],
+            ).set(0)
+            log.warning("Orphan volume: %s is found on filer %s (share_id = %s)",
+                        vol['volume'], vol['filer'], share_id)
 
     def get_netapp_volumes(self):
         results = self._fetch_prom_metrics(NETAPP_VOLUME_QUERY)
@@ -184,7 +193,15 @@ class ManilaShareSyncNanny(ManilaNanny):
             return None
         return r.json()['data']['result']
 
-    def get_manila_shares(self):
+    def query_shares_by_ids(self, share_ids):
+        shares_t = Table('shares', self.db_metadata, autoload=True)
+        q = select([shares_t]).where(shares_t.c.id.in_(share_ids))
+        shares = []
+        for r in q.execute():
+            shares.append({k: v for (k, v) in r.items()})
+        return shares
+
+    def query_shares(self):
         shares_t = Table('shares', self.db_metadata, autoload=True)
         share_instances_t = Table('share_instances', self.db_metadata, autoload=True)
         shares_join = shares_t.join(share_instances_t, shares_t.c.id == share_instances_t.c.share_id)
