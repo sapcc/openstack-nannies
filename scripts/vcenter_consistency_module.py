@@ -168,7 +168,7 @@ class ConsistencyCheck:
                                                   'how many instances have a gray status in the vcenter')
         self.gauge_no_autofix = Gauge('vcenter_nanny_consistency_no_autofix',
                                                   'the number of volume inconsistencies not fixable automatically')
-        self.gauge_bb_not_in_aggregate = Gauge('vcenter_nanny_bb_not_in_aggregate',
+        self.gauge_bb_not_in_aggregate = Gauge('vcenter_nanny_consistency_vcenter_bb_not_in_aggregate',
                                                   'the number of bb not in an aggregate')
 
         self.gauge_value_cinder_volume_attaching_for_too_long = 0
