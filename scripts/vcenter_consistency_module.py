@@ -58,7 +58,7 @@ uuid_re = re.compile('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 filename_uuid_re = re.compile('/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})', re.IGNORECASE)
 
 # compile a regex for trying to filter out openstack generated vms
-#  they all have the "name:" field set
+# they all have the "name:" field set
 openstack_re = re.compile("^name")
 
 class ConsistencyCheck:
@@ -70,6 +70,8 @@ class ConsistencyCheck:
         self.novaconfig = novaconfig
         self.cinderconfig = cinderconfig
         self.dry_run = dry_run
+        # backup of the original cmdline dry-run setting as we might overwrite it later temporarily
+        self.cmdline_dry_run = dry_run
         self.prometheus_port = prometheus_port
         self.interactive = interactive
         if fix_limit:
@@ -166,6 +168,8 @@ class ConsistencyCheck:
                                                   'how many instances have a gray status in the vcenter')
         self.gauge_no_autofix = Gauge('vcenter_nanny_consistency_no_autofix',
                                                   'the number of volume inconsistencies not fixable automatically')
+        self.gauge_bb_not_in_aggregate = Gauge('vcenter_nanny_bb_not_in_aggregate',
+                                                  'the number of bb not in an aggregate')
 
         self.gauge_value_cinder_volume_attaching_for_too_long = 0
         self.gauge_value_cinder_volume_detaching_for_too_long = 0
@@ -182,6 +186,7 @@ class ConsistencyCheck:
         self.gauge_value_vcenter_volume_zero_size = 0
         self.gauge_value_vcenter_instance_state_gray = 0
         self.gauge_value_no_autofix = 0
+        self.gauge_value_bb_not_in_aggregate = 0
 
     # start prometheus exporter if needed
     def start_prometheus_exporter(self):
@@ -971,23 +976,41 @@ class ConsistencyCheck:
                     match = re.search(r"^vc-[a-z]-[0-9]$", aggregate.name)
                     if match:
                         hosts_per_vc[aggregate.name] = aggregate.hosts
+                        # this one is needed for a comparision later
                         all_hosts_in_vc_aggregates.update(aggregate.hosts)
 
+            # build a dict of servers and the vcenter instances they are running on
             host_from_server_uuid = dict()
             for server in temporary_server_list:
                 if server.compute_host:
                     host_from_server_uuid[server.id] = server.compute_host
 
+            # make sure that all vc hosts servers are running on are defined in some vc-* aggregate
             for host in set(host_from_server_uuid.values()):
-                if host not in all_hosts_in_vc_aggregates:
+                # make sure we only consider vcenter compute hosts (i.e. no ironic etc.)
+                match = re.search(r"^nova-compute-bb", host)
+                if match:
+                    log.debug("==> server host %s matches", str(host))
+                if (host not in all_hosts_in_vc_aggregates) and match:
                     log.error("- PLEASE CHECK MANUALLY - host %s has instances on it, but is not referenced in the vc-* aggregates!", host)
+                    self.gauge_value_bb_not_in_aggregate += 1
 
+            if self.gauge_value_bb_not_in_aggregate != 0:
+                log.error("- PLEASE CHECK MANUALLY - some vc hosts seem to be not connected to vc-* aggregates - forcing dry-run mode!")
+                self.dry_run = True
+            else:
+                # in case we forced dry-run on and everything is connected properly again
+                # go back to the original dry-run setting from the cmdline
+                self.dry_run = self.cmdline_dry_run
+
+            # determine the vc-* aggregate per server
             vc_from_server_uuid = dict()
             for server in host_from_server_uuid:
                 for vcenter in hosts_per_vc:
                     if host_from_server_uuid[server] in hosts_per_vc[vcenter]:
                         vc_from_server_uuid[server] = vcenter
 
+            # determine the vc-* aggregate per volume
             vc_from_volume_uuid = dict()
             for volume in temporary_volume_list:
                 if volume.host:
@@ -1385,6 +1408,7 @@ class ConsistencyCheck:
         self.gauge_value_vcenter_volume_zero_size = 0
         self.gauge_value_vcenter_instance_state_gray = 0
         self.gauge_value_no_autofix = 0
+        self.gauge_value_bb_not_in_aggregate = 0
 
 
     def discover_problems(self, iterations):
@@ -1598,6 +1622,7 @@ class ConsistencyCheck:
         self.gauge_vcenter_volume_zero_size.set(self.gauge_value_vcenter_volume_zero_size)
         self.gauge_vcenter_instance_state_gray.set(self.gauge_value_vcenter_instance_state_gray)
         self.gauge_no_autofix.set(self.gauge_value_no_autofix)
+        self.gauge_bb_not_in_aggregate.set(self.gauge_value_bb_not_in_aggregate)
 
     def run_tool(self):
         log.info("- INFO - connecting to the cinder db")
