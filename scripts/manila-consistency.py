@@ -18,26 +18,21 @@
 # this script checks for inconsistencies in the manila db
 
 import argparse
-import sys
-import ConfigParser
-import logging
+import configparser
 import datetime
+import logging
+import sys
 
-from sqlalchemy import and_
-from sqlalchemy import func
-from sqlalchemy import MetaData
-from sqlalchemy import select
-from sqlalchemy import join
-from sqlalchemy import Table
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.sql.expression import false
+from sqlalchemy import (MetaData, Table, and_, create_engine, select, update)
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
-# get all the rows with a share_network_security_service_association still defined where the corresponding share_network is already deleted
+
+# get all the rows with a share_network_security_service_association still defined where the
+# corresponding share_network is already deleted
 def get_wrong_share_network_ssas(meta):
 
     wrong_share_network_ssas = {}
@@ -61,7 +56,7 @@ def fix_wrong_share_network_ssas(meta, wrong_share_network_ssas):
         log.info ("-- action: deleting share network security service association id: %s", share_network_ssa_id)
         delete_share_network_ssa_q = share_network_ssa_t.update().\
             where(share_network_ssa_t.c.id == share_network_ssa_id).\
-                values(updated_at=now, deleted_at=now, deleted=share_network_ssa_id)
+            values(updated_at=now, deleted_at=now, deleted=share_network_ssa_id)
         delete_share_network_ssa_q.execute()
 
 # get all the rows with a network_allocations still defined where the corresponding share_server is already deleted
@@ -87,7 +82,7 @@ def fix_wrong_network_allocations(meta, wrong_network_allocations):
         log.info ("-- action: deleting network allocation id: %s", network_allocations_id)
         delete_network_allocations_q = network_allocations_t.update().\
             where(network_allocations_t.c.id == network_allocations_id).\
-                values(updated_at=now, deleted_at=now, deleted=network_allocations_id)
+            values(updated_at=now, deleted_at=now, deleted=network_allocations_id)
         delete_network_allocations_q.execute()
 
 # get all the rows with a share_metadata still defined where the corresponding share is already deleted
@@ -113,7 +108,7 @@ def fix_wrong_share_metadata(meta, wrong_share_metadata):
         log.info ("-- action: deleting share metadata id: %s", share_metadata_id)
         delete_share_metadata_q = share_metadata_t.update().\
             where(share_metadata_t.c.id == share_metadata_id).\
-                values(updated_at=now, deleted_at=now, deleted=share_metadata_id)
+            values(updated_at=now, deleted_at=now, deleted=share_metadata_id)
         delete_share_metadata_q.execute()
 
 # get all the rows with a share_group_type_share_type_mapping still defined where the corresponding share_group_type is already deleted
@@ -137,9 +132,9 @@ def fix_wrong_share_gtstm(meta, wrong_share_gtstm):
     now = datetime.datetime.utcnow()
     for share_gtstm_id in wrong_share_gtstm:
         log.info ("-- action: deleting share group type id: %s", share_gtstm_id)
-        delete_share_gtstm_q = share_gtstm_t.update().\
+        delete_share_gtstm_q = update(share_gtstm_t).\
             where(share_gtstm_t.c.id == share_gtstm_id).\
-                values(updated_at=now, deleted_at=now, deleted=share_gtstm_id)
+            values(updated_at=now, deleted_at=now, deleted=share_gtstm_id)
         delete_share_gtstm_q.execute()
 
 # establish a database connection and return the handle
@@ -157,7 +152,7 @@ def makeConnection(db_url):
 # return the database connection string from the config file
 def get_db_url(config_file):
 
-    parser = ConfigParser.SafeConfigParser()
+    parser = configparser.SafeConfigParser()
     try:
         parser.read(config_file)
         db_url = parser.get('database', 'connection', raw=True)
@@ -181,11 +176,11 @@ def main():
     try:
         args = parse_cmdline_args()
     except Exception as e:
-        log.error("Check command line arguments (%s)", e.strerror)
+        log.error("Check command line arguments (%s)", str(e))
 
     # connect to the DB
     db_url = get_db_url(args.config)
-    manila_session, manila_metadata, manila_Base = makeConnection(db_url)
+    _, manila_metadata, _ = makeConnection(db_url)
 
     wrong_share_network_ssas = get_wrong_share_network_ssas(manila_metadata)
     if len(wrong_share_network_ssas) != 0:
