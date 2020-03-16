@@ -834,6 +834,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                     # there is a vm for that file path we check what to do with it
                     if vm:
                         # maybe there is a better way to get the moid ...
+                        # TODO - test: vm_moid = vm._moId
                         vm_moid = str(vm).strip('"\'').split(":")[1]
                         power_state = vm.runtime.powerState
                         # is the vm located on vvol storage - needed later to check if its a volume shadow vm
