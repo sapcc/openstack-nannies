@@ -18,27 +18,17 @@
 # based on https://github.com/cernops/cinder-quota-sync
 
 import argparse
-import sys
-import ConfigParser
+import configparser
 import datetime
 import logging
-import time
-import sqlalchemy
+import sys
 
+import sqlalchemy
 from manilananny import ManilaNanny
 from prettytable import PrettyTable
-from prometheus_client import start_http_server, Counter
-from sqlalchemy import and_
-from sqlalchemy import delete
-from sqlalchemy import func
-from sqlalchemy import MetaData
-from sqlalchemy import select
-from sqlalchemy import join
-from sqlalchemy import Table
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.sql.expression import false
-from sqlalchemy.ext.declarative import declarative_base
+from prometheus_client import Counter, start_http_server
+from sqlalchemy import Table, and_, func, select
+
 
 class ManilaQuotaSyncNanny(ManilaNanny):
     def __init__(self, config_file, interval, dry_run):
@@ -60,15 +50,15 @@ class ManilaQuotaSyncNanny(ManilaNanny):
         """Return the snapshots resource usages of a project"""
         snapshots_t = Table('share_snapshots', self.db_metadata, autoload=True)
         share_instances_t = Table('share_instances', self.db_metadata, autoload=True)
-        q = snapshots_t.join(share_instances_t, snapshots_t.c.share_id == share_instances_t.c.share_id)
+        q = snapshots_t.join(share_instances_t,
+                             snapshots_t.c.share_id == share_instances_t.c.share_id)
         snapshots_q = select(columns=[snapshots_t.c.id,
                                       snapshots_t.c.user_id,
                                       snapshots_t.c.share_size,
                                       share_instances_t.c.share_type_id],
-                             whereclause=and_(
-                                    snapshots_t.c.deleted == "False",
-                                    snapshots_t.c.project_id == project_id)
-                            ).select_from(q)
+                             whereclause=and_(snapshots_t.c.deleted == "False",
+                                              snapshots_t.c.project_id == project_id)
+                             ).select_from(q)
         return snapshots_q.execute()
 
     def get_share_usages_project(self, project_id):
@@ -80,10 +70,9 @@ class ManilaQuotaSyncNanny(ManilaNanny):
                                    shares_t.c.user_id,
                                    shares_t.c.size,
                                    share_instances_t.c.share_type_id],
-                          whereclause=and_(
-                                shares_t.c.deleted == "False",
-                                shares_t.c.project_id == project_id)
-                         ).select_from(q)
+                          whereclause=and_(shares_t.c.deleted == "False",
+                                           shares_t.c.project_id == project_id)
+                          ).select_from(q)
         return shares_q.execute()
 
     def get_quota_usages_project(self, project_id):
@@ -128,12 +117,14 @@ class ManilaQuotaSyncNanny(ManilaNanny):
             quota_usages_t.update().values(updated_at=now, in_use=quota).where(and_(
                 quota_usages_t.c.project_id == project_id,
                 quota_usages_t.c.resource == resource,
-                quota_usages_t.c.share_type_id == share_type_id, 
+                quota_usages_t.c.share_type_id == share_type_id,
             )).execute()
+
     def sync_quota_usages_by_type(self, project_id, quota_to_sync):
-        print("Syncing %s" % (project_id))
-        now = datetime.datetime.utcnow()
-        quota_usages_t = Table('quota_usages', self.db_metadata, autoload=True)
+        # print("Syncing %s" % (project_id))
+        # now = datetime.datetime.utcnow()
+        # quota_usages_t = Table('quota_usages', self.db_metadata, autoload=True)
+        pass
 
     def _run(self):
         # prepare the output
@@ -167,17 +158,17 @@ class ManilaQuotaSyncNanny(ManilaNanny):
             quota_usages_by_user_to_sync = {}
             quota_usages_by_type_to_sync = {}
 
-            quota_usages_by_user = { (r, u): q for (r, u, _), q in quota_usages.iteritems() if u != None }
-            quota_usages_by_type = { (r, t): q for (r, _, t), q in quota_usages.iteritems() if t != None }
+            quota_usages_by_user = { (r, u): q for (r, u, _), q in quota_usages.items() if u is not None }
+            quota_usages_by_type = { (r, t): q for (r, _, t), q in quota_usages.items() if t is not None }
             quota_usages_by_user_sorted_keys = sorted([k for k in quota_usages_by_user.keys()], key=lambda k: k[1])
             quota_usages_by_type_sorted_keys = sorted([k for k in quota_usages_by_type.keys()], key=lambda k: k[1])
 
             real_usages_by_user = {}
-            for (r, u, t), q in real_usages.iteritems():
+            for (r, u, t), q in real_usages.items():
                 real_usages_by_user[(r, u)] = real_usages_by_user.get((r, u), 0) + q
             real_usages_by_type = {}
-            for (r, u, t), q in real_usages.iteritems():
-                if t != None:
+            for (r, u, t), q in real_usages.items():
+                if t is not None:
                     real_usages_by_type[(r, t)] = real_usages_by_type.get((r, t), 0) + q
 
             for resource, user in quota_usages_by_user_sorted_keys:
@@ -186,8 +177,8 @@ class ManilaQuotaSyncNanny(ManilaNanny):
                 if quota != real_quota:
                     quota_usages_by_user_to_sync[(resource, user)] = real_quota
                     ptable_user.add_row([project_id, user, resource,
-                                    str(quota) + ' -> ' + str(real_quota),
-                                    '\033[1m\033[91mMISMATCH\033[0m'])
+                                         str(quota) + ' -> ' + str(real_quota),
+                                         '\033[1m\033[91mMISMATCH\033[0m'])
                     if not self.dry_run:
                         self.MANILA_QUOTA_BY_USER_SYNCED.inc()
 
@@ -197,8 +188,8 @@ class ManilaQuotaSyncNanny(ManilaNanny):
                 if quota != real_quota:
                     quota_usages_by_type_to_sync[(resource, type)] = real_quota
                     ptable_type.add_row([project_id, type, resource,
-                                    str(quota) + ' -> ' + str(real_quota),
-                                    '\033[1m\033[91mMISMATCH\033[0m'])
+                                         str(quota) + ' -> ' + str(real_quota),
+                                         '\033[1m\033[91mMISMATCH\033[0m'])
                     if not self.dry_run:
                         self.MANILA_QUOTA_BY_TYPE_SYNCED.inc()
 
@@ -216,14 +207,15 @@ class ManilaQuotaSyncNanny(ManilaNanny):
 
 def get_db_url(config_file):
     """Return the database connection string from the config file"""
-    parser = ConfigParser.SafeConfigParser()
+    parser = configparser.SafeConfigParser()
     try:
         parser.read(config_file)
         db_url = parser.get('database', 'connection', raw=True)
     except:
-        print "ERROR: Check Manila configuration file."
+        print("ERROR: Check Manila configuration file.")
         sys.exit(2)
     return db_url
+
 
 def main():
     try:
@@ -256,6 +248,7 @@ def main():
 
     # args.dry_run = True
     ManilaQuotaSyncNanny(args.config, args.interval, args.dry_run).run()
+
 
 if __name__ == "__main__":
     main()

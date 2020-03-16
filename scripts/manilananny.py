@@ -1,7 +1,7 @@
 import os
 import sys
 import time
-import ConfigParser
+import configparser
 from sqlalchemy import MetaData
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -40,11 +40,11 @@ class ManilaNanny(object):
     def get_db_url(self):
         """Return the database connection string from the config file"""
         try:
-            parser = ConfigParser.SafeConfigParser()
+            parser = configparser.SafeConfigParser()
             parser.read(self.config_file)
             db_url = parser.get('database', 'connection', raw=True)
         except Exception as e:
-            print("ERROR: Parse {}: ".format(self.config_file) + str(e))
+            print(f"ERROR: Parse {self.config_file}: " + str(e))
             sys.exit(2)
         return db_url
 
@@ -59,7 +59,7 @@ def create_manila_client(config_file, version="2.7"):
         :return client.Client manila:  manila client
     """
     try:
-        parser = ConfigParser.SafeConfigParser()
+        parser = configparser.SafeConfigParser()
         parser.read(config_file)
         auth_url = parser.get('keystone_authtoken', 'www_authenticate_uri')
         username = parser.get('keystone_authtoken', 'username')
@@ -68,7 +68,7 @@ def create_manila_client(config_file, version="2.7"):
         prj_domain = parser.get('keystone_authtoken', 'project_domain_name')
         prj_name = parser.get('keystone_authtoken', 'project_name')
     except Exception as e:
-        print "ERROR: Parse {}: ".format(config_file) + e.message
+        print(f"ERROR: Parse {config_file}: " + str(e))
         sys.exit(2)
 
     auth = v3.Password(
