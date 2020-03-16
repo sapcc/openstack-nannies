@@ -19,7 +19,7 @@
 
 import argparse
 import sys
-import ConfigParser
+import configparser
 import datetime
 import logging
 import time
@@ -33,6 +33,7 @@ from sqlalchemy import delete
 from sqlalchemy import func
 from sqlalchemy import MetaData
 from sqlalchemy import select
+from sqlalchemy import update
 from sqlalchemy import join
 from sqlalchemy import Table
 from sqlalchemy import create_engine
@@ -120,20 +121,35 @@ class ManilaQuotaSyncNanny(ManilaNanny):
         quota_usages_t = Table('quota_usages', self.db_metadata, autoload=True)
         # a tuple is used here to have a dict value per project and user
         for resource_tuple, quota in quota_to_sync_by_user.iteritems():
-            quota_usages_t.update().values(updated_at=now, in_use=quota).where(and_(
-                    quota_usages_t.c.project_id == project_id,
-                    quota_usages_t.c.resource == resource_tuple[0],
-                    quota_usages_t.c.user_id == resource_tuple[1])).execute()
+            update(quota_usages_t). \
+                where(and_(quota_usages_t.c.project_id == project_id,
+                           quota_usages_t.c.resource == resource_tuple[0],
+                           quota_usages_t.c.user_id == resource_tuple[1])). \
+                values(updated_at=now, in_use=quota). \
+                execute()
+            # Linter raises error on Table.update(), when argument 'dml' is not given
+            # quota_usages_t.update().values(updated_at=now, in_use=quota).where(and_(
+            #         quota_usages_t.c.project_id == project_id,
+            #         quota_usages_t.c.resource == resource_tuple[0],
+            #         quota_usages_t.c.user_id == resource_tuple[1])).execute()
         for (resource, share_type_id), quota in quota_to_sync_by_type.iteritems():
-            quota_usages_t.update().values(updated_at=now, in_use=quota).where(and_(
-                quota_usages_t.c.project_id == project_id,
-                quota_usages_t.c.resource == resource,
-                quota_usages_t.c.share_type_id == share_type_id, 
-            )).execute()
+            update(quota_usages_t). \
+                where(and_(quota_usages_t.c.project_id == project_id,
+                           quota_usages_t.c.resource == resource,
+                           quota_usages_t.c.share_type_id == share_type_id)). \
+                values(updated_at=now, in_use=quota). \
+                execute()
+            # Linter raises error on Table.update(), when argument 'dml' is not given
+            # quota_usages_t.update().values(updated_at=now, in_use=quota).where(and_(
+            #     quota_usages_t.c.project_id == project_id,
+            #     quota_usages_t.c.resource == resource,
+            #     quota_usages_t.c.share_type_id == share_type_id, 
+            # )).execute()
     def sync_quota_usages_by_type(self, project_id, quota_to_sync):
-        print("Syncing %s" % (project_id))
-        now = datetime.datetime.utcnow()
-        quota_usages_t = Table('quota_usages', self.db_metadata, autoload=True)
+        # print("Syncing %s" % (project_id))
+        # now = datetime.datetime.utcnow()
+        # quota_usages_t = Table('quota_usages', self.db_metadata, autoload=True)
+        pass
 
     def _run(self):
         # prepare the output
@@ -143,7 +159,7 @@ class ManilaQuotaSyncNanny(ManilaNanny):
         try:
             projects = self.get_projects()
         except sqlalchemy.exc.OperationalError:
-            self.makeConnection()
+            self.init_db_connection()
             projects = self.get_projects()
 
         for project_id in projects:
@@ -167,16 +183,16 @@ class ManilaQuotaSyncNanny(ManilaNanny):
             quota_usages_by_user_to_sync = {}
             quota_usages_by_type_to_sync = {}
 
-            quota_usages_by_user = { (r, u): q for (r, u, _), q in quota_usages.iteritems() if u != None }
-            quota_usages_by_type = { (r, t): q for (r, _, t), q in quota_usages.iteritems() if t != None }
+            quota_usages_by_user = { (r, u): q for (r, u, _), q in quota_usages.items() if u != None }
+            quota_usages_by_type = { (r, t): q for (r, _, t), q in quota_usages.items() if t != None }
             quota_usages_by_user_sorted_keys = sorted([k for k in quota_usages_by_user.keys()], key=lambda k: k[1])
             quota_usages_by_type_sorted_keys = sorted([k for k in quota_usages_by_type.keys()], key=lambda k: k[1])
 
             real_usages_by_user = {}
-            for (r, u, t), q in real_usages.iteritems():
+            for (r, u, t), q in real_usages.items():
                 real_usages_by_user[(r, u)] = real_usages_by_user.get((r, u), 0) + q
             real_usages_by_type = {}
-            for (r, u, t), q in real_usages.iteritems():
+            for (r, u, t), q in real_usages.items():
                 if t != None:
                     real_usages_by_type[(r, t)] = real_usages_by_type.get((r, t), 0) + q
 
@@ -216,12 +232,12 @@ class ManilaQuotaSyncNanny(ManilaNanny):
 
 def get_db_url(config_file):
     """Return the database connection string from the config file"""
-    parser = ConfigParser.SafeConfigParser()
+    parser = configparser.SafeConfigParser()
     try:
         parser.read(config_file)
         db_url = parser.get('database', 'connection', raw=True)
     except:
-        print "ERROR: Check Manila configuration file."
+        print("ERROR: Check Manila configuration file.")
         sys.exit(2)
     return db_url
 
