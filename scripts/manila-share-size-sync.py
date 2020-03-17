@@ -94,7 +94,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                     log.info("Volume %s on filer %s is offline. Status of share %s is '%s'",
                              vol.get('volume'), vol.get('filer'), share_id, s.status)
 
-        for share_id, share in shares.iteritems():
+        for share_id, share in shares.items():
             # Backend volume exists, but share size does not match
             vol = volumes.get(share_id)
             if vol:
@@ -102,7 +102,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                 if vsize != share.size:
                     msg = "share %s: manila share size != netapp volume size (%d != %d)"
                     if self.dry_run:
-                        log.info("Dry run: " + msg, share_id, share.size, vsize)
+                        log.info(f'Dry run: {msg}', share_id, share.size, vsize)
                     else:
                         log.info(msg, share_id, share.size, vsize)
                         self.set_share_size(share_id, vsize)
@@ -128,7 +128,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                         id=share.id, name=share.name, status=share.status, project=share.project_id
                     ).set(1)
                 else:
-                    log.warn("ShareMissingBackend: id=%s, status=%s, created_at=%s",
+                    log.info("ShareMissingBackend: id=%s, status=%s, created_at=%s",
                              share_id, share.status, share.created_at)
 
         # Orphan volumes
@@ -146,7 +146,8 @@ class ManilaShareSyncNanny(ManilaNanny):
             if s['deleted_at'] is not None:
                 if (datetime.utcnow() - s['deleted_at']).total_seconds() < 600:
                     orphan_volumes[s['id']] = None
-        for share_id, vol in filter(lambda _, v: v is not None, orphan_volumes.items()):
+        for share_id, vol in filter(lambda shareid_vol: shareid_vol[1] is not None, 
+                                    orphan_volumes.items()):
             # set gauge value to 0: orphan volume found but not corrected
             self.MANILA_ORPHAN_VOLUMES_GAUGE.labels(
                 share_id=share_id, filer=vol['filer'], vserver=vol['vserver'], volume=vol['volume'],

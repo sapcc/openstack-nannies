@@ -18,22 +18,22 @@
 # this script checks for inconsistencies in the manila db
 
 import argparse
-import sys
 import configparser
-import logging
 import datetime
+import logging
+import sys
 
-from sqlalchemy import and_
-from sqlalchemy import func
 from sqlalchemy import MetaData
+from sqlalchemy import Table
+from sqlalchemy import and_
+from sqlalchemy import create_engine
+from sqlalchemy import func
+from sqlalchemy import join
 from sqlalchemy import select
 from sqlalchemy import update
-from sqlalchemy import join
-from sqlalchemy import Table
-from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.expression import false
-from sqlalchemy.ext.declarative import declarative_base
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')

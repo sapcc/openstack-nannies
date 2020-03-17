@@ -39,7 +39,7 @@ keystoneauth1==3.17.1
 #linecache2==1.0.0
 #lxml==4.4.1
 #Mako==1.1.0
-#manila==3.0.0.dev2302
+manila==3.0.0.dev2302
 #MarkupSafe==1.1.1
 #monotonic==1.5
 #more-itertools==7.2.0
