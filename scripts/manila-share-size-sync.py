@@ -17,22 +17,22 @@
 #
 
 import argparse
+import logging
+import requests
 import sys
 import time
-import requests
-import logging
-from datetime import datetime
 
-# from prettytable import PrettyTable
+from datetime import datetime
+from manilaclient.common.apiclient import exceptions as manilaApiExceptions
+from manilananny import ManilaNanny
+from prometheus_client import start_http_server, Counter, Gauge
+from sqlalchemy import Table
 from sqlalchemy import and_
 from sqlalchemy import delete
 from sqlalchemy import func
 from sqlalchemy import select
-from sqlalchemy import Table
+from sqlalchemy import update
 from sqlalchemy.sql.expression import false
-from prometheus_client import start_http_server, Counter, Gauge
-from manilananny import ManilaNanny
-from manilaclient.common.apiclient import exceptions as manilaApiExceptions
 
 log = logging.getLogger('nanny-manila-share-sync')
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
@@ -78,7 +78,7 @@ class ManilaShareSyncNanny(ManilaNanny):
         self.MANILA_SHARE_MISSING_BACKEND_GAUGE._metrics.clear()
 
         # Volume is offline
-        for share_id, vol in vstates.iteritems():
+        for share_id, vol in vstates.items():
             if vol['state'] != 1:
                 try:
                     s = self.manilaclient.shares.get(share_id)
@@ -134,7 +134,7 @@ class ManilaShareSyncNanny(ManilaNanny):
         # Orphan volumes
         share_ids = shares.keys()
         orphan_volumes = {}
-        for share_id, vol in volumes.iteritems():
+        for share_id, vol in volumes.items():
             if share_id not in share_ids:
                 try:
                     s = self.manilaclient.shares.get(share_id)
@@ -146,7 +146,7 @@ class ManilaShareSyncNanny(ManilaNanny):
             if s['deleted_at'] is not None:
                 if (datetime.utcnow() - s['deleted_at']).total_seconds() < 600:
                     orphan_volumes[s['id']] = None
-        for share_id, vol in filter(lambda (_, v): v is not None, orphan_volumes.iteritems()):
+        for share_id, vol in filter(lambda _, v: v is not None, orphan_volumes.items()):
             # set gauge value to 0: orphan volume found but not corrected
             self.MANILA_ORPHAN_VOLUMES_GAUGE.labels(
                 share_id=share_id, filer=vol['filer'], vserver=vol['vserver'], volume=vol['volume'],
@@ -188,7 +188,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                 'time': time.time()
             })
         except Exception as e:
-            raise type(e)("_fetch_prom_metrics(query=\"%s\"): %s".format(query, e.message))
+            raise type(e)(f'_fetch_prom_metrics(query="{query}"): {e}')
         if r.status_code != 200:
             return None
         return r.json()['data']['result']
@@ -221,11 +221,11 @@ class ManilaShareSyncNanny(ManilaNanny):
         now = datetime.utcnow()
         shares_t = Table('shares', self.db_metadata, autoload=True)
         share_instances_t = Table('share_instances', self.db_metadata, autoload=True)
-        shares_t.update() \
-                .values(updated_at=now, size=share_size) \
-                .where(shares_t.c.id == share_instances_t.c.share_id) \
-                .where(and_(shares_t.c.id == share_id, share_instances_t.c.status == 'available')) \
-                .execute()
+        update(shares_t) \
+            .values(updated_at=now, size=share_size) \
+            .where(shares_t.c.id == share_instances_t.c.share_id) \
+            .where(and_(shares_t.c.id == share_id, share_instances_t.c.status == 'available')) \
+            .execute()
 
     def get_shares(self):
         # manila api returns maximally 1000 shares
@@ -275,7 +275,7 @@ def main():
         log.info("command line arguments...")
         log.info(args)
     except Exception as e:
-        sys.stdout.write("parse command line arguments (%s)" % e.strerror)
+        sys.stdout.write(f'parse command line arguments ({e})')
 
     try:
         start_http_server(args.prom_port)
@@ -293,9 +293,8 @@ def test_resize():
     try:
         args = parse_cmdline_args()
     except Exception as e:
-        sys.stdout.write("Check command line arguments (%s)" % e.strerror)
-
-    nanny = ManilaShareSyncNanny(args.config, args.netapp_prom_host, args.netapp_prom_query, args.interval, args.dry_run)
+        sys.stdout.write(f'Check command line arguments ({e})')
+    nanny = ManilaShareSyncNanny(args.config, args.netapp_prom_host, args.interval, args.dry_run)
     nanny.set_share_size('7eb50f3b-b5ea-47e2-a6e9-5934de57c777', 4)
 
 
