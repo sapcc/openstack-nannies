@@ -998,9 +998,10 @@ class ConsistencyCheck:
             if self.gauge_value_bb_not_in_aggregate != 0:
                 log.error("- PLEASE CHECK MANUALLY - some vc hosts seem to be not connected to vc-* aggregates - forcing dry-run mode!")
                 self.dry_run = True
-            else:
+            elif self.dry_run != self.cmdline_dry_run:
                 # in case we forced dry-run on and everything is connected properly again
                 # go back to the original dry-run setting from the cmdline
+                log.error("- PLEASE CHECK MANUALLY - vc hosts seem to be properly connected to vc-* aggregates again - leaving forced dry-run mode!")
                 self.dry_run = self.cmdline_dry_run
 
             # determine the vc-* aggregate per server
