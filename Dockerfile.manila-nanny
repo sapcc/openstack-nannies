@@ -20,5 +20,3 @@ RUN /var/lib/openstack/bin/pip uninstall -y psycopg2
 RUN /var/lib/openstack/bin/pip install -q --no-cache-dir psycopg2-binary==2.8.4 prometheus-client==0.7.1  python-manilaclient==2.0.0
 
 ADD scripts/manila* /scripts/
-ADD scripts/db-cleanup.py /scripts/
-ADD scripts/count-deleted.py /scripts/
