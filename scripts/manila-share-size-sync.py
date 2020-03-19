@@ -86,10 +86,17 @@ class ManilaShareSyncNanny(ManilaNanny):
                     # share can be deleted meanwhile
                     continue
                 if s.status == 'available':
-                    log.info("Volume %s on filer %s is offline. Reset status of share %s from '%s' to 'error'",
-                             vol.get('volume'), vol.get('filer'), share_id, s.status)
-                    self._reset_share_state(share_id, "error")
-                    self.MANILA_RESET_SHARE_ERROR_COUNTER.inc()
+                    msg = "Volume %s on filer %s is offline. " \
+                          "Reset status of share %s from '%s' to 'error'"
+                    if self.dry_run:
+                        log.info("Dry run" + msg,
+                                vol.get('volume'), vol.get('filer'),
+                                share_id, s.status)
+                    else:
+                        log.info(msg, vol.get('volume'), vol.get('filer'),
+                                share_id, s.status)
+                        self._reset_share_state(share_id, "error")
+                        self.MANILA_RESET_SHARE_ERROR_COUNTER.inc()
                 else:
                     log.info("Volume %s on filer %s is offline. Status of share %s is '%s'",
                              vol.get('volume'), vol.get('filer'), share_id, s.status)
@@ -100,7 +107,8 @@ class ManilaShareSyncNanny(ManilaNanny):
             if vol:
                 vsize = vol['size']
                 if vsize != share.size:
-                    msg = "share %s: manila share size != netapp volume size (%d != %d)"
+                    msg = "share %s: manila share size != " \
+                          "netapp volume size (%d != %d)"
                     if self.dry_run:
                         log.info("Dry run: " + msg, share_id, share.size, vsize)
                     else:
@@ -115,10 +123,15 @@ class ManilaShareSyncNanny(ManilaNanny):
                     # It should be compared using utc time.
                     c = datetime.strptime(share.created_at, '%Y-%m-%dT%H:%M:%S.%f')
                     if (datetime.utcnow() - c).total_seconds() > 600:
-                        log.warn("ShareMissingBackend: id=%s, status=%s, created_at=%s: Set status to error",
-                                 share_id, share.status, share.created_at)
-                        self._reset_share_state(share_id, 'error')
-                        self.MANILA_RESET_SHARE_ERROR_COUNTER.inc()
+                        msg = "ShareMissingBackend: id=%s, status=%s, " \
+                              "created_at=%s: Set status to error"
+                        if self.dry_run:
+                            log.warn("Dry run: " + msg,
+                                     share_id, share.status, share.created_at)
+                        else:
+                            log.warn(msg, share_id, share.status, share.created_at)
+                            self._reset_share_state(share_id, 'error')
+                            self.MANILA_RESET_SHARE_ERROR_COUNTER.inc()
                         self.MANILA_SHARE_MISSING_BACKEND_GAUGE.labels(
                             id=share.id, name=share.name, status=share.status, project=share.project_id
                         ).set(1)
