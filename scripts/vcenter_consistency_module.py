@@ -563,7 +563,7 @@ class ConsistencyCheck:
                                         and (filename_uuid_search_result.group(1) in self.cinder_os_all_volumes):
                                         # do the consistency check logging only in non interactive mode
                                         if not self.interactive:
-                                            log.warn("- PLEASE CHECK MANUALLY - volume on instance '%s' with uuid %s in backing store config in cinder and different shadow vm uuid %s extracted from its vcenter filename '%s' in cinder too", str(k.get('config.name')), str(j.backing.uuid), str(filename_uuid_search_result.group(1), str(j.backing.fileName)))
+                                            log.warn("- PLEASE CHECK MANUALLY - volume on instance '%s' with uuid %s in backing store config in cinder and different shadow vm uuid %s extracted from its vcenter filename '%s' in cinder too", str(k.get('config.name')), str(j.backing.uuid), str(filename_uuid_search_result.group(1)), str(j.backing.fileName))
                                         my_volume_uuid = None
                                     # ok - they are either equal or we only have a backing uuid - check if it is in cinder and if yes - use it
                                     elif j.backing.uuid in self.cinder_os_all_volumes:
