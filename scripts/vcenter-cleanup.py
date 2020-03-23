@@ -423,6 +423,9 @@ def detach_ghost_port(service_instance, vm, mac_address):
     except vim.fault.InvalidState as e:
         log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - %s", vm.config.instanceUuid, str(e.msg))
         return False
+    except vim.fault.TaskInProgress as e:
+        log.warn("- PLEASE CHECK MANUALLY - cannot detach ghost port from instance %s - %s", vm.config.instanceUuid, str(e.msg))
+        return False
     return True
 
 
