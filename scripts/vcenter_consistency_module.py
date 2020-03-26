@@ -634,7 +634,7 @@ class ConsistencyCheck:
                                     # do the instance uuid fixing only in non interactive mode
                                     if not self.interactive:
                                         my_volume_status = self.cinder_db_get_volume_status(my_volume_uuid)
-                                        if my_volume_uuid and (my_volume_status in ['backing-up','restoring-backup']):
+                                        if my_volume_uuid and (my_volume_status in ['backing-up','restoring-backup','maintenance']):
                                             log.info("- plan: renaming instanceUuid %s to uuid %s extracted from instance name ('%s') - delayed as the attached volume %s is in state '%s'", \
                                                 str(k['config.instanceUuid']),str(instancename_uuid_search_result.group(0)), str(k['config.name']), str(my_volume_uuid), \
                                                     str(my_volume_status))
