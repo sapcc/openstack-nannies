@@ -143,7 +143,7 @@ class ManilaQuotaSyncNanny(ManilaNanny):
         try:
             projects = self.get_projects()
         except sqlalchemy.exc.OperationalError:
-            self.makeConnection()
+            self.init_db_connection()
             projects = self.get_projects()
 
         for project_id in projects:
