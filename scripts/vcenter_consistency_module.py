@@ -1303,12 +1303,12 @@ class ConsistencyCheck:
             elif self.vc_server_uuid_with_mounted_volume.get(self.volume_query) \
                     and (not self.cinder_os_servers_with_attached_volume.get(self.volume_query)) \
                     and self.nova_os_servers_with_attached_volume.get(self.volume_query):
-                log.info("- plan (dry-run-for-now) - try to bring back cinder volume attachment for volume %s", self.volume_query)
+                log.info("- plan: (dry-run-for-now) - try to bring back cinder volume attachment for volume %s", self.volume_query)
                 self.gauge_value_no_autofix += 1
             elif self.vc_server_uuid_with_mounted_volume.get(self.volume_query) \
                     and self.cinder_os_servers_with_attached_volume.get(self.volume_query) \
                     and (not self.nova_os_servers_with_attached_volume.get(self.volume_query)):
-                log.info("- plan (dry-run-for-now) - try to bring back nova volume attachment for volume %s", self.volume_query)
+                log.info("- plan: (dry-run-for-now) - try to bring back nova volume attachment for volume %s", self.volume_query)
                 self.gauge_value_no_autofix += 1
             elif self.vc_server_uuid_with_mounted_volume.get(self.volume_query) \
                     and (not self.cinder_os_servers_with_attached_volume.get(self.volume_query)) \
