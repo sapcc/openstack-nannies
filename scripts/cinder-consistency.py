@@ -302,7 +302,7 @@ def fix_missing_deleted_at(meta, table_names):
         a_table_set_deleted_at_q.execute()
 
 
-# get all the rows with a volume_admin_metadata still defined where the corresponding volume is already deleted
+# get all the rows with a service still defined where the corresponding volume is already deleted
 def get_deleted_services_still_used_in_volumes(meta):
 
     deleted_services_still_used_in_volumes = {}
@@ -319,7 +319,7 @@ def get_deleted_services_still_used_in_volumes(meta):
     return deleted_services_still_used_in_volumes
 
 
-# delete volume_admin_metadata still defined where the corresponding volume is already deleted
+# delete services still defined where the corresponding volume is already deleted
 def fix_deleted_services_still_used_in_volumes(meta, deleted_services_still_used_in_volumes):
 
     services_t = Table('services', meta, autoload=True)
