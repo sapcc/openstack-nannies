@@ -29,7 +29,7 @@ class ManilaNanny(object):
     def init_db_connection(self):
         """Establish a database connection"""
         db_url = self.get_db_url()
-        engine = create_engine(db_url)
+        engine = create_engine(db_url, pool_recycle=3600)
         engine.connect()
         Session = sessionmaker(bind=engine)
         self.db_session = Session()
