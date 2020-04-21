@@ -16,57 +16,63 @@
 #    under the License.
 #
 
-import argparse
 import sys
 import time
-import requests
-import logging
 from datetime import datetime
 
-# from prettytable import PrettyTable
+import argparse
+import logging
+import re
+import requests
+
 from sqlalchemy import and_
-from sqlalchemy import delete
-from sqlalchemy import func
 from sqlalchemy import select
+from sqlalchemy import update
 from sqlalchemy import Table
-from sqlalchemy.sql.expression import false
 from prometheus_client import start_http_server, Counter, Gauge
-from manilananny import ManilaNanny
 from manilaclient.common.apiclient import exceptions as manilaApiExceptions
+# from sqlalchemy import delete
+# from sqlalchemy import func
+# from sqlalchemy.sql.expression import false
+
+from manilananny import ManilaNanny
 
 log = logging.getLogger('nanny-manila-share-sync')
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
-NETAPP_VOLUME_QUERY = "netapp_volume_total_bytes{app='netapp-capacity-exporter-manila'} + " \
-                      "netapp_volume_snapshot_reserved_bytes"
-NETAPP_VOLUME_STATE_QUERY = "netapp_volume_state{app='netapp-capacity-exporter-manila'}"
-onegb = 1073741824
+NETAPP_VOLUME_QUERY = \
+        "netapp_volume_total_bytes{app='netapp-capacity-exporter-manila'} + "\
+        "netapp_volume_snapshot_reserved_bytes"
+NETAPP_VOLUME_STATE_QUERY = \
+        "netapp_volume_state{app='netapp-capacity-exporter-manila'}"
+ONEGB = 1073741824
 
 TASK_SHARE_SIZE = '1'
 TASK_MISSING_VOLUME = '2'
 TASK_OFFLINE_VOLUME = '3'
 TASK_ORPHAN_VOLUME = '4'
 
+
 class ManilaShareSyncNanny(ManilaNanny):
     def __init__(self, config_file, prom_host, interval, tasks, dry_run_tasks):
         super(ManilaShareSyncNanny, self).__init__(config_file, interval)
         self.prom_host = prom_host+"/api/v1/query"
         self.MANILA_NANNY_SHARE_SYNC_FAILURE = Counter(
-                'manila_nanny_share_sync_failure', '')
+            'manila_nanny_share_sync_failure', '')
         self.MANILA_SHARE_MISSING_BACKEND_GAUGE = Gauge(
-                'manila_nanny_share_missing_backend',
-                'Backend volume for manila share does not exist',
-                ['id', 'name', 'status', 'project'])
+            'manila_nanny_share_missing_backend',
+            'Backend volume for manila share does not exist',
+            ['id', 'name', 'status', 'project'])
         self.MANILA_ORPHAN_VOLUMES_GAUGE = Gauge(
-                'manila_nanny_orphan_volumes',
-                'Orphan backedn volumes of Manila service',
-                ['share_id', 'filer', 'vserver', 'volume'])
+            'manila_nanny_orphan_volumes',
+            'Orphan backedn volumes of Manila service',
+            ['share_id', 'filer', 'vserver', 'volume'])
         self.MANILA_SYNC_SHARE_SIZE_COUNTER = Counter(
-                'manila_nanny_sync_share_size',
-                'manila nanny sync share size')
+            'manila_nanny_sync_share_size',
+            'manila nanny sync share size')
         self.MANILA_RESET_SHARE_ERROR_COUNTER = Counter(
-                'manila_nanny_reset_share_error',
-                'manila nanny reset share status to error')
+            'manila_nanny_reset_share_error',
+            'manila nanny reset share status to error')
 
         self._tasks = tasks
         self._dry_run_tasks = dry_run_tasks
@@ -80,14 +86,27 @@ class ManilaShareSyncNanny(ManilaNanny):
             volumes = self.get_netapp_volumes()
             vstates = self.get_netapp_volume_states()
             shares = self.get_shares()
+            _, instance_share_d = self.query_share_instance_mapping()
+            vols = self._get_netapp_volumes()
         except Exception as e:
             log.warning("Skip nanny run because queries have failed: %s", e)
             self.MANILA_NANNY_SHARE_SYNC_FAILURE.inc()
             return
 
+        share_volume_d = {}
+        for v in vols:
+            if re.match(r'^share_\w+$', v['volume']):
+                siid = v['volume'][6:].replace('_', '-')
+                sid = instance_share_d.get(siid)
+                v['instance_id'] = siid
+                if sid is None:
+                    v['orphan'] = True
+                else:
+                    share_volume_d[sid] = v
+
         if self._tasks[TASK_SHARE_SIZE]:
             dry_run = self._dry_run_tasks[TASK_SHARE_SIZE]
-            self.sync_share_size(shares, volumes, dry_run)
+            self.sync_share_size(shares, share_volume_d, dry_run)
         if self._tasks[TASK_MISSING_VOLUME]:
             dry_run = self._dry_run_tasks[TASK_MISSING_VOLUME]
             self.process_missing_backend(shares, volumes, dry_run)
@@ -172,18 +191,18 @@ class ManilaShareSyncNanny(ManilaNanny):
             if s.status == 'available':
                 if dry_run:
                     log.info("Dry run: " + msg2 + ": " + msg1,
-                            vol.get('volume'), vol.get('filer'),
-                            share_id, s.status)
+                             vol.get('volume'), vol.get('filer'),
+                             share_id, s.status)
                 else:
                     log.info(msg2 + ": " + msg1,
-                            vol.get('volume'), vol.get('filer'),
-                            share_id, s.status)
+                             vol.get('volume'), vol.get('filer'),
+                             share_id, s.status)
                     self._reset_share_state(share_id, "error")
                     self.MANILA_RESET_SHARE_ERROR_COUNTER.inc()
             else:
                 log.info(msg3 + ": " + msg1,
-                        vol.get('volume'), vol.get('filer'),
-                        share_id, s.status)
+                         vol.get('volume'), vol.get('filer'),
+                         share_id, s.status)
 
     def process_orphan_volumes(self, shares, volumes, dry_run=True):
         msg = "Orphan volume %s is found on filer %s (share_id = %s)"
@@ -213,6 +232,21 @@ class ManilaShareSyncNanny(ManilaNanny):
             ).set(0)
             log.info(msg, vol['volume'], vol['filer'], share_id)
 
+    def _get_netapp_volumes(self):
+        """ query prometheus for netapp volumes 
+        return [<vol>, <vol>, ...]
+        """
+        vols = []
+        results = self._fetch_prom_metrics(NETAPP_VOLUME_QUERY)
+        for s in results:
+            vols.append({
+                'filer': s['metric']['filer'],
+                'vserver': s['metric']['vserver'],
+                'volume': s['metric']['volume'],
+                'size':  int(s['value'][1]) / ONEGB
+            })
+        return vols
+
     def get_netapp_volumes(self):
         results = self._fetch_prom_metrics(NETAPP_VOLUME_QUERY)
         vols = {}
@@ -223,7 +257,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                                       filer=s['metric']['filer'],
                                       vserver=s['metric']['vserver'],
                                       volume=s['metric']['volume'],
-                                      size=int(s['value'][1]) / onegb)
+                                      size=int(s['value'][1]) / ONEGB)
         return vols
 
     def get_netapp_volume_states(self):
@@ -252,6 +286,20 @@ class ManilaShareSyncNanny(ManilaNanny):
             return None
         return r.json()['data']['result']
 
+    def query_share_instance_mapping(self):
+        shares = Table('shares', self.db_metadata, autoload=True)
+        instances = Table('share_instances', self.db_metadata, autoload=True)
+        q = select([shares.c.id, instances.c.id]).\
+                where(shares.c.id == instances.c.share_id).\
+                where(instances.c.deleted == 'False')
+        r = q.execute()
+        shares = {}
+        instances = {}
+        for share_id, share_instance_id in r:
+            shares[share_id] = share_instance_id
+            instances[share_instance_id] = share_id
+        return shares, instances
+
     def query_shares_by_ids(self, share_ids):
         shares_t = Table('shares', self.db_metadata, autoload=True)
         q = select([shares_t]).where(shares_t.c.id.in_(share_ids))
@@ -262,11 +310,15 @@ class ManilaShareSyncNanny(ManilaNanny):
 
     def query_shares(self):
         shares_t = Table('shares', self.db_metadata, autoload=True)
-        share_instances_t = Table('share_instances', self.db_metadata, autoload=True)
-        shares_join = shares_t.join(share_instances_t, shares_t.c.id == share_instances_t.c.share_id)
-        q = select(columns=[shares_t.c.id, shares_t.c.size, shares_t.c.updated_at]) \
+        share_instances_t = Table('share_instances', self.db_metadata,
+                                  autoload=True)
+        shares_join = shares_t.join(share_instances_t, shares_t.c.id ==
+                                    share_instances_t.c.share_id)
+        q = select(columns=[shares_t.c.id, shares_t.c.size,
+                            shares_t.c.updated_at]) \
             .select_from(shares_join) \
-            .where(and_(shares_t.c.deleted=='False', share_instances_t.c.status=='available'))
+            .where(and_(shares_t.c.deleted == 'False',
+                        share_instances_t.c.status == 'available'))
         shares = {}
         for (share_id, share_size, updated_at) in q.execute():
             shares[share_id] = {
@@ -279,12 +331,14 @@ class ManilaShareSyncNanny(ManilaNanny):
     def set_share_size(self, share_id, share_size):
         now = datetime.utcnow()
         shares_t = Table('shares', self.db_metadata, autoload=True)
-        share_instances_t = Table('share_instances', self.db_metadata, autoload=True)
-        shares_t.update() \
-                .values(updated_at=now, size=share_size) \
-                .where(shares_t.c.id == share_instances_t.c.share_id) \
-                .where(and_(shares_t.c.id == share_id, share_instances_t.c.status == 'available')) \
-                .execute()
+        share_instances_t = Table('share_instances', self.db_metadata,
+                                  autoload=True)
+        update(shares_t) \
+            .values(updated_at=now, size=share_size) \
+            .where(shares_t.c.id == share_instances_t.c.share_id) \
+            .where(and_(shares_t.c.id == share_id,
+                        share_instances_t.c.status == 'available')) \
+            .execute()
 
     def get_shares(self):
         # manila api returns maximally 1000 shares
@@ -373,7 +427,7 @@ def main():
         log.info("command line arguments...")
         log.info(args)
     except Exception as e:
-        sys.stdout.write("parse command line arguments (%s)" % e.strerror)
+        sys.stdout.write("parse command line arguments (%s)" % e)
 
     try:
         start_http_server(args.prom_port)
@@ -395,12 +449,14 @@ def main():
         TASK_ORPHAN_VOLUME: args.task_orphan_volume_dry_run,
     }
 
-    ManilaShareSyncNanny(args.config,
-                         args.netapp_prom_host,
-                         args.interval,
-                         tasks,
-                         dry_run_tasks,
-                         ).run()
+    ManilaShareSyncNanny(
+        args.config,
+        args.netapp_prom_host,
+        args.interval,
+        tasks,
+        dry_run_tasks,
+    ).run()
+
 
 if __name__ == "__main__":
     # test_resize()

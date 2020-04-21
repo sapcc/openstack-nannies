@@ -51,6 +51,7 @@ class ManilaNanny(object):
     def renew_manila_client(self):
         self.manilaclient = create_manila_client(self.config_file, "2.7")
 
+
 def create_manila_client(config_file, version="2.7"):
     """  Parse config file and create manila client
 
@@ -71,15 +72,13 @@ def create_manila_client(config_file, version="2.7"):
         sys.exit(2)
 
     auth = v3.Password(
-        username = username,
-        password = password,
-        user_domain_name = user_domain,
-        project_domain_name= prj_domain,
-        project_name= prj_name,
-        auth_url= auth_url,
+        username=username,
+        password=password,
+        user_domain_name=user_domain,
+        project_domain_name=prj_domain,
+        project_name=prj_name,
+        auth_url=auth_url,
     )
     sess = session.Session(auth=auth)
     manila = client.Client(version, session=sess)
     return manila
-
-
