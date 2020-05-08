@@ -23,7 +23,6 @@ import time
 from datetime import datetime
 
 import requests
-from manilaclient.common.apiclient import exceptions as manilaApiExceptions
 from prometheus_client import Counter, Gauge, start_http_server
 from sqlalchemy import Table, and_, select, update
 
@@ -50,16 +49,22 @@ class ManilaShareSyncNanny(ManilaNanny):
         super(ManilaShareSyncNanny, self).__init__(config_file, interval)
         self.prom_host = prom_host + "/api/v1/query"
         self.MANILA_NANNY_SHARE_SYNC_FAILURE = Counter('manila_nanny_share_sync_failure', '')
-        self.MANILA_SHARE_MISSING_BACKEND_GAUGE = Gauge('manila_nanny_share_missing_volume',
-                                                        'Manila Share missing backend volume',
-                                                        ['id', 'name', 'status'])
-        self.MANILA_ORPHAN_VOLUMES_GAUGE = Gauge('manila_nanny_orphan_volumes',
-                                                 'Orphan backedn volumes of Manila service',
-                                                 ['share_id', 'filer', 'vserver', 'volume'])
         self.MANILA_SYNC_SHARE_SIZE_COUNTER = Counter('manila_nanny_sync_share_size',
                                                       'manila nanny sync share size')
         self.MANILA_RESET_SHARE_ERROR_COUNTER = Counter('manila_nanny_reset_share_error',
                                                         'manila nanny reset share status to error')
+        self.MANILA_SHARE_MISSING_BACKEND_GAUGE = Gauge(
+            'manila_nanny_share_missing_volume',
+            'Manila Share missing backend volume',
+            ['id', 'name', 'status'])
+        self.MANILA_ORPHAN_VOLUMES_GAUGE = Gauge(
+            'manila_nanny_orphan_volumes',
+            'Orphan backend volumes of Manila service',
+            ['share_id', 'share_status', 'filer', 'vserver', 'volume'])
+        self.MANILA_OFFLINE_VOLUMES_GAUGE = Gauge(
+            'manila_nanny_offline_volumes',
+            'Offline volumes of Manila service',
+            ['share_id', 'share_status', 'filer', 'vserver', 'volume'])
 
         self._tasks = tasks
         self._dry_run_tasks = dry_run_tasks
@@ -68,23 +73,23 @@ class ManilaShareSyncNanny(ManilaNanny):
 
     def _run(self):
         # Need to recreate manila client each run, because of session timeout
-        self.renew_manila_client()
+        # self.renew_manila_client()
 
+        # fetch data
         try:
-            _share_list = self._query_shares()
-            _volume_list = self._get_netapp_volumes()
-            _offline_volume_list = self._get_netapp_volumes('offline')
+            if self._tasks[TASK_SHARE_SIZE] or self._tasks[TASK_MISSING_VOLUME]\
+                    or self._tasks[TASK_ORPHAN_VOLUME]:
+                _share_list = self._query_shares()
+                _volume_list = self._get_netapp_volumes()
+
+                _shares, _orphan_volumes = self._merge_share_and_volumes(_share_list, _volume_list)
+
+            if self._tasks[TASK_OFFLINE_VOLUME]:
+                _offline_volume_list = self._get_netapp_volumes('offline')
         except Exception as e:
             log.warning(e)
             self.MANILA_NANNY_SHARE_SYNC_FAILURE.inc()
             return
-
-        _shares = {(s['id'], s['instance_id']): s for s in _share_list}
-        _volumes = {
-            vol['volume'][6:].replace('_', '-'): vol
-            for vol in _volume_list if vol['volume'].startswith('share_')
-        }
-        _shares, _orphan_volumes = self._merge_share_and_volumes(_shares, _volumes)
 
         if self._tasks[TASK_SHARE_SIZE]:
             dry_run = self._dry_run_tasks[TASK_SHARE_SIZE]
@@ -102,20 +107,6 @@ class ManilaShareSyncNanny(ManilaNanny):
             dry_run = self._dry_run_tasks[TASK_OFFLINE_VOLUME]
             self.process_offline_volumes(_offline_volume_list, dry_run)
 
-    def _merge_share_and_volumes(self, shares, volumes):
-        """ Merge shares and volumes by share id and volume name
-
-        Assuming the volume name is `share_[share_instance_id]`. Update the share object
-        with the volume fields ("filer", "vserver", "volume", "volume_size").
-
-        Return (merged shares, unmerged volumes)
-        """
-        for (share_id, instance_id) in shares.keys():
-            vol = volumes.pop(instance_id, None)
-            if vol:
-                shares[(share_id, instance_id)].update({'volume': vol})
-        return shares, volumes
-
     def sync_share_size(self, shares, dry_run=True):
         """ Backend volume exists, but share size does not match """
         msg = "share %s: share size != netapp volume size (%d != %d)"
@@ -124,6 +115,11 @@ class ManilaShareSyncNanny(ManilaNanny):
             if 'volume' not in share:
                 continue
             size, vsize = share['size'], share['volume']['size']
+
+            # volume size can not be zero, could be in offline state
+            if vsize == 0:
+                continue
+
             if size != vsize:
                 if dry_run:
                     log.info(msg_dry_run, share_id, size, vsize)
@@ -137,7 +133,6 @@ class ManilaShareSyncNanny(ManilaNanny):
 
         Ignore shares that are created/updated within 6 hours.
         """
-
         msg1 = "ManilaShareMissingVolume: id=%s, status=%s, created_at=%s, updated_at=%s"
         msg = msg1 + ": Set share status to error"
         dry_run_msg = "Dry run: " + msg1
@@ -171,37 +166,60 @@ class ManilaShareSyncNanny(ManilaNanny):
                     status=share['status'],
                 ).set(1)
 
-    def process_offline_volumes(self, volumes, vstates, dry_run=True):
+    def process_offline_volumes(self, offline_volume_list, dry_run=True):
         """ offline volume
 
+        @params offline_volumes:
+            List[Volume]
+
+        Volume: Dict[Keys['volume', 'vserver', 'filer'], Any]
         """
-        print(volumes)
-        print(vstates)
 
-        msg1 = "Volume %s on filer %s is offline"
-        msg2 = "Reset status of share %s from '%s' to 'error'"
-        msg3 = "Status of share %s is '%s'"
+        _offline_volumes = {}
+        for vol in offline_volume_list:
+            if vol['volume'].startswith('share'):
+                instance_id = vol['volume'][6:].replace('_', '-')
+                _offline_volumes[instance_id] = vol
 
-        for share_id, vol in vstates.iteritems():
-            if vol['state'] == 1:
-                continue
-            # share can be deleted meanwhile
-            try:
-                s = self.manilaclient.shares.get(share_id)
-            except manilaApiExceptions.NotFound:
-                continue
-            if s.status == 'available':
-                if dry_run:
-                    log.info("Dry run: " + msg2 + ": " + msg1, vol.get('volume'),
-                             vol.get('filer'), share_id, s.status)
+        # find associated share for offline volumes
+        _shares = self._query_shares_by_instance_ids(_offline_volumes.keys())
+        for s in _shares:
+            instance_id = s['instance_id']
+            if instance_id in _offline_volumes:
+                _offline_volumes[instance_id].update({'share': s})
+
+        # ignore the shares that are updated/deleted recently
+        _offline_volume_keys = _offline_volumes.keys()
+        for vol_key in _offline_volumes.keys():
+            share = _offline_volumes.get('share')
+            if share is not None:
+                if share['updated_at'] is not None:
+                    delta = datetime.utcnow() - share['updated_at']
                 else:
-                    log.info(msg2 + ": " + msg1, vol.get('volume'),
-                             vol.get('filer'), share_id, s.status)
-                    self._reset_share_state(share_id, "error")
-                    self.MANILA_RESET_SHARE_ERROR_COUNTER.inc()
+                    delta = datetime.utcnow() - share['created_at']
+                if delta.total_seconds() < 6 * 3600:
+                    _offline_volume_keys.pop(vol)
+
+        # process remaining volume
+        for vol_key in _offline_volume_keys:
+            vol = _offline_volumes[vol_key]
+            name, filer = vol['volume'], vol['filer']
+            share = vol.get('share')
+            if share is not None:
+                share_id, status = share['share_id'], share['status']
+                log.info('OfflineVolume: %s (%s): Associated with share %s (%s)', name, filer,
+                         share_id, status)
             else:
-                log.info(msg3 + ": " + msg1, vol.get('volume'),
-                         vol.get('filer'), share_id, s.status)
+                share_id, status = '', ''
+                log.info('OfflineVolume: %s (%s): No associated share found', name, filer)
+
+            self.MANILA_OFFLINE_VOLUMES_GAUGE.labels(
+                    share_id=share_id,
+                    share_status=status,
+                    volume=vol['volume'],
+                    vserver=vol['vserver'],
+                    filer=vol['filer'],
+                ).set(1)
 
     def process_orphan_volumes(self, volumes, dry_run=True):
         """ orphan volumes
@@ -209,9 +227,6 @@ class ManilaShareSyncNanny(ManilaNanny):
         Check if the corresponding manila shares are deleted recently (hard coded as 6 hours).
         @params volumes: Dict[InstanceId, Volume]
         """
-        msg = "Orphan volume %s is found on filer %s (share_id = %s)"
-        print(volumes)
-
         # share instance id
         # volume key (extracted from volume name) is manila instance id
         vol_keys = volumes.keys()
@@ -232,7 +247,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                 deleted_at = share.get('deleted_at', None)
                 if deleted_at is not None:
                     if (datetime.utcnow() - deleted_at).total_seconds() < 6*3600:
-                        vol_keys.pop(instance_id)
+                        vol_keys.remove(instance_id)
 
         for vol_key in vol_keys:
             vol = volumes[vol_key]
@@ -242,11 +257,12 @@ class ManilaShareSyncNanny(ManilaNanny):
                 log.info("OrphanVolume: %s (%s): Associated with share %s (%s)", name, filer,
                          share_id, status)
             else:
-                share_id = ''
+                share_id, status = '', ''
                 log.info("OrphanVolume: %s (%s): No associated share", name, filer)
 
             self.MANILA_ORPHAN_VOLUMES_GAUGE.labels(
                 share_id=share_id,
+                share_status=status,
                 filer=vol['filer'],
                 vserver=vol['vserver'],
                 volume=vol['volume'],
@@ -283,33 +299,6 @@ class ManilaShareSyncNanny(ManilaNanny):
                 _filter_labels(vol['metric']) for vol in results
             ]
 
-    # def _get_netapp_volume_states(self):
-    #     results = self._fetch_prom_metrics(NETAPP_VOLUME_STATE_QUERY)
-    #     vols = {}
-    #     for s in results:
-    #         labels = s['metric']
-    #         value = s['value']
-    #         share_id = labels.get('share_id')
-    #         if share_id is not None:
-    #             vols[share_id] = dict(share_id=share_id,
-    #                                   volume=labels['volume'],
-    #                                   filer=labels['filer'],
-    #                                   state=int(value[1]))
-    #     return vols
-
-    # def get_netapp_volumes(self):
-    #     results = self._fetch_prom_metrics(NETAPP_VOLUME_QUERY)
-    #     vols = {}
-    #     for s in results:
-    #         share_id = s['metric'].get('share_id')
-    #         if share_id is not None:
-    #             vols[share_id] = dict(share_id=share_id,
-    #                                   filer=s['metric']['filer'],
-    #                                   vserver=s['metric']['vserver'],
-    #                                   volume=s['metric']['volume'],
-    #                                   size=int(s['value'][1]) / ONEGB)
-    #     return vols
-
     def _fetch_prom_metrics(self, query):
         try:
             r = requests.get(self.prom_host, params={'query': query, 'time': time.time()})
@@ -319,40 +308,26 @@ class ManilaShareSyncNanny(ManilaNanny):
             return None
         return r.json()['data']['result']
 
-    def query_share_instance_mapping(self):
-        shares = Table('shares', self.db_metadata, autoload=True)
-        instances = Table('share_instances', self.db_metadata, autoload=True)
-        q = select([shares.c.id, instances.c.id]).\
-            where(shares.c.id == instances.c.share_id).\
-            where(instances.c.deleted == 'False')
-        r = q.execute()
-        shares = {}
-        instances = {}
-        for share_id, share_instance_id in r:
-            shares[share_id] = share_instance_id
-            instances[share_instance_id] = share_id
-        return shares, instances
-
     def _query_shares_by_instance_ids(self, instance_ids):
+        """
+        @return List[Share]
+
+        Share: Dict[Keys['share_id', 'instance_id', 'created_at', 'updated_at', 'deleted_at',
+                         'status'], Any]
+        """
         shares_t = Table('shares', self.db_metadata, autoload=True)
         instances_t = Table('share_instances', self.db_metadata, autoload=True)
         q = select([shares_t.c.id.label('share_id'),
+                    shares_t.c.created_at,
+                    shares_t.c.updated_at,
                     shares_t.c.deleted_at,
                     instances_t.c.status,
                     instances_t.c.id.label('instance_id'),
-                    ]).\
-            where(shares_t.c.id == instances_t.c.share_id).\
-            where(instances_t.c.id.in_(instance_ids))
+                    ])\
+            .where(shares_t.c.id == instances_t.c.share_id)\
+            .where(instances_t.c.id.in_(instance_ids))
         r = q.execute()
         return [{k: v for k, v in zip(r.keys(), x)} for x in r.fetchall()]
-
-    def _query_shares_by_ids(self, share_ids):
-        shares_t = Table('shares', self.db_metadata, autoload=True)
-        q = select([shares_t]).where(shares_t.c.id.in_(share_ids))
-        shares = []
-        for r in q.execute():
-            shares.append({k: v for (k, v) in r.items()})
-        return shares
 
     def _query_shares(self):
         """ Get shares that are not deleted """
@@ -360,14 +335,16 @@ class ManilaShareSyncNanny(ManilaNanny):
         shares = Table('shares', self.db_metadata, autoload=True)
         instances = Table('share_instances', self.db_metadata, autoload=True)
 
-        stmt = \
-            select([
-                shares.c.id, shares.c.display_name,
-                shares.c.size, shares.c.created_at,
-                shares.c.updated_at, instances.c.id, instances.c.status])\
+        stmt = select([shares.c.id,
+                       shares.c.display_name,
+                       shares.c.size,
+                       shares.c.created_at,
+                       shares.c.updated_at,
+                       instances.c.id,
+                       instances.c.status,
+                       ])\
             .select_from(
-                shares.join(instances,
-                            shares.c.id == instances.c.share_id))\
+                shares.join(instances, shares.c.id == instances.c.share_id))\
             .where(shares.c.deleted == 'False')
 
         shares = []
@@ -383,18 +360,32 @@ class ManilaShareSyncNanny(ManilaNanny):
             })
         return shares
 
-        # shares = {}
-        # for (sid, name, size, ctime, utime, siid, status) in stmt.execute():
-        #     shares[(sid, siid)] = {
-        #         'id': sid,
-        #         'name': name,
-        #         'size': size,
-        #         'created_at': ctime,
-        #         'updated_at': utime,
-        #         'instance_id': siid,
-        #         'status': status,
-        #     }
-        # return shares
+    def _merge_share_and_volumes(self, shares, volumes):
+        """ Merge shares and volumes by share id and volume name
+
+        Assuming the volume name is `share_[share_instance_id]`. Update the share object
+        with the volume fields ("filer", "vserver", "volume", "volume_size").
+
+        Args:
+            shares: List[]
+            volumes: List[]
+
+        Return:
+            (shares, volumes): merged shares and unmerged volumes
+
+            shares: Dict[(ShareId, InstanceId): Share]
+            volumes: Dict[VolumeName: Volume]
+        """
+        _shares = {(s['id'], s['instance_id']): s for s in shares}
+        _volumes = {
+            vol['volume'][6:].replace('_', '-'): vol
+            for vol in volumes if vol['volume'].startswith('share_')
+        }
+        for (share_id, instance_id) in _shares.keys():
+            vol = _volumes.pop(instance_id, None)
+            if vol:
+                _shares[(share_id, instance_id)].update({'volume': vol})
+        return _shares, _volumes
 
     def set_share_size(self, share_id, share_size):
         now = datetime.utcnow()
