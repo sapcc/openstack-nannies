@@ -44,7 +44,7 @@ class ManilaNanny(object):
             parser.read(self.config_file)
             db_url = parser.get('database', 'connection', raw=True)
         except Exception as e:
-            print("ERROR: Parse {}: ".format(config_file) + str(e))
+            print("ERROR: Parse {}: ".format(self.config_file) + str(e))
             sys.exit(2)
         return db_url
 
