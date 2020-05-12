@@ -26,8 +26,7 @@ service_name = 'netapp-multi'
 # host needs to be set in config
 host = "%s@%s" % (CONF.host, service_name)
 
-backend = service.Service.create(binary='manila-share',
-                                    service_name=service_name, host=host)
+backend = service.Service.create(binary='manila-share', service_name=service_name, host=host)
 ctxt = context.get_admin_context()
 backend.driver.do_setup(ctxt)
 # in contrast to manila-share service enable re-export
