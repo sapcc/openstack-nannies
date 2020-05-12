@@ -28,10 +28,6 @@ from sqlalchemy import Table, and_, select, update
 
 from manilananny import ManilaNanny
 
-# from sqlalchemy import delete
-# from sqlalchemy import func
-
-
 log = logging.getLogger('nanny-manila-share-sync')
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
@@ -111,7 +107,7 @@ class ManilaShareSyncNanny(ManilaNanny):
         """ Backend volume exists, but share size does not match """
         msg = "share %s: share size != netapp volume size (%d != %d)"
         msg_dry_run = "Dry run: " + msg
-        for (share_id, _), share in shares.iteritems():
+        for (share_id, _), share in shares.items():
             if 'volume' not in share:
                 continue
             size, vsize = share['size'], share['volume']['size']
@@ -137,7 +133,7 @@ class ManilaShareSyncNanny(ManilaNanny):
         msg = msg1 + ": Set share status to error"
         dry_run_msg = "Dry run: " + msg1
 
-        for (share_id, _), share in shares.iteritems():
+        for (share_id, _), share in shares.items():
             if 'volume' not in share:
                 # check if shares are created/updated recently
                 if share['updated_at'] is not None:
@@ -182,15 +178,15 @@ class ManilaShareSyncNanny(ManilaNanny):
                 _offline_volumes[instance_id] = vol
 
         # find associated share for offline volumes
-        _shares = self._query_shares_by_instance_ids(_offline_volumes.keys())
+        _shares = self._query_shares_by_instance_ids(list(_offline_volumes.keys()))
         for s in _shares:
             instance_id = s['instance_id']
             if instance_id in _offline_volumes:
                 _offline_volumes[instance_id].update({'share': s})
 
         # ignore the shares that are updated/deleted recently
-        _offline_volume_keys = _offline_volumes.keys()
-        for vol_key in _offline_volumes.keys():
+        _offline_volume_keys = list(_offline_volumes.keys())
+        for vol_key in _offline_volumes:
             share = _offline_volumes.get('share')
             if share is not None:
                 if share['updated_at'] is not None:
@@ -198,7 +194,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                 else:
                     delta = datetime.utcnow() - share['created_at']
                 if delta.total_seconds() < 6 * 3600:
-                    _offline_volume_keys.pop(vol)
+                    _offline_volume_keys.pop(vol_key)
 
         # process remaining volume
         for vol_key in _offline_volume_keys:
@@ -214,12 +210,12 @@ class ManilaShareSyncNanny(ManilaNanny):
                 log.info('OfflineVolume: %s (%s): No associated share found', name, filer)
 
             self.MANILA_OFFLINE_VOLUMES_GAUGE.labels(
-                    share_id=share_id,
-                    share_status=status,
-                    volume=vol['volume'],
-                    vserver=vol['vserver'],
-                    filer=vol['filer'],
-                ).set(1)
+                share_id=share_id,
+                share_status=status,
+                volume=vol['volume'],
+                vserver=vol['vserver'],
+                filer=vol['filer'],
+            ).set(1)
 
     def process_orphan_volumes(self, volumes, dry_run=True):
         """ orphan volumes
@@ -240,7 +236,7 @@ class ManilaShareSyncNanny(ManilaNanny):
             volumes[s['instance_id']].update({'share': s})
 
         # loop over vol
-        for instance_id, vol in volumes.iteritems():
+        for instance_id, vol in volumes.items():
             # double check if the manila shares are deleted recently
             if 'share' in vol:
                 share = vol['share']
@@ -272,9 +268,9 @@ class ManilaShareSyncNanny(ManilaNanny):
         """ get netapp volumes from prometheus metrics
         return [<vol>, <vol>, ...]
         """
-        def _merge_dicts(a, b):
-            a.update(b)
-            return a
+        def _merge_dicts(dict_a, dict_b):
+            dict_a.update(dict_b)
+            return dict_a
 
         def _filter_labels(vol):
             return {
@@ -284,17 +280,18 @@ class ManilaShareSyncNanny(ManilaNanny):
             }
 
         if status == 'online':
-            QUERY = "netapp_volume_total_bytes{app='netapp-capacity-exporter-manila'} + "\
+            query = "netapp_volume_total_bytes{app='netapp-capacity-exporter-manila'} + "\
                     "netapp_volume_snapshot_reserved_bytes"
-            results = self._fetch_prom_metrics(QUERY)
+            results = self._fetch_prom_metrics(query)
             return [
                 _merge_dicts(_filter_labels(vol['metric']),
                              {'size': int(vol['value'][1]) / ONEGB})
                 for vol in results
             ]
-        elif status == 'offline':
-            QUERY = "netapp_volume_state{app='netapp-capacity-exporter-manila'}==3"
-            results = self._fetch_prom_metrics(QUERY)
+
+        if status == 'offline':
+            query = "netapp_volume_state{app='netapp-capacity-exporter-manila'}==3"
+            results = self._fetch_prom_metrics(query)
             return [
                 _filter_labels(vol['metric']) for vol in results
             ]
@@ -303,7 +300,7 @@ class ManilaShareSyncNanny(ManilaNanny):
         try:
             r = requests.get(self.prom_host, params={'query': query, 'time': time.time()})
         except Exception as e:
-            raise type(e)("_fetch_prom_metrics(query=\"%s\"): %s".format(query, e.message))
+            raise type(e)(f'_fetch_prom_metrics(query=\"{query}\"): {e}')
         if r.status_code != 200:
             return None
         return r.json()['data']['result']
@@ -327,7 +324,7 @@ class ManilaShareSyncNanny(ManilaNanny):
             .where(shares_t.c.id == instances_t.c.share_id)\
             .where(instances_t.c.id.in_(instance_ids))
         r = q.execute()
-        return [{k: v for k, v in zip(r.keys(), x)} for x in r.fetchall()]
+        return [dict(zip(r.keys(), x)) for x in r.fetchall()]
 
     def _query_shares(self):
         """ Get shares that are not deleted """
@@ -420,15 +417,14 @@ class ManilaShareSyncNanny(ManilaNanny):
             log.exception("_reset_share_state(share_id=%s, state=%s): %s", share_id, state, e)
 
 
-def str2bool(v):
-    if isinstance(v, bool):
-        return v
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+def str2bool(val):
+    if isinstance(val, bool):
+        return val
+    if val.lower() in ('yes', 'true', 't', 'y', '1'):
         return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+    if val.lower() in ('no', 'false', 'f', 'n', '0'):
         return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
+    raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
 def parse_cmdline_args():

@@ -1,4 +1,3 @@
-import os
 import sys
 import time
 import configparser
@@ -9,6 +8,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from keystoneauth1.identity import v3
 from keystoneauth1 import session
 from manilaclient import client
+
 
 class ManilaNanny(object):
     def __init__(self, config_file, interval, dry_run=False):
@@ -44,7 +44,7 @@ class ManilaNanny(object):
             parser.read(self.config_file)
             db_url = parser.get('database', 'connection', raw=True)
         except Exception as e:
-            print(f"ERROR: Parse {self.config_file}: " + str(e))
+            print(f'ERROR: Parse {self.config_file}: ' + str(e))
             sys.exit(2)
         return db_url
 
