@@ -186,15 +186,17 @@ class ManilaShareSyncNanny(ManilaNanny):
 
         # ignore the shares that are updated/deleted recently
         _offline_volume_keys = list(_offline_volumes.keys())
-        for vol_key in _offline_volumes:
-            share = _offline_volumes.get('share')
+        for vol_key, vol in _offline_volumes.items():
+            share = vol.get('share')
             if share is not None:
-                if share['updated_at'] is not None:
+                if share['deleted_at'] is not None:
+                    delta = datetime.utcnow() - share['deleted_at']
+                    if delta.total_seconds() < 6 * 3600:
+                        _offline_volume_keys.pop(vol_key)
+                elif share['updated_at'] is not None:
                     delta = datetime.utcnow() - share['updated_at']
-                else:
-                    delta = datetime.utcnow() - share['created_at']
-                if delta.total_seconds() < 6 * 3600:
-                    _offline_volume_keys.pop(vol_key)
+                    if delta.total_seconds() < 6 * 3600:
+                        _offline_volume_keys.pop(vol_key)
 
         # process remaining volume
         for vol_key in _offline_volume_keys:
@@ -225,7 +227,7 @@ class ManilaShareSyncNanny(ManilaNanny):
         """
         # share instance id
         # volume key (extracted from volume name) is manila instance id
-        vol_keys = volumes.keys()
+        vol_keys = list(volumes.keys())
 
         # Shares: List[Share])
         # Share.Keys: share_id, instance_id, deleted_at, status

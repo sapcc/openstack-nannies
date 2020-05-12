@@ -24,10 +24,11 @@ import logging
 import sys
 
 import sqlalchemy
-from manilananny import ManilaNanny
 from prettytable import PrettyTable
 from prometheus_client import Counter, start_http_server
 from sqlalchemy import Table, and_, func, select
+
+from manilananny import ManilaNanny
 
 
 class ManilaQuotaSyncNanny(ManilaNanny):
@@ -41,9 +42,8 @@ class ManilaQuotaSyncNanny(ManilaNanny):
         networks_t = Table('share_networks', self.db_metadata, autoload=True)
         networks_q = select(columns=[networks_t.c.id,
                                      networks_t.c.user_id],
-                            whereclause=and_(
-                                    networks_t.c.deleted == "False",
-                                    networks_t.c.project_id == project_id))
+                            whereclause=and_(networks_t.c.deleted == "False",
+                                             networks_t.c.project_id == project_id))
         return networks_q.execute()
 
     def get_snapshot_usages_project(self, project_id):
@@ -82,9 +82,8 @@ class ManilaQuotaSyncNanny(ManilaNanny):
                                          quota_usages_t.c.user_id,
                                          quota_usages_t.c.share_type_id,
                                          quota_usages_t.c.in_use],
-                                whereclause=and_(
-                                        quota_usages_t.c.deleted == 0,
-                                        quota_usages_t.c.project_id == project_id))
+                                whereclause=and_(quota_usages_t.c.deleted == 0,
+                                                 quota_usages_t.c.project_id == project_id))
         return quota_usages_q.execute()
 
     def get_resource_types(self, project_id):
@@ -108,12 +107,12 @@ class ManilaQuotaSyncNanny(ManilaNanny):
         now = datetime.datetime.utcnow()
         quota_usages_t = Table('quota_usages', self.db_metadata, autoload=True)
         # a tuple is used here to have a dict value per project and user
-        for resource_tuple, quota in quota_to_sync_by_user.iteritems():
+        for resource_tuple, quota in quota_to_sync_by_user.items():
             quota_usages_t.update().values(updated_at=now, in_use=quota).where(and_(
-                    quota_usages_t.c.project_id == project_id,
-                    quota_usages_t.c.resource == resource_tuple[0],
-                    quota_usages_t.c.user_id == resource_tuple[1])).execute()
-        for (resource, share_type_id), quota in quota_to_sync_by_type.iteritems():
+                quota_usages_t.c.project_id == project_id,
+                quota_usages_t.c.resource == resource_tuple[0],
+                quota_usages_t.c.user_id == resource_tuple[1])).execute()
+        for (resource, share_type_id), quota in quota_to_sync_by_type.items():
             quota_usages_t.update().values(updated_at=now, in_use=quota).where(and_(
                 quota_usages_t.c.project_id == project_id,
                 quota_usages_t.c.resource == resource,
@@ -149,7 +148,7 @@ class ManilaQuotaSyncNanny(ManilaNanny):
                 real_usages[("shares", user, share_type_id)] = real_usages.get(("shares", user, share_type_id), 0) + 1
                 real_usages[("gigabytes", user, share_type_id)] = real_usages.get(("gigabytes", user, share_type_id), 0) + size
             for (_, user, size, share_type_id) in self.get_snapshot_usages_project(project_id):
-                real_usages[("snapshots",user, share_type_id)] = real_usages.get(("snapshots",user, share_type_id), 0) + 1
+                real_usages[("snapshots", user, share_type_id)] = real_usages.get(("snapshots", user, share_type_id), 0) + 1
                 real_usages[("snapshot_gigabytes", user, share_type_id)] = real_usages.get(("snapshot_gigabytes", user, share_type_id), 0) + size
             for (_, user) in self.get_share_networks_usages_project(project_id):
                 real_usages[("share_networks", user, None)] = real_usages.get(("share_networks", user, None), 0) + 1
@@ -158,10 +157,10 @@ class ManilaQuotaSyncNanny(ManilaNanny):
             quota_usages_by_user_to_sync = {}
             quota_usages_by_type_to_sync = {}
 
-            quota_usages_by_user = { (r, u): q for (r, u, _), q in quota_usages.items() if u is not None }
-            quota_usages_by_type = { (r, t): q for (r, _, t), q in quota_usages.items() if t is not None }
-            quota_usages_by_user_sorted_keys = sorted([k for k in quota_usages_by_user.keys()], key=lambda k: k[1])
-            quota_usages_by_type_sorted_keys = sorted([k for k in quota_usages_by_type.keys()], key=lambda k: k[1])
+            quota_usages_by_user = {(r, u): q for (r, u, _), q in quota_usages.items() if u is not None}
+            quota_usages_by_type = {(r, t): q for (r, _, t), q in quota_usages.items() if t is not None}
+            quota_usages_by_user_sorted_keys = sorted(list(quota_usages_by_user.keys()), key=lambda k: k[1])
+            quota_usages_by_type_sorted_keys = sorted(list(quota_usages_by_type.keys()), key=lambda k: k[1])
 
             real_usages_by_user = {}
             for (r, u, t), q in real_usages.items():
@@ -243,7 +242,7 @@ def main():
     try:
         start_http_server(args.promport)
     except Exception as e:
-        logging.fatal("start_http_server: " + str(e))
+        logging.fatal("start_http_server: %s", e)
         sys.exit(-1)
 
     # args.dry_run = True
