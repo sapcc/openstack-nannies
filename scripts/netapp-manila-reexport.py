@@ -17,16 +17,20 @@
 #
 # this script re-exports share instances from manila to netapp
 
-from oslo_config import cfg
 from manila import context
 from manila import service
+from oslo_config import cfg
 
 CONF = cfg.CONF
-service_name = 'netapp-multi'
-# host needs to be set in config
-host = "%s@%s" % (CONF.host, service_name)
 
-backend = service.Service.create(binary='manila-share', service_name=service_name, host=host)
+
+if CONF.enabled_share_backends:
+    for service_name in CONF.enabled_share_backends:
+        host = "%s@%s" % (CONF.host, service_name)
+        backend = service.Service.create(binary='manila-share',
+                                         service_name=service_name,
+                                         host=host)
+
 ctxt = context.get_admin_context()
 backend.driver.do_setup(ctxt)
 # in contrast to manila-share service enable re-export
