@@ -192,11 +192,11 @@ class ManilaShareSyncNanny(ManilaNanny):
                 if share['deleted_at'] is not None:
                     delta = datetime.utcnow() - share['deleted_at']
                     if delta.total_seconds() < 6 * 3600:
-                        _offline_volume_keys.pop(vol_key)
+                        _offline_volume_keys.remove(vol_key)
                 elif share['updated_at'] is not None:
                     delta = datetime.utcnow() - share['updated_at']
                     if delta.total_seconds() < 6 * 3600:
-                        _offline_volume_keys.pop(vol_key)
+                        _offline_volume_keys.remove(vol_key)
 
         # process remaining volume
         for vol_key in _offline_volume_keys:
