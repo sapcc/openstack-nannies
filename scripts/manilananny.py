@@ -40,7 +40,7 @@ class ManilaNanny(object):
     def get_db_url(self):
         """Return the database connection string from the config file"""
         try:
-            parser = configparser.SafeConfigParser()
+            parser = configparser.ConfigParser()
             parser.read(self.config_file)
             db_url = parser.get('database', 'connection', raw=True)
         except Exception as e:
@@ -59,7 +59,7 @@ def create_manila_client(config_file, version="2.7"):
         :return client.Client manila:  manila client
     """
     try:
-        parser = configparser.SafeConfigParser()
+        parser = configparser.ConfigParser()
         parser.read(config_file)
         auth_url = parser.get('keystone_authtoken', 'www_authenticate_uri')
         username = parser.get('keystone_authtoken', 'username')
