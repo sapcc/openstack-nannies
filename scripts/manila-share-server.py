@@ -104,7 +104,7 @@ def str2bool(val):
 def parse_cmdline_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config",
-                        default='/manila-etc/manila.conf',
+                        default='/etc/manila/manila.conf',
                         help='configuration file')
     parser.add_argument("--interval",
                         type=float,
