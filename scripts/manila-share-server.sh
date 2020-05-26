@@ -28,5 +28,6 @@ echo "INFO: working on manila share server"
 /var/lib/openstack/bin/python /scripts/manila-share-server.py \
     --config /etc/manila/manila.conf \
     --interval $MANILA_NANNY_INTERVAL \
-    --port $MANILA_NANNY_SHARE_SERVER_PORT
+    --prom-port $MANILA_NANNY_PROMETHEUS_PORT \
+    --listen-port $MANILA_NANNY_LISTEN_PORT
 

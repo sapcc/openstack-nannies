@@ -18,11 +18,13 @@
 from __future__ import absolute_import
 
 import argparse
+import datetime
+import sys
 from http.server import BaseHTTPRequestHandler
 from threading import Lock
 from typing import Dict, List, Tuple
-import datetime
 
+from prometheus_client import Counter, Gauge
 from sqlalchemy import Table, and_, func, select
 
 from manilananny import ManilaNanny, response
@@ -43,10 +45,17 @@ class MyHandler(BaseHTTPRequestHandler):
 
 class ManilaShareServerNanny(ManilaNanny):
     """ Manila Share Server """
-    def __init__(self, config_file, interval, port, handler):
-        super(ManilaShareServerNanny, self).__init__(config_file, interval, port=port, handler=handler)
+    def __init__(self, config_file, interval, prom_port, port, handler):
+        super(ManilaShareServerNanny, self).__init__(config_file,
+                                                     interval,
+                                                     prom_port=prom_port,
+                                                     port=port,
+                                                     handler=handler)
         self.orphan_share_servers_lock = Lock()
         self.orphan_share_servers: Dict[str, Dict[str, str]] = {}
+        self.orphan_share_server_gauge = Gauge('manila_nanny_orphan_share_servers',
+                                               'Orphan Manila Share Servers',
+                                               ['id'])
 
     def _run(self):
         s = self.query_share_server_count_share_instance()
@@ -57,6 +66,8 @@ class ManilaShareServerNanny(ManilaNanny):
             }
             for (share_server_id, count) in s
             if count == 0}
+        for share_server_id in orphan_share_servers:
+            self.orphan_share_server_gauge.labels(id=share_server_id).set(1)
         with self.orphan_share_servers_lock:
             self.orphan_share_servers = update_dict(self.orphan_share_servers, orphan_share_servers)
 
@@ -110,19 +121,23 @@ def parse_cmdline_args():
                         type=float,
                         default=3600,
                         help="interval")
-    parser.add_argument("--port",
+    parser.add_argument("--listen-port",
                         type=int,
                         default=8000,
+                        help="http server listen port")
+    parser.add_argument("--prom-port",
+                        type=int,
+                        default=9000,
                         help="http server listen port")
     return parser.parse_args()
 
 def main():
     args = parse_cmdline_args()
-
     ManilaShareServerNanny(
         args.config,
         args.interval,
-        port=args.port,
+        prom_port=args.prom_port,
+        port=args.listen_port,
         handler=MyHandler
     ).run()
 

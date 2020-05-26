@@ -10,31 +10,40 @@ from threading import Thread
 from keystoneauth1 import session
 from keystoneauth1.identity import v3
 from manilaclient import client
+from prometheus_client import start_http_server
 from sqlalchemy import MetaData, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 
 class ManilaNanny(http.server.HTTPServer):
-    def __init__(self, config_file, interval, dry_run=False, address="", port=8000, handler=None):
+    ''' Manila Nanny '''
+    def __init__(self, config_file, interval, dry_run=False, prom_port=0, address="", port=8000, handler=None):
         self.config_file = config_file
         self.interval = interval
         self.dry_run = dry_run
         self.init_db_connection()
         self.manilaclient = create_manila_client(config_file)
-        self.handler = handler
-        self.address = address
-        self.port = port
+
+        if prom_port != 0:
+            try:
+                start_http_server(prom_port)
+            except Exception as e:
+                sys.stdout.write("prometheus_client:start_http_server: " + str(e) + "\n")
+                sys.exit(-1)
+
+        # Initialize the class as http server. The handler needs to access the variables
+        # in the class
+        if handler:
+            super(ManilaNanny, self).__init__((address, port), handler)
+            thread = Thread(target=self.serve_forever, args=())
+            thread.setDaemon(True)
+            thread.start()
 
     def _run(self):
         raise Exception('not implemented')
 
     def run(self):
-        if self.handler:
-            super(ManilaNanny, self).__init__((self.address, self.port), self.handler)
-            thread = Thread(target=self.serve_forever, args=())
-            thread.setDaemon(True)
-            thread.start()
         while True:
             self._run()
             time.sleep(self.interval)
