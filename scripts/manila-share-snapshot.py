@@ -1,4 +1,4 @@
-# Copyright (c) 2018 SAP SE
+# Copyright (c) 2020 SAP SE
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -19,10 +19,10 @@ import argparse
 import datetime
 from http.server import BaseHTTPRequestHandler
 from threading import Lock
-from typing import Dict, List, Tuple
+from typing import Dict
 
 from prometheus_client import Gauge
-from sqlalchemy import Table, and_, func, select
+from sqlalchemy import Table, select
 
 from manilananny import ManilaNanny, response, update_dict
 
@@ -31,7 +31,7 @@ class MyHandler(BaseHTTPRequestHandler):
     ''' http server handler '''
     def do_GET(self):
         if self.path == '/':
-            status_code, header, data = self.server.get_orphan_share_servers()
+            status_code, header, data = self.server.get_orphan_snapshots()
         else:
             status_code, header, data = self.server.undefined_route(self.path)
         self.send_response(status_code)
@@ -48,47 +48,39 @@ class ManilaShareServerNanny(ManilaNanny):
                                                      prom_port=prom_port,
                                                      port=port,
                                                      handler=handler)
-        self.orphan_share_servers_lock = Lock()
-        self.orphan_share_servers: Dict[str, Dict[str, str]] = {}
-        self.orphan_share_server_gauge = Gauge('manila_nanny_orphan_share_servers',
-                                               'Orphan Manila Share Servers',
-                                               ['id'])
+        self.orphan_snapshots_lock = Lock()
+        self.orphan_snapshots: Dict[str, Dict[str, str]] = {}
+        self.orphan_snapshots_gauge = Gauge('manila_nanny_orphan_share_snapshots',
+                                            'Orphan Manila Share Snapshots',
+                                            ['id'])
 
     def _run(self):
-        s = self.query_share_server_count_share_instance()
-        orphan_share_servers = {
-            share_server_id: {
-                'share_server_id': share_server_id,
+        s = self.query_orphan_snapshots()
+        orphan_snapshots = {
+            snapshot_id: {
+                'snapshot_id': snapshot_id,
+                'share_id': share_id,
                 'first_seen_ts': datetime.datetime.utcnow()
             }
-            for (share_server_id, count) in s
-            if count == 0}
-        for share_server_id in orphan_share_servers:
-            self.orphan_share_server_gauge.labels(id=share_server_id).set(1)
-        with self.orphan_share_servers_lock:
-            self.orphan_share_servers = update_dict(self.orphan_share_servers, orphan_share_servers)
+            for snapshot_id, share_id in s}
+        with self.orphan_snapshots_lock:
+            self.orphan_snapshots = update_dict(self.orphan_snapshots, orphan_snapshots)
+        for snapshot_id in orphan_snapshots:
+            self.orphan_snapshots_gauge.labels(id=snapshot_id).set(1)
 
-    def query_share_server_count_share_instance(self) -> List[Tuple[str, int]]:
-        """ share servers and count of undeleted share instances """
-        instances_t = Table('share_instances', self.db_metadata, autoload=True)
-        s_servers_t = Table('share_servers', self.db_metadata, autoload=True)
-
-        q = select([s_servers_t.c.id.label('ssid'),
-                    func.count(instances_t.c.id)])\
-            .select_from(
-                s_servers_t.outerjoin(instances_t,
-                                      and_(instances_t.c.share_server_id == s_servers_t.c.id,
-                                           instances_t.c.deleted == 'False')))\
-            .where(s_servers_t.c.deleted == 'False')\
-            .group_by('ssid')
-        r = q.execute()
-        return list(r)
+    def query_orphan_snapshots(self):
+        Snapshots = Table('share_snapshots', self.db_metadata, autoload=True)
+        Shares = Table('shares', self.db_metadata, autoload=True)
+        q = select([Snapshots.c.id, Snapshots.c.share_id])\
+            .select_from(Snapshots.join(Shares, Snapshots.c.share_id == Shares.c.id))\
+            .where(Snapshots.c.deleted == 'False')\
+            .where(Shares.c.deleted != 'False')
+        return list(q.execute())
 
     @response
-    def get_orphan_share_servers(self):
-        with self.orphan_share_servers_lock:
-            orphan_share_servers = list(self.orphan_share_servers.values())
-        return orphan_share_servers
+    def get_orphan_snapshots(self):
+        with self.orphan_snapshots_lock:
+            return list(self.orphan_snapshots.values())
 
 
 def parse_cmdline_args():

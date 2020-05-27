@@ -115,6 +115,15 @@ def create_manila_client(config_file, version="2.7"):
     return manila
 
 
+def str2bool(val):
+    if isinstance(val, bool):
+        return val
+    if val.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    if val.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    raise argparse.ArgumentTypeError('Boolean value expected.')
+
 def response(func):
     def wrapper_func(self, *args, **kwargs):
         try:
@@ -132,3 +141,13 @@ def response(func):
             message = '\r\n'.join(message_parts)
             return status_code, header, message
     return wrapper_func
+
+def update_dict(target_dict, new_dict):
+    old_dict = target_dict
+    target_dict = {}
+    for key in new_dict:
+        if key in old_dict:
+            target_dict[key] = old_dict[key]
+        else:
+            target_dict[key] = new_dict[key]
+    return target_dict
