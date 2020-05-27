@@ -17,15 +17,14 @@ from __future__ import absolute_import
 
 import argparse
 import datetime
-import sys
 from http.server import BaseHTTPRequestHandler
 from threading import Lock
-from typing import Dict, List, Tuple
+from typing import Dict
 
-from prometheus_client import Counter, Gauge
-from sqlalchemy import Table, and_, func, select
+from prometheus_client import Gauge
+from sqlalchemy import Table, select
 
-from manilananny import ManilaNanny, response, str2bool, update_dict
+from manilananny import ManilaNanny, response, update_dict
 
 
 class MyHandler(BaseHTTPRequestHandler):
@@ -83,24 +82,15 @@ class ManilaShareServerNanny(ManilaNanny):
         with self.orphan_snapshots_lock:
             return list(self.orphan_snapshots.values())
 
+
 def parse_cmdline_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config",
-                        default='/etc/manila/manila.conf',
-                        help='configuration file')
-    parser.add_argument("--interval",
-                        type=float,
-                        default=3600,
-                        help="interval")
-    parser.add_argument("--listen-port",
-                        type=int,
-                        default=8000,
-                        help="http server listen port")
-    parser.add_argument("--prom-port",
-                        type=int,
-                        default=9000,
-                        help="http server listen port")
+    parser.add_argument("--config", default='/etc/manila/manila.conf', help='configuration file')
+    parser.add_argument("--interval", type=float, default=3600, help="interval")
+    parser.add_argument("--listen-port", type=int, default=8000, help="http server listen port")
+    parser.add_argument("--prom-port", type=int, default=9000, help="http server listen port")
     return parser.parse_args()
+
 
 def main():
     args = parse_cmdline_args()
@@ -111,6 +101,7 @@ def main():
         port=args.listen_port,
         handler=MyHandler
     ).run()
+
 
 if __name__ == "__main__":
     main()

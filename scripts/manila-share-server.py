@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-#
 # Copyright (c) 2018 SAP SE
 # All Rights Reserved.
 #
@@ -19,15 +17,14 @@ from __future__ import absolute_import
 
 import argparse
 import datetime
-import sys
 from http.server import BaseHTTPRequestHandler
 from threading import Lock
 from typing import Dict, List, Tuple
 
-from prometheus_client import Counter, Gauge
+from prometheus_client import Gauge
 from sqlalchemy import Table, and_, func, select
 
-from manilananny import ManilaNanny, response
+from manilananny import ManilaNanny, response, update_dict
 
 
 class MyHandler(BaseHTTPRequestHandler):
@@ -93,43 +90,15 @@ class ManilaShareServerNanny(ManilaNanny):
             orphan_share_servers = list(self.orphan_share_servers.values())
         return orphan_share_servers
 
-def update_dict(target_dict, new_dict):
-    old_dict = target_dict
-    target_dict = {}
-    for key in new_dict:
-        if key in old_dict:
-            target_dict[key] = old_dict[key]
-        else:
-            target_dict[key] = new_dict[key]
-    return target_dict
-
-def str2bool(val):
-    if isinstance(val, bool):
-        return val
-    if val.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    if val.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    raise argparse.ArgumentTypeError('Boolean value expected.')
 
 def parse_cmdline_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config",
-                        default='/etc/manila/manila.conf',
-                        help='configuration file')
-    parser.add_argument("--interval",
-                        type=float,
-                        default=3600,
-                        help="interval")
-    parser.add_argument("--listen-port",
-                        type=int,
-                        default=8000,
-                        help="http server listen port")
-    parser.add_argument("--prom-port",
-                        type=int,
-                        default=9000,
-                        help="http server listen port")
+    parser.add_argument("--config", default='/etc/manila/manila.conf', help='configuration file')
+    parser.add_argument("--interval", type=float, default=3600, help="interval")
+    parser.add_argument("--listen-port", type=int, default=8000, help="http server listen port")
+    parser.add_argument("--prom-port", type=int, default=9000, help="http server listen port")
     return parser.parse_args()
+
 
 def main():
     args = parse_cmdline_args()
