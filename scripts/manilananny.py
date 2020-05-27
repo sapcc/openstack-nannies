@@ -115,6 +115,15 @@ def create_manila_client(config_file, version="2.7"):
     return manila
 
 
+def str2bool(val):
+    if isinstance(val, bool):
+        return val
+    if val.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    if val.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    raise argparse.ArgumentTypeError('Boolean value expected.')
+
 def response(func):
     def wrapper_func(self, *args, **kwargs):
         try:
