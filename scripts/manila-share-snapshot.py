@@ -60,7 +60,7 @@ class ManilaShareServerNanny(ManilaNanny):
             snapshot_id: {
                 'snapshot_id': snapshot_id,
                 'share_id': share_id,
-                'first_seen_ts': datetime.datetime.utcnow()
+                'since': datetime.datetime.utcnow()
             }
             for snapshot_id, share_id in s}
         with self.orphan_snapshots_lock:

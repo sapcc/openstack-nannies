@@ -59,7 +59,7 @@ class ManilaShareServerNanny(ManilaNanny):
         orphan_share_servers = {
             share_server_id: {
                 'share_server_id': share_server_id,
-                'first_seen_ts': datetime.datetime.utcnow()
+                'since': datetime.datetime.utcnow()
             }
             for (share_server_id, count) in s
             if count == 0}
