@@ -1,22 +1,44 @@
+from __future__ import absolute_import
+
+import configparser
+import http.server
+import json
 import sys
 import time
-import configparser
-from sqlalchemy import MetaData
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
-from keystoneauth1.identity import v3
+from threading import Thread
+
 from keystoneauth1 import session
+from keystoneauth1.identity import v3
 from manilaclient import client
+from prometheus_client import start_http_server
+from sqlalchemy import MetaData, create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
 
-class ManilaNanny(object):
-    def __init__(self, config_file, interval, dry_run=False):
+class ManilaNanny(http.server.HTTPServer):
+    ''' Manila Nanny '''
+    def __init__(self, config_file, interval, dry_run=False, prom_port=0, address="", port=8000, handler=None):
         self.config_file = config_file
         self.interval = interval
         self.dry_run = dry_run
         self.init_db_connection()
         self.manilaclient = create_manila_client(config_file)
+
+        if prom_port != 0:
+            try:
+                start_http_server(prom_port)
+            except Exception as e:
+                sys.stdout.write("prometheus_client:start_http_server: " + str(e) + "\n")
+                sys.exit(-1)
+
+        # Initialize the class as http server. The handler needs to access the variables
+        # in the class
+        if handler:
+            super(ManilaNanny, self).__init__((address, port), handler)
+            thread = Thread(target=self.serve_forever, args=())
+            thread.setDaemon(True)
+            thread.start()
 
     def _run(self):
         raise Exception('not implemented')
@@ -40,7 +62,7 @@ class ManilaNanny(object):
     def get_db_url(self):
         """Return the database connection string from the config file"""
         try:
-            parser = configparser.SafeConfigParser()
+            parser = configparser.ConfigParser()
             parser.read(self.config_file)
             db_url = parser.get('database', 'connection', raw=True)
         except Exception as e:
@@ -51,6 +73,15 @@ class ManilaNanny(object):
     def renew_manila_client(self):
         self.manilaclient = create_manila_client(self.config_file, "2.7")
 
+    def undefined_route(self, route):
+        status_code = 500
+        header = ('Content-Type', 'text/html; charset=UTF-8')
+        message_parts = [
+            f'{route} is not defined in {self.__class__}',
+        ]
+        message = '\r\n'.join(message_parts)
+        return status_code, header, message
+
 
 def create_manila_client(config_file, version="2.7"):
     """  Parse config file and create manila client
@@ -59,7 +90,7 @@ def create_manila_client(config_file, version="2.7"):
         :return client.Client manila:  manila client
     """
     try:
-        parser = configparser.SafeConfigParser()
+        parser = configparser.ConfigParser()
         parser.read(config_file)
         auth_url = parser.get('keystone_authtoken', 'www_authenticate_uri')
         username = parser.get('keystone_authtoken', 'username')
@@ -82,3 +113,22 @@ def create_manila_client(config_file, version="2.7"):
     sess = session.Session(auth=auth)
     manila = client.Client(version, session=sess)
     return manila
+
+
+def response(func):
+    def wrapper_func(self, *args, **kwargs):
+        try:
+            status_code = 200
+            header = ('Content-Type', 'application/json')
+            data = func(self, *args, **kwargs)
+            data = json.dumps(data, indent=4, sort_keys=True, default=str)
+            return status_code, header, data
+        except Exception as e:
+            status_code = 500
+            header = ('Content-Type', 'text/html; charset=UTF-8')
+            message_parts = [
+                str(e),
+            ]
+            message = '\r\n'.join(message_parts)
+            return status_code, header, message
+    return wrapper_func
