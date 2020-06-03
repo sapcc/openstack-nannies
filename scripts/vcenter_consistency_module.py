@@ -605,7 +605,7 @@ class ConsistencyCheck:
                                 # if we have my_volume_uuid, which is either the uuid from the backing config or (if that does not exist or is not
                                 # in cinder) will be extracted from the filename, then we assume this volume uuid to be attached to the instance
                                 # and we only care about openstack instances (with annotations) here
-                                if my_volume_uuid and openstack_re.match(k.get('config.annotation')):
+                                if my_volume_uuid and openstack_re.match(k.get('config.annotation', 'no_annotation')):
                                     # map attached volume id to instance uuid - used later
                                     self.vc_server_uuid_with_mounted_volume[my_volume_uuid] = k['config.instanceUuid']
                                     # map attached volume id to instance name - used later for more detailed logging

@@ -614,7 +614,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
     # iterate over the list of vms
     for k in data:
         # only work with results, which have an instance uuid defined and are openstack vms (i.e. have an annotation set)
-        if k.get('config.instanceUuid') and openstack_re.match(k.get('config.annotation')):
+        if k.get('config.instanceUuid') and openstack_re.match(k.get('config.annotation', 'no_annotation')):
             # check if this instance is a vcenter template
             if k.get('config.template'):
                 template[k['config.instanceUuid']] = k['config.template']
@@ -1250,7 +1250,7 @@ def sync_volume_attachments(host, username, password, dry_run, service_instance,
     # iterate over the list of vms
     for k in data:
         # only work with results, which have an instance uuid defined and are openstack vms (i.e. have an annotation set)
-        if k.get('config.instanceUuid') and openstack_re.match(k.get('config.annotation')) and not k.get('config.template'):
+        if k.get('config.instanceUuid') and openstack_re.match(k.get('config.annotation', 'no_annotation')) and not k.get('config.template'):
             # build a list of all openstack volumes in the vcenter to later compare it to the volumes in openstack
             vc_all_servers.append(k['config.instanceUuid'])
             # debug code
