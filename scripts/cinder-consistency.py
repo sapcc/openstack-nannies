@@ -191,7 +191,7 @@ def get_wrong_volume_admin_metadata(meta):
     wrong_volume_admin_metadata_q = select(columns=columns).select_from(admin_metadata_join).\
         where(and_(volumes_t.c.deleted == 1, volume_admin_metadata_t.c.deleted == 0))
 
-    # return a dict indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments
+    # return a dict indexed by volume_admin_metadata_id and with the value volume_id for non deleted volume_admin_metadata
     for (volume_id, volume_deleted, volume_admin_metadata_id, volume_admin_metadata_deleted) in wrong_volume_admin_metadata_q.execute():
         wrong_admin_metadata[volume_admin_metadata_id] = volume_id
     return wrong_admin_metadata
@@ -210,6 +210,36 @@ def fix_wrong_volume_admin_metadata(meta, wrong_admin_metadata):
         delete_volume_admin_metadata_q.execute()
 
 
+# get all the rows with a volume_glance_metadata still defined where the corresponding volume is already deleted
+def get_wrong_volume_glance_metadata(meta):
+
+    wrong_glance_metadata = {}
+    volume_glance_metadata_t = Table('volume_glance_metadata', meta, autoload=True)
+    volumes_t = Table('volumes', meta, autoload=True)
+    glance_metadata_join = volume_glance_metadata_t.join(volumes_t,volume_glance_metadata_t.c.volume_id == volumes_t.c.id)
+    columns = [volumes_t.c.id, volumes_t.c.deleted, volume_glance_metadata_t.c.id, volume_glance_metadata_t.c.deleted]
+    wrong_volume_glance_metadata_q = select(columns=columns).select_from(glance_metadata_join).\
+        where(and_(volumes_t.c.deleted == 1, volume_glance_metadata_t.c.deleted == 0))
+
+    # return a dict indexed by volume_glance_metadata_id and with the value volume_id for non deleted volume_glance_metadata
+    for (volume_id, volume_deleted, volume_glance_metadata_id, volume_glance_metadata_deleted) in wrong_volume_glance_metadata_q.execute():
+        wrong_glance_metadata[volume_glance_metadata_id] = volume_id
+    return wrong_glance_metadata
+
+
+# delete volume_glance_metadata still defined where the corresponding volume is already deleted
+def fix_wrong_volume_glance_metadata(meta, wrong_glance_metadata):
+
+    volume_glance_metadata_t = Table('volume_glance_metadata', meta, autoload=True)
+
+    for volume_glance_metadata_id in wrong_glance_metadata:
+        log.info("-- action: deleting volume_glance_metadata id: %s", volume_glance_metadata_id)
+        now = datetime.datetime.utcnow()
+        delete_volume_glance_metadata_q = volume_glance_metadata_t.update().\
+            where(volume_glance_metadata_t.c.id == volume_glance_metadata_id).values(updated_at=now, deleted_at=now, deleted=1)
+        delete_volume_glance_metadata_q.execute()
+
+
 # get all the rows with a volume_metadata still defined where the corresponding volume is already deleted
 def get_wrong_volume_metadata(meta):
 
@@ -221,7 +251,7 @@ def get_wrong_volume_metadata(meta):
     wrong_volume_metadata_q = select(columns=columns).select_from(metadata_join).\
         where(and_(volumes_t.c.deleted == 1, volume_metadata_t.c.deleted == 0))
 
-    # return a dict indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments
+    # return a dict indexed by volume_metadata_id and with the value volume_id for non deleted volume_metadata
     for (volume_id, volume_deleted, volume_metadata_id, volume_metadata_deleted) in wrong_volume_metadata_q.execute():
         wrong_metadata[volume_metadata_id] = volume_id
     return wrong_metadata
@@ -454,6 +484,19 @@ def main():
             fix_wrong_volume_admin_metadata(cinder_metadata, wrong_admin_metadata)
     else:
         log.info("- volume_admin_metadata entries are consistent")
+
+    # fixing possible wrong glance_metadata entries
+    wrong_glance_metadata = get_wrong_volume_glance_metadata(cinder_metadata)
+    if len(wrong_glance_metadata) != 0:
+        log.info("- volume_glance_metadata inconsistencies found")
+        # print out what we would delete
+        for volume_glance_metadata_id in wrong_glance_metadata:
+            log.info("-- volume_glance_metadata id: %s - deleted volume id: %s", volume_glance_metadata_id, wrong_glance_metadata[volume_glance_metadata_id])
+        if not args.dry_run:
+            log.info("- removing volume_glance_metadata inconsistencies found")
+            fix_wrong_volume_glance_metadata(cinder_metadata, wrong_glance_metadata)
+    else:
+        log.info("- volume_glance_metadata entries are consistent")
 
     # fixing possible wrong metadata entries
     wrong_metadata = get_wrong_volume_metadata(cinder_metadata)
