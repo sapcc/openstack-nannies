@@ -26,7 +26,7 @@ import requests
 from prometheus_client import Counter, Gauge, start_http_server
 from sqlalchemy import Table, and_, select, update
 
-from manilananny import ManilaNanny
+from manilananny import ManilaNanny, is_utcts_recent
 
 log = logging.getLogger('nanny-manila-share-sync')
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
@@ -115,6 +115,10 @@ class ManilaShareSyncNanny(ManilaNanny):
             # volume size can not be zero, could be in offline state
             if vsize == 0:
                 continue
+
+            if share['updated_at'] is not None:
+                if is_utcts_recent(share['updated_at'], 3600):
+                    continue
 
             if size != vsize:
                 if dry_run:

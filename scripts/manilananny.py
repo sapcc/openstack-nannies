@@ -1,6 +1,8 @@
 from __future__ import absolute_import
 
+import argparse
 import configparser
+import datetime
 import http.server
 import json
 import sys
@@ -151,3 +153,9 @@ def update_dict(target_dict, new_dict):
         else:
             target_dict[key] = new_dict[key]
     return target_dict
+
+def is_utcts_recent(ts: datetime.datetime, seconds):
+    delta = datetime.datetime.utcnow() - ts
+    if delta.total_seconds() < seconds:
+        return True
+    return False
