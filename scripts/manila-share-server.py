@@ -42,11 +42,11 @@ class MyHandler(BaseHTTPRequestHandler):
 
 class ManilaShareServerNanny(ManilaNanny):
     """ Manila Share Server """
-    def __init__(self, config_file, interval, prom_port, port, handler):
+    def __init__(self, config_file, interval, prom_port, http_port, handler):
         super(ManilaShareServerNanny, self).__init__(config_file,
                                                      interval,
                                                      prom_port=prom_port,
-                                                     port=port,
+                                                     http_port=http_port,
                                                      handler=handler)
         self.orphan_share_servers_lock = Lock()
         self.orphan_share_servers: Dict[str, Dict[str, str]] = {}
@@ -106,7 +106,7 @@ def main():
         args.config,
         args.interval,
         prom_port=args.prom_port,
-        port=args.listen_port,
+        http_port=args.listen_port,
         handler=MyHandler
     ).run()
 

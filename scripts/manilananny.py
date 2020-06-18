@@ -20,7 +20,7 @@ from sqlalchemy.orm import sessionmaker
 
 class ManilaNanny(http.server.HTTPServer):
     ''' Manila Nanny '''
-    def __init__(self, config_file, interval, dry_run=False, prom_port=0, address="", port=8000, handler=None):
+    def __init__(self, config_file, interval, dry_run=False, prom_port=0, address="", http_port=8000, handler=None):
         self.config_file = config_file
         self.interval = interval
         self.dry_run = dry_run
@@ -37,7 +37,7 @@ class ManilaNanny(http.server.HTTPServer):
         # Initialize the class as http server. The handler needs to access the variables
         # in the class
         if handler:
-            super(ManilaNanny, self).__init__((address, port), handler)
+            super(ManilaNanny, self).__init__((address, http_port), handler)
             thread = Thread(target=self.serve_forever, args=())
             thread.setDaemon(True)
             thread.start()
@@ -153,6 +153,17 @@ def update_dict(target_dict, new_dict):
         else:
             target_dict[key] = new_dict[key]
     return target_dict
+
+def update_records(old, new):
+    result = {}
+    for k in new:
+        if k in old:
+            result[k] = old[k]
+        else:
+            result[k] = new[k]
+            result[k]['since'] = datetime.datetime.utcnow()
+    return result
+
 
 def is_utcts_recent(ts: datetime.datetime, seconds):
     delta = datetime.datetime.utcnow() - ts

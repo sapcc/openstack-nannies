@@ -15,18 +15,20 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 #
+from __future__ import absolute_import
 
 import argparse
 import logging
-import sys
 import time
 from datetime import datetime
+from http.server import BaseHTTPRequestHandler
+from threading import Lock
 
 import requests
-from prometheus_client import Counter, Gauge, start_http_server
+from prometheus_client import Counter, Gauge
 from sqlalchemy import Table, and_, select, update
 
-from manilananny import ManilaNanny, is_utcts_recent
+from manilananny import ManilaNanny, is_utcts_recent, response, update_records
 
 log = logging.getLogger('nanny-manila-share-sync')
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
@@ -39,10 +41,24 @@ TASK_OFFLINE_VOLUME = '3'
 TASK_ORPHAN_VOLUME = '4'
 
 
+class MyHandler(BaseHTTPRequestHandler):
+    ''' http server handler '''
+    def do_GET(self):
+        if self.path == '/orphan_volumes':
+            status_code, header, data = self.server.get_orphan_volumes()
+        else:
+            status_code, header, data = self.server.undefined_route(self.path)
+        self.send_response(status_code)
+        self.send_header(*header)
+        self.end_headers()
+        self.wfile.write(data.encode('utf-8'))
+
+
 class ManilaShareSyncNanny(ManilaNanny):
 
-    def __init__(self, config_file, prom_host, interval, tasks, dry_run_tasks):
-        super(ManilaShareSyncNanny, self).__init__(config_file, interval)
+    def __init__(self, config_file, prom_host, interval, tasks, dry_run_tasks, prom_port, http_port, handler):
+        super(ManilaShareSyncNanny, self).__init__(config_file, interval,
+                                                   prom_port=prom_port, http_port=http_port, handler=handler)
         self.prom_host = prom_host + "/api/v1/query"
         self.MANILA_NANNY_SHARE_SYNC_FAILURE = Counter('manila_nanny_share_sync_failure', '')
         self.MANILA_SYNC_SHARE_SIZE_COUNTER = Counter('manila_nanny_sync_share_size',
@@ -66,6 +82,9 @@ class ManilaShareSyncNanny(ManilaNanny):
         self._dry_run_tasks = dry_run_tasks
         if not any(tasks.values()):
             raise Exception('All tasks are disabled')
+
+        self.orphan_volumes_lock = Lock()
+        self.orphan_volumes = {}
 
     def _run(self):
         # Need to recreate manila client each run, because of session timeout
@@ -251,24 +270,40 @@ class ManilaShareSyncNanny(ManilaNanny):
                     if (datetime.utcnow() - deleted_at).total_seconds() < 6*3600:
                         vol_keys.remove(instance_id)
 
+        orphan_volumes = {}
         for vol_key in vol_keys:
             vol = volumes[vol_key]
-            name, filer = vol['volume'], vol['filer']
+            volume, vserver, filer = vol['volume'], vol['vserver'], vol['filer']
             if 'share' in vol:
-                share_id, status = vol['share']['share_id'], vol['share']['status']
-                log.info("OrphanVolume: %s (%s): Associated with share %s (%s)", name, filer,
-                         share_id, status)
+                share_id = vol['share']['share_id']
+                share_deleted = vol['share']['deleted']
+                share_deleted_at = vol['share']['deleted_at']
+                instance_id = vol['share']['instance_id']
+                instance_status = vol['share']['status']
             else:
-                share_id, status = '', ''
-                log.info("OrphanVolume: %s (%s): No associated share", name, filer)
+                share_id, share_deleted, share_deleted_at, instance_id, instance_status = None, None, None, None, ''
 
             self.MANILA_ORPHAN_VOLUMES_GAUGE.labels(
                 share_id=share_id,
-                share_status=status,
-                filer=vol['filer'],
-                vserver=vol['vserver'],
-                volume=vol['volume'],
+                share_status=instance_status,
+                filer=filer,
+                vserver=vserver,
+                volume=volume,
             ).set(1)
+
+            orphan_volumes[volume] = {
+                'filer': filer,
+                'vserver': vserver,
+                'volume': volume,
+                'share_id': share_id,
+                'share_deleted': share_deleted,
+                'share_deleted_at': share_deleted_at,
+                'instance_id': instance_id,
+                'instance_status': instance_status,
+            }
+
+        with self.orphan_volumes_lock:
+            self.orphan_volumes = update_records(self.orphan_volumes, orphan_volumes)
 
     def _get_netapp_volumes(self, status='online'):
         """ get netapp volumes from prometheus metrics
@@ -316,7 +351,7 @@ class ManilaShareSyncNanny(ManilaNanny):
         @return List[Share]
 
         Share: Dict[Keys['share_id', 'instance_id', 'created_at', 'updated_at', 'deleted_at',
-                         'status'], Any]
+                         'deleted', 'status'], Any]
         """
         shares_t = Table('shares', self.db_metadata, autoload=True)
         instances_t = Table('share_instances', self.db_metadata, autoload=True)
@@ -324,6 +359,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                     shares_t.c.created_at,
                     shares_t.c.updated_at,
                     shares_t.c.deleted_at,
+                    shares_t.c.deleted,
                     instances_t.c.status,
                     instances_t.c.id.label('instance_id'),
                     ])\
@@ -401,26 +437,17 @@ class ManilaShareSyncNanny(ManilaNanny):
                         share_instances_t.c.status == 'available')) \
             .execute()
 
-    def get_shares(self):
-        # manila api returns maximally 1000 shares
-        _limit = 1000
-        opts = dict(all_tenants=1, limit=_limit, offset=0)
-        try:
-            data = self.manilaclient.shares.list(search_opts=opts)
-            shares = data
-            while len(data) == _limit:
-                opts['offset'] += _limit
-                data = self.manilaclient.shares.list(search_opts=opts)
-                shares.extend(data)
-        except Exception as e:
-            raise type(e)("get_shares(): " + str(e))
-        return {s.id: s for s in shares}
-
     def _reset_share_state(self, share_id, state):
         try:
             self.manilaclient.shares.reset_state(share_id, state)
         except Exception as e:
             log.exception("_reset_share_state(share_id=%s, state=%s): %s", share_id, state, e)
+
+    @response
+    def get_orphan_volumes(self):
+        with self.orphan_volumes_lock:
+            orphan_volumes = list(self.orphan_volumes.values())
+        return orphan_volumes
 
 
 def str2bool(val):
@@ -435,75 +462,30 @@ def str2bool(val):
 
 def parse_cmdline_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config",
-                        default='/manila-etc/manila.conf',
-                        help='configuration file')
-    parser.add_argument("--netapp-prom-host",
-                        help="never sync resources (no interactive check)")
-    parser.add_argument("--interval",
-                        type=float,
-                        default=600,
-                        help="interval")
-    parser.add_argument("--prom-port",
-                        type=int,
-                        default=9457,
-                        help="prometheus port")
-    parser.add_argument("--task-share-size",
-                        type=str2bool,
-                        default=False,
-                        help="enable share size task")
-    parser.add_argument("--task-share-size-dry-run",
-                        type=str2bool,
-                        default=True,
-                        help="dry run mode for share size task")
-    parser.add_argument("--task-missing-volume",
-                        type=str2bool,
-                        default=False,
-                        help="enable missing-volume task")
-    parser.add_argument("--task-missing-volume-dry-run",
-                        type=str2bool,
-                        default=True,
-                        help="dry run mode for missing-volume task")
-    parser.add_argument("--task-offline-volume",
-                        type=str2bool,
-                        default=False,
-                        help="enable offline-volume task")
-    parser.add_argument("--task-offline-volume-dry-run",
-                        type=str2bool,
-                        default=True,
-                        help="dry run mode for offline-volume task")
-    parser.add_argument("--task-orphan-volume",
-                        type=str2bool,
-                        default=False,
-                        help="enable orphan-volume task")
-    parser.add_argument("--task-orphan-volume-dry-run",
-                        type=str2bool,
-                        default=True,
-                        help="dry run mode for orphan-volume task")
+    parser.add_argument("--config", default='/manila-etc/manila.conf', help='configuration file')
+    parser.add_argument("--netapp-prom-host", help="never sync resources (no interactive check)")
+    parser.add_argument("--interval", type=float, default=600, help="interval")
+    parser.add_argument("--prom-port", type=int, default=9000, help="prometheus port")
+    parser.add_argument("--http-port", type=int, default=8000, help="http server port")
+    parser.add_argument("--task-share-size", type=str2bool, default=False, help="enable share size task")
+    parser.add_argument("--task-missing-volume", type=str2bool, default=False, help="enable missing-volume task")
+    parser.add_argument("--task-offline-volume", type=str2bool, default=False, help="enable offline-volume task")
+    parser.add_argument("--task-orphan-volume", type=str2bool, default=False, help="enable orphan-volume task")
+    parser.add_argument("--task-share-size-dry-run", type=str2bool, default=True, help="dry run mode for share size task")
+    parser.add_argument("--task-missing-volume-dry-run", type=str2bool, default=True, help="dry run mode for missing-volume task")
+    parser.add_argument("--task-offline-volume-dry-run", type=str2bool, default=True, help="dry run mode for offline-volume task")
+    parser.add_argument("--task-orphan-volume-dry-run", type=str2bool, default=True, help="dry run mode for orphan-volume task")
     return parser.parse_args()
 
 
 def main():
-    try:
-        args = parse_cmdline_args()
-        log.info("command line arguments...")
-        log.info(args)
-    except Exception as e:
-        sys.stdout.write("parse command line arguments (%s)" % e)
-
-    try:
-        start_http_server(args.prom_port)
-    except Exception as e:
-        sys.stdout.write("start_http_server: " + str(e) + "\n")
-        sys.exit(-1)
-
+    args = parse_cmdline_args()
     tasks = {
         TASK_SHARE_SIZE: args.task_share_size,
         TASK_MISSING_VOLUME: args.task_missing_volume,
         TASK_OFFLINE_VOLUME: args.task_offline_volume,
         TASK_ORPHAN_VOLUME: args.task_orphan_volume,
     }
-
     dry_run_tasks = {
         TASK_SHARE_SIZE: args.task_share_size_dry_run,
         TASK_MISSING_VOLUME: args.task_missing_volume_dry_run,
@@ -517,6 +499,9 @@ def main():
         args.interval,
         tasks,
         dry_run_tasks,
+        prom_port=args.prom_port,
+        http_port=args.http_port,
+        handler=MyHandler
     ).run()
 
 
