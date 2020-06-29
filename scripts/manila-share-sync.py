@@ -46,6 +46,8 @@ class MyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/orphan_volumes':
             status_code, header, data = self.server.get_orphan_volumes()
+        elif self.path == '/offline_volumes':
+            status_code, header, data = self.server.get_offline_volumes()
         elif self.path == '/missing_volume_shares':
             status_code, header, data = self.server.get_missing_volume_shares()
         else:
@@ -225,29 +227,20 @@ class ManilaShareSyncNanny(ManilaNanny):
         for vol_key, vol in _offline_volumes.items():
             share = vol.get('share')
             if share is not None:
-                if share['deleted_at'] is not None:
-                    delta = datetime.utcnow() - share['deleted_at']
-                    if delta.total_seconds() < 6 * 3600:
+                if share['deleted_at'] or share['updated_at']:
+                    if is_utcts_recent(share['deleted_at'] or share['updated_at'], 6*3600):
                         _offline_volume_keys.remove(vol_key)
-                elif share['updated_at'] is not None:
-                    delta = datetime.utcnow() - share['updated_at']
-                    if delta.total_seconds() < 6 * 3600:
-                        _offline_volume_keys.remove(vol_key)
-
-        offline_volumes = {}
 
         # process remaining volume
+        offline_volumes = {}
         for vol_key in _offline_volume_keys:
             vol = _offline_volumes[vol_key]
             name, filer, vserver = vol['volume'], vol['filer'], vol['vserver']
             share = vol.get('share')
             if share is not None:
                 share_id, status = share['share_id'], share['status']
-                log.info('OfflineVolume: %s (%s): Associated with share %s (%s)', name, filer,
-                         share_id, status)
             else:
                 share_id, status = '', ''
-                log.info('OfflineVolume: %s (%s): No associated share found', name, filer)
 
             self.MANILA_OFFLINE_VOLUMES_GAUGE.labels(
                 share_id=share_id,
@@ -474,6 +467,12 @@ class ManilaShareSyncNanny(ManilaNanny):
         with self.orphan_volumes_lock:
             orphan_volumes = list(self.orphan_volumes.values())
         return orphan_volumes
+
+    @response
+    def get_offline_volumes(self):
+        with self.offline_volumes_lock:
+            offline_volumes = list(self.offline_volumes.values())
+        return offline_volumes
 
     @response
     def get_missing_volume_shares(self):
