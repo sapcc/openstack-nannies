@@ -46,6 +46,8 @@ class MyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == '/orphan_volumes':
             status_code, header, data = self.server.get_orphan_volumes()
+        elif self.path == '/missing_volume_shares':
+            status_code, header, data = self.server.get_missing_volume_shares()
         else:
             status_code, header, data = self.server.undefined_route(self.path)
         self.send_response(status_code)
@@ -85,6 +87,10 @@ class ManilaShareSyncNanny(ManilaNanny):
 
         self.orphan_volumes_lock = Lock()
         self.orphan_volumes = {}
+        self.missing_volumes_lock = Lock()
+        self.missing_volumes = {}
+        self.offline_volumes_lock = Lock()
+        self.offline_volumes = {}
 
     def _run(self):
         # Need to recreate manila client each run, because of session timeout
@@ -152,38 +158,45 @@ class ManilaShareSyncNanny(ManilaNanny):
 
         Ignore shares that are created/updated within 6 hours.
         """
-        msg1 = "ManilaShareMissingVolume: id=%s, status=%s, created_at=%s, updated_at=%s"
-        msg = msg1 + ": Set share status to error"
-        dry_run_msg = "Dry run: " + msg1
+        missing_volumes = {}
 
-        for (share_id, _), share in shares.items():
+        for (share_id, instance_id), share in shares.items():
             if 'volume' not in share:
                 # check if shares are created/updated recently
-                if share['updated_at'] is not None:
-                    delta = datetime.utcnow() - share['updated_at']
-                else:
-                    delta = datetime.utcnow() - share['created_at']
-                if delta.total_seconds() < 6 * 3600:
+                if is_utcts_recent(share['updated_at'] or share['created_at'], 6*3600):
                     continue
 
-                if dry_run:
-                    log.info(dry_run_msg, share_id, share['status'],
-                             share['created_at'], share['updated_at'])
-                else:
-                    if share['status'] == 'available':
-                        log.info(msg, share_id, share['status'],
-                                 share['created_at'], share['updated_at'])
+                share_name = share['name']
+                share_status = share['status']
+                msg = f'ManilaShareMissingVolume: share={share_id}, '\
+                    f'instance={instance_id}, status={share_status}'
+
+                if not dry_run:
+                    if share_status == 'available':
                         self._reset_share_state(share_id, 'error')
-                        share['status'] = 'error'
-                    else:
-                        log.info(msg1, share_id, share['status'],
-                                 share['created_at'], share['updated_at'])
+                        share_status = 'error'
+                        msg = f'ManilaShareMissingVolume: Set share {share_id} to error'
+                else:
+                    msg = 'Dry run: ' + msg
+
+                log.info(msg)
 
                 self.MANILA_SHARE_MISSING_BACKEND_GAUGE.labels(
-                    id=share['id'],
-                    name=share['name'],
-                    status=share['status'],
+                    id=share_id,
+                    name=share_name,
+                    status=share_status,
                 ).set(1)
+
+                missing_volumes[(share_id, instance_id)] = {
+                    'share_id': share_id,
+                    'instance_id': instance_id,
+                    'share_name': share_name,
+                    'share_status': share_status,
+                }
+
+        with self.missing_volumes_lock:
+            self.missing_volumes = update_records(self.missing_volumes, missing_volumes)
+
 
     def process_offline_volumes(self, offline_volume_list, dry_run=True):
         """ offline volume
@@ -221,10 +234,12 @@ class ManilaShareSyncNanny(ManilaNanny):
                     if delta.total_seconds() < 6 * 3600:
                         _offline_volume_keys.remove(vol_key)
 
+        offline_volumes = {}
+
         # process remaining volume
         for vol_key in _offline_volume_keys:
             vol = _offline_volumes[vol_key]
-            name, filer = vol['volume'], vol['filer']
+            name, filer, vserver = vol['volume'], vol['filer'], vol['vserver']
             share = vol.get('share')
             if share is not None:
                 share_id, status = share['share_id'], share['status']
@@ -237,10 +252,21 @@ class ManilaShareSyncNanny(ManilaNanny):
             self.MANILA_OFFLINE_VOLUMES_GAUGE.labels(
                 share_id=share_id,
                 share_status=status,
-                volume=vol['volume'],
-                vserver=vol['vserver'],
-                filer=vol['filer'],
+                volume=name,
+                vserver=vserver,
+                filer=filer,
             ).set(1)
+
+            offline_volumes[name] = {
+                'volume': name,
+                'filer': filer,
+                'vserver': vserver,
+                'share_id': share_id,
+                'status': status,
+            }
+
+        with self.offline_volumes_lock:
+            self.offline_volumes = update_records(self.offline_volumes, offline_volumes)
 
     def process_orphan_volumes(self, volumes, dry_run=True):
         """ orphan volumes
@@ -448,6 +474,12 @@ class ManilaShareSyncNanny(ManilaNanny):
         with self.orphan_volumes_lock:
             orphan_volumes = list(self.orphan_volumes.values())
         return orphan_volumes
+
+    @response
+    def get_missing_volume_shares(self):
+        with self.missing_volumes_lock:
+            missing_volumes = list(self.missing_volumes.values())
+        return sorted(missing_volumes, key=lambda v: v['share_id'])
 
 
 def str2bool(val):

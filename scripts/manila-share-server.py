@@ -24,7 +24,7 @@ from typing import Dict, List, Tuple
 from prometheus_client import Gauge
 from sqlalchemy import Table, and_, func, select
 
-from manilananny import ManilaNanny, response, update_dict
+from manilananny import ManilaNanny, response, update_records
 
 
 class MyHandler(BaseHTTPRequestHandler):
@@ -52,21 +52,20 @@ class ManilaShareServerNanny(ManilaNanny):
         self.orphan_share_servers: Dict[str, Dict[str, str]] = {}
         self.orphan_share_server_gauge = Gauge('manila_nanny_orphan_share_servers',
                                                'Orphan Manila Share Servers',
-                                               ['id'])
+                                               ['share_server_id'])
 
     def _run(self):
         s = self.query_share_server_count_share_instance()
         orphan_share_servers = {
             share_server_id: {
                 'share_server_id': share_server_id,
-                'since': datetime.datetime.utcnow()
             }
             for (share_server_id, count) in s
             if count == 0}
         for share_server_id in orphan_share_servers:
-            self.orphan_share_server_gauge.labels(id=share_server_id).set(1)
+            self.orphan_share_server_gauge.labels(share_server_id=share_server_id).set(1)
         with self.orphan_share_servers_lock:
-            self.orphan_share_servers = update_dict(self.orphan_share_servers, orphan_share_servers)
+            self.orphan_share_servers = update_records(self.orphan_share_servers, orphan_share_servers)
 
     def query_share_server_count_share_instance(self) -> List[Tuple[str, int]]:
         """ share servers and count of undeleted share instances """

@@ -138,7 +138,7 @@ def response(func):
             status_code = 500
             header = ('Content-Type', 'text/html; charset=UTF-8')
             message_parts = [
-                str(e),
+                repr(e),
             ]
             message = '\r\n'.join(message_parts)
             return status_code, header, message
