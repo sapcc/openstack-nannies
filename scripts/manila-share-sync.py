@@ -64,23 +64,21 @@ class ManilaShareSyncNanny(ManilaNanny):
         super(ManilaShareSyncNanny, self).__init__(config_file, interval,
                                                    prom_port=prom_port, http_port=http_port, handler=handler)
         self.prom_host = prom_host + "/api/v1/query"
+
         self.MANILA_NANNY_SHARE_SYNC_FAILURE = Counter('manila_nanny_share_sync_failure', '')
         self.MANILA_SYNC_SHARE_SIZE_COUNTER = Counter('manila_nanny_sync_share_size',
                                                       'manila nanny sync share size')
         self.MANILA_RESET_SHARE_ERROR_COUNTER = Counter('manila_nanny_reset_share_error',
                                                         'manila nanny reset share status to error')
-        self.MANILA_SHARE_MISSING_BACKEND_GAUGE = Gauge(
-            'manila_nanny_share_missing_volume',
-            'Manila Share missing backend volume',
-            ['id', 'name', 'status'])
-        self.MANILA_ORPHAN_VOLUMES_GAUGE = Gauge(
-            'manila_nanny_orphan_volumes',
-            'Orphan backend volumes of Manila service',
-            ['share_id', 'share_status', 'filer', 'vserver', 'volume'])
-        self.MANILA_OFFLINE_VOLUMES_GAUGE = Gauge(
-            'manila_nanny_offline_volumes',
-            'Offline volumes of Manila service',
-            ['share_id', 'share_status', 'filer', 'vserver', 'volume'])
+        self.manila_missing_volume_shares_gauge = Gauge('manila_nanny_share_missing_volume',
+                                                        'Manila Share missing backend volume',
+                                                        ['share_id', 'instance_id', 'share_name', 'share_status'])
+        self.manila_orphan_volumes_gauge = Gauge('manila_nanny_orphan_volumes',
+                                                 'Orphan backend volumes of Manila service',
+                                                 ['share_id', 'share_status', 'filer', 'vserver', 'volume'])
+        self.manila_offline_volumes_gauge = Gauge('manila_nanny_offline_volumes',
+                                                  'Offline volumes of Manila service',
+                                                  ['share_id', 'share_status', 'filer', 'vserver', 'volume'])
 
         self._tasks = tasks
         self._dry_run_tasks = dry_run_tasks
@@ -183,10 +181,11 @@ class ManilaShareSyncNanny(ManilaNanny):
 
                 log.info(msg)
 
-                self.MANILA_SHARE_MISSING_BACKEND_GAUGE.labels(
-                    id=share_id,
-                    name=share_name,
-                    status=share_status,
+                self.manila_missing_volume_shares_gauge.labels(
+                    share_id=share_id,
+                    instance_id=instance_id,
+                    share_name=share_name,
+                    share_status=share_status,
                 ).set(1)
 
                 missing_volumes[(share_id, instance_id)] = {
@@ -196,9 +195,19 @@ class ManilaShareSyncNanny(ManilaNanny):
                     'share_status': share_status,
                 }
 
+        for (share_id, instance_id) in self.missing_volumes:
+            s = self.missing_volumes[(share_id, instance_id)]
+            share_name, share_status = s['share_name'], s['share_status']
+            if (share_id, instance_id) not in shares:
+                self.manila_missing_volume_shares_gauge.labels(
+                    share_id=share_id,
+                    instance_id=instance_id,
+                    share_name=share_name,
+                    share_status=share_status,
+                ).remove()
+
         with self.missing_volumes_lock:
             self.missing_volumes = update_records(self.missing_volumes, missing_volumes)
-
 
     def process_offline_volumes(self, offline_volume_list, dry_run=True):
         """ offline volume
@@ -242,7 +251,7 @@ class ManilaShareSyncNanny(ManilaNanny):
             else:
                 share_id, status = '', ''
 
-            self.MANILA_OFFLINE_VOLUMES_GAUGE.labels(
+            self.manila_offline_volumes_gauge.labels(
                 share_id=share_id,
                 share_status=status,
                 volume=name,
@@ -257,6 +266,16 @@ class ManilaShareSyncNanny(ManilaNanny):
                 'share_id': share_id,
                 'status': status,
             }
+
+        for volname, vol in self.offline_volumes.items():
+            if volname not in offline_volumes:
+                self.manila_offline_volumes_gauge.labels(
+                    share_id=vol['share_id'],
+                    share_status=['status'],
+                    volume=vol['name'],
+                    vserver=vol['vserver'],
+                    filer=vol['filer'],
+                ).remove()
 
         with self.offline_volumes_lock:
             self.offline_volumes = update_records(self.offline_volumes, offline_volumes)
@@ -302,7 +321,7 @@ class ManilaShareSyncNanny(ManilaNanny):
             else:
                 share_id, share_deleted, share_deleted_at, instance_id, instance_status = None, None, None, None, ''
 
-            self.MANILA_ORPHAN_VOLUMES_GAUGE.labels(
+            self.manila_orphan_volumes_gauge.labels(
                 share_id=share_id,
                 share_status=instance_status,
                 filer=filer,
@@ -320,6 +339,16 @@ class ManilaShareSyncNanny(ManilaNanny):
                 'instance_id': instance_id,
                 'instance_status': instance_status,
             }
+
+        for k, vol in self.orphan_volumes.items():
+            if k not in orphan_volumes:
+                self.manila_orphan_volumes_gauge.labels(
+                    share_id=vol['share_id'],
+                    share_status=vol['instance_status'],
+                    filer=vol['filer'],
+                    vserver=vol['vserver'],
+                    volume=vol['volume'],
+                ).remove()
 
         with self.orphan_volumes_lock:
             self.orphan_volumes = update_records(self.orphan_volumes, orphan_volumes)

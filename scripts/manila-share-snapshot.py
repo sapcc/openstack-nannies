@@ -24,7 +24,7 @@ from typing import Dict
 from prometheus_client import Gauge
 from sqlalchemy import Table, select
 
-from manilananny import ManilaNanny, response, update_dict
+from manilananny import ManilaNanny, response, update_records
 
 
 class MyHandler(BaseHTTPRequestHandler):
@@ -52,21 +52,22 @@ class ManilaShareServerNanny(ManilaNanny):
         self.orphan_snapshots: Dict[str, Dict[str, str]] = {}
         self.orphan_snapshots_gauge = Gauge('manila_nanny_orphan_share_snapshots',
                                             'Orphan Manila Share Snapshots',
-                                            ['id'])
+                                            ['share_id', 'snapshot_id'])
 
     def _run(self):
         s = self.query_orphan_snapshots()
         orphan_snapshots = {
-            snapshot_id: {
-                'snapshot_id': snapshot_id,
-                'share_id': share_id,
-                'since': datetime.datetime.utcnow()
-            }
+            snapshot_id: {'snapshot_id': snapshot_id, 'share_id': share_id}
             for snapshot_id, share_id in s}
-        with self.orphan_snapshots_lock:
-            self.orphan_snapshots = update_dict(self.orphan_snapshots, orphan_snapshots)
         for snapshot_id in orphan_snapshots:
-            self.orphan_snapshots_gauge.labels(id=snapshot_id).set(1)
+            share_id = orphan_snapshots[snapshot_id]['share_id']
+            self.orphan_snapshots_gauge.labels(share_id=share_id, snapshot_id=snapshot_id).set(1)
+        for snapshot_id in self.orphan_snapshots:
+            if snapshot_id not in orphan_snapshots:
+                share_id = self.orphan_snapshots[snapshot_id]['share_id']
+                self.orphan_snapshots_gauge.labels(share_id=share_id, snapshot_id=snapshot_id).remove()
+        with self.orphan_snapshots_lock:
+            self.orphan_snapshots = update_records(self.orphan_snapshots, orphan_snapshots)
 
     def query_orphan_snapshots(self):
         Snapshots = Table('share_snapshots', self.db_metadata, autoload=True)
