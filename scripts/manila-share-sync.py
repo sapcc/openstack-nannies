@@ -19,6 +19,7 @@ from __future__ import absolute_import
 
 import argparse
 import logging
+import re
 import time
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler
@@ -102,7 +103,6 @@ class ManilaShareSyncNanny(ManilaNanny):
                     or self._tasks[TASK_ORPHAN_VOLUME]:
                 _share_list = self._query_shares()
                 _volume_list = self._get_netapp_volumes()
-
                 _shares, _orphan_volumes = self._merge_share_and_volumes(_share_list, _volume_list)
 
             if self._tasks[TASK_OFFLINE_VOLUME]:
@@ -284,7 +284,7 @@ class ManilaShareSyncNanny(ManilaNanny):
         """ orphan volumes
 
         Check if the corresponding manila shares are deleted recently (hard coded as 6 hours).
-        @params volumes: Dict[InstanceId, Volume]
+        @params volumes: Dict[(FilerName, InstanceId), Volume]
         """
         # share instance id
         # volume key (extracted from volume name) is manila instance id
@@ -292,21 +292,28 @@ class ManilaShareSyncNanny(ManilaNanny):
 
         # Shares: List[Share])
         # Share.Keys: share_id, instance_id, deleted_at, status
-        shares = self._query_shares_by_instance_ids(vol_keys)
+        shares = self._query_shares_by_instance_ids([instance_id for (_, instance_id) in vol_keys])
 
         # merge share into volume
+        r = re.compile('^manila-share-netapp-(?P<filer>.+)@(?P=filer)#.*')
         for s in shares:
-            volumes[s['instance_id']].update({'share': s})
+            m = r.match(s['host'])
+            if m:
+                filer = m.group('filer')
+            else:
+                continue
+            if (filer, s['instance_id']) in volumes:
+                volumes[(filer, s['instance_id'])].update({'share': s})
 
         # loop over vol
-        for instance_id, vol in volumes.items():
+        for (filer, instance_id), vol in volumes.items():
             # double check if the manila shares are deleted recently
             if 'share' in vol:
                 share = vol['share']
                 deleted_at = share.get('deleted_at', None)
                 if deleted_at is not None:
                     if (datetime.utcnow() - deleted_at).total_seconds() < 6*3600:
-                        vol_keys.remove(instance_id)
+                        vol_keys.remove((filer, instance_id))
 
         orphan_volumes = {}
         for vol_key in vol_keys:
@@ -329,7 +336,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                 volume=volume,
             ).set(1)
 
-            orphan_volumes[volume] = {
+            orphan_volumes[vol_key] = {
                 'filer': filer,
                 'vserver': vserver,
                 'volume': volume,
@@ -399,7 +406,7 @@ class ManilaShareSyncNanny(ManilaNanny):
         @return List[Share]
 
         Share: Dict[Keys['share_id', 'instance_id', 'created_at', 'updated_at', 'deleted_at',
-                         'deleted', 'status'], Any]
+                         'deleted', 'status', 'host'], Any]
         """
         shares_t = Table('shares', self.db_metadata, autoload=True)
         instances_t = Table('share_instances', self.db_metadata, autoload=True)
@@ -410,6 +417,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                     shares_t.c.deleted,
                     instances_t.c.status,
                     instances_t.c.id.label('instance_id'),
+                    instances_t.c.host,
                     ])\
             .where(shares_t.c.id == instances_t.c.share_id)\
             .where(instances_t.c.id.in_(instance_ids))
@@ -429,13 +437,14 @@ class ManilaShareSyncNanny(ManilaNanny):
                        shares.c.updated_at,
                        instances.c.id,
                        instances.c.status,
+                       instances.c.host,
                        ])\
             .select_from(
                 shares.join(instances, shares.c.id == instances.c.share_id))\
             .where(shares.c.deleted == 'False')
 
         shares = []
-        for (sid, name, size, ctime, utime, siid, status) in stmt.execute():
+        for (sid, name, size, ctime, utime, siid, status, host) in stmt.execute():
             shares.append({
                 'id': sid,
                 'name': name,
@@ -444,6 +453,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                 'updated_at': utime,
                 'instance_id': siid,
                 'status': status,
+                'host': host,
             })
         return shares
 
@@ -463,13 +473,19 @@ class ManilaShareSyncNanny(ManilaNanny):
             shares: Dict[(ShareId, InstanceId): Share]
             volumes: Dict[VolumeName: Volume]
         """
+        r = re.compile('^manila-share-netapp-(?P<filer>.+)@(?P=filer)#.*')
         _shares = {(s['id'], s['instance_id']): s for s in shares}
         _volumes = {
-            vol['volume'][6:].replace('_', '-'): vol
+            (vol['filer'], vol['volume'][6:].replace('_', '-')): vol
             for vol in volumes if vol['volume'].startswith('share_')
         }
-        for (share_id, instance_id) in _shares.keys():
-            vol = _volumes.pop(instance_id, None)
+        for (share_id, instance_id), share in _shares.items():
+            m = r.match(share['host'])
+            if m:
+                filer = m.group('filer')
+                vol = _volumes.pop((filer, instance_id), None)
+            else:
+                continue
             if vol:
                 _shares[(share_id, instance_id)].update({'volume': vol})
         return _shares, _volumes
