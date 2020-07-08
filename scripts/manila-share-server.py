@@ -66,7 +66,7 @@ class ManilaShareServerNanny(ManilaNanny):
             self.orphan_share_server_gauge.labels(share_server_id=share_server_id).set(1)
         for share_server_id in self.orphan_share_servers:
             if share_server_id not in orphan_share_servers:
-                self.orphan_share_server_gauge.labels(share_server_id=share_server_id).remove()
+                self.orphan_share_server_gauge.remove(share_server_id)
         with self.orphan_share_servers_lock:
             self.orphan_share_servers = update_records(self.orphan_share_servers, orphan_share_servers)
 

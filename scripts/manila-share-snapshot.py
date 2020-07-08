@@ -65,7 +65,7 @@ class ManilaShareServerNanny(ManilaNanny):
         for snapshot_id in self.orphan_snapshots:
             if snapshot_id not in orphan_snapshots:
                 share_id = self.orphan_snapshots[snapshot_id]['share_id']
-                self.orphan_snapshots_gauge.labels(share_id=share_id, snapshot_id=snapshot_id).remove()
+                self.orphan_snapshots_gauge.remove(share_id, snapshot_id)
         with self.orphan_snapshots_lock:
             self.orphan_snapshots = update_records(self.orphan_snapshots, orphan_snapshots)
 

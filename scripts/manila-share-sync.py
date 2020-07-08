@@ -199,12 +199,8 @@ class ManilaShareSyncNanny(ManilaNanny):
             s = self.missing_volumes[(share_id, instance_id)]
             share_name, share_status = s['share_name'], s['share_status']
             if (share_id, instance_id) not in shares:
-                self.manila_missing_volume_shares_gauge.labels(
-                    share_id=share_id,
-                    instance_id=instance_id,
-                    share_name=share_name,
-                    share_status=share_status,
-                ).remove()
+                self.manila_missing_volume_shares_gauge.remove(share_id, instance_id, share_name,
+                                                               share_status)
 
         with self.missing_volumes_lock:
             self.missing_volumes = update_records(self.missing_volumes, missing_volumes)
@@ -269,13 +265,8 @@ class ManilaShareSyncNanny(ManilaNanny):
 
         for volname, vol in self.offline_volumes.items():
             if volname not in offline_volumes:
-                self.manila_offline_volumes_gauge.labels(
-                    share_id=vol['share_id'],
-                    share_status=['status'],
-                    volume=vol['name'],
-                    vserver=vol['vserver'],
-                    filer=vol['filer'],
-                ).remove()
+                self.manila_offline_volumes_gauge.remove(vol['share_id'], vol['status'],
+                                                         vol['filer'], vol['vserver'], vol['name'])
 
         with self.offline_volumes_lock:
             self.offline_volumes = update_records(self.offline_volumes, offline_volumes)
@@ -349,13 +340,8 @@ class ManilaShareSyncNanny(ManilaNanny):
 
         for k, vol in self.orphan_volumes.items():
             if k not in orphan_volumes:
-                self.manila_orphan_volumes_gauge.labels(
-                    share_id=vol['share_id'],
-                    share_status=vol['instance_status'],
-                    filer=vol['filer'],
-                    vserver=vol['vserver'],
-                    volume=vol['volume'],
-                ).remove()
+                self.manila_orphan_volumes_gauge.remove(vol['share_id'], vol['instance_status'],
+                                                        vol['filer'], vol['vserver'], vol['volume'])
 
         with self.orphan_volumes_lock:
             self.orphan_volumes = update_records(self.orphan_volumes, orphan_volumes)
