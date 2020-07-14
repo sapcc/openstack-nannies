@@ -1,9 +1,7 @@
-pyvmomi==6.7.3
 openstacksdk==0.40.0
 keystoneauth1==4.0.0
-os-client-config==1.31.2
-os-service-types==1.7.0
-osc-lib==1.11.1
+netapp-lib==2020.3.12
+prometheus-client==0.7.1
 python-barbicanclient==4.7.0
 python-cinderclient==4.0.1
 python-dateutil==2.7.3
@@ -17,8 +15,12 @@ python-novaclient==11.0.0
 python-openstackclient==3.18.0
 python-swiftclient==3.6.0
 python-octaviaclient==2.0.0
+pyvmomi==6.7.3
+os-client-config==1.31.2
+osc-lib==1.11.1
 osc-lib==1.11.1
 osc-placement==1.7.0
+os-service-types==1.7.0
 pytz==2018.5
 PyYAML==5.1
 requests==2.20.0

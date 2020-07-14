@@ -20,12 +20,10 @@ RUN apt-get update -y
 
 RUN apt-get install -y python3 python3-pip
 
-RUN pip3 install netapp-lib pyvmomi prometheus_client
-
-COPY *requirements.txt requirements/
+COPY nannies/requirements.txt requirements/
 
 RUN pip3 install -r requirements/requirements.txt
 
-ADD helper/* /scripts/helper/
+ADD  nannies/helper/* /scripts/helper/
 
-ADD netapp* /scripts/
+ADD  nannies/netapp* /scripts/
