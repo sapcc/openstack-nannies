@@ -20,7 +20,7 @@ python-octaviaclient==2.0.0
 osc-lib==1.11.1
 osc-placement==1.7.0
 pytz==2018.5
-PyYAML==3.13
-requests==2.19.1
+PyYAML==5.1
+requests==2.20.0
 requestsexceptions==1.4.0
 six==1.11.0
