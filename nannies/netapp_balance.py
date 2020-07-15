@@ -107,7 +107,7 @@ def get_netapp_hosts(vc, region):
                 stnpa_num = 0
             else:
                 stnpa_num = 1
-            # e.g. stnpca1-bb091.cc.qa-de-1.cloud.sap - those are the netapp cluster addresses (..np_c_a1..)
+            # e.g. stnpca1-bb123.cc.<region>.cloud.sap - those are the netapp cluster addresses (..np_c_a1..)
             netapp_name = "stnpca{}-bb{:03d}.cc.{}.cloud.sap".format(stnpa_num, bbnum, region)
             # build a list of netapps
             netapp_hosts.append(netapp_name)
@@ -562,11 +562,8 @@ def move_suggestions_aggr(args, nanny_metrics_data):
     luns = nh_most_used.get_luns_for_aggr(aggr_most_used[1], "vv0_BB")
 
     # filter luns for desired size range
-    # debug
-    if args.region != 'qa-de-1':
-        # lun size in scope?
-        luns = [lun for lun in luns
-                if args.lun_min_size_aggr * 1024**3 <= int(lun['size-used']) <= args.lun_max_size_aggr * 1024**3]
+    luns = [lun for lun in luns
+            if args.lun_min_size_aggr * 1024**3 <= int(lun['size-used']) <= args.lun_max_size_aggr * 1024**3]
     luns.sort(key=lambda lun: int(lun['size-used']), reverse=True)
 
     # we can only balance if there are any luns to balance on the aggregate within the given min and max regions
@@ -598,10 +595,6 @@ def move_suggestions_aggr(args, nanny_metrics_data):
         # get the netapp id (naa.xyz...) name
         path_match = naa_path_re.match(lun['path'])
         if not path_match:
-            continue
-
-        # debug
-        if args.region == 'qa-de-1' and comment_match.group('vmdk') != 'e01c2c71-787c-4674-8918-b9b4df2d7698.vmdk':
             continue
 
         vmdk = (comment_match.group('vmdk'), path_match.group('naa'), int(lun['size-used']))
@@ -727,7 +720,7 @@ def move_suggestions_aggr(args, nanny_metrics_data):
                     optional_string = ' (no move)'
 
     if aggr_most_used_current_size > aggr_most_used_target_size:
-        log.info("- INFO - there are not enough (or no) attached volumes within the current min/max limits to bring the aggregate {} below the limit of {:.0f} gb - maybe limits should be adjusted?".format(aggr_most_used[1], aggr_most_used_target_size))
+        log.info("- INFO - there are not enough (or no) attached volumes within the current min/max limits to bring the aggregate {} below the limit of {:.0f} gb - maybe limits should be adjusted?".format(aggr_most_used[1], aggr_most_used_target_size / 1024**3))
 
     nanny_metrics_data.set_data_in('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_detached,['aggregate', 'detached'])
     nanny_metrics_data.set_data_in('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_attached,['aggregate', 'attached'])
