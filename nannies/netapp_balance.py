@@ -183,20 +183,6 @@ def get_vcenter_info(vc):
                         # add backingObjectId to our list of attached volumes
                         attached_volumes.append(device.backing.backingObjectId)
 
-# # debug
-#                         print(str(vm.get('name')) + " - " + str(device.backing.backingObjectId) + " - " + str(device.backing.fileName))
-#         if not vc.is_openstack_vm(vm) and (vc.is_shadow_vm(vm) or vc.is_snapshot_shadow_vm(vm)):
-#             # iterate over all devices
-#             for device in vm['config.hardware.device']:
-#                 # TODO maybe use the "continue" method to skip non matching?
-#                 # and filter out the virtual disks
-#                 if isinstance(device, vc.vim.vm.device.VirtualDisk):
-#                     # we are only interested in vvols here
-#                     if device.backing.fileName.lower().startswith('[vvol_'):
-#                         # add backingObjectId to our list of attached volumes
-#                         print(str(vm.get('name')) + " - " + str(device.backing.backingObjectId) + " - " + str(device.backing.fileName))
-# # end debug
-
     return vms, attached_volumes
 
 def move_shadow_vm(vc, volume_uuid, target_ds, dry_run):
