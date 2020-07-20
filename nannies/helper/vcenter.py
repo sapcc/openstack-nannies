@@ -405,8 +405,6 @@ class VCenterHelper:
 
         for i in servers:
             print(i)
-            Enter BIG VM Instance UUID: 73880262-5130-42f1-90bd-4d9f8badbf40
-            Enter Free Node name like(node*-bb*.cc.*-*-*.cloud.sap):node014-bb164.cc.na-us-1.cloud.sap
         """
 
         # details about vm and  free node
