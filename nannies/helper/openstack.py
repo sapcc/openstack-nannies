@@ -194,3 +194,15 @@ class OpenstackHelper:
             return result
         else:
             return False
+
+    def set_nanny_metadata(self):
+        pass
+
+    def delete_nanny_metadata(self,nanny_metadata):
+        for server in self.api.compute.servers(details=True, all_projects=True):
+            if server.metadata.get("nanny_metadata") == nanny_metadata:
+                log.info(f"Server name : {server.name} and UUID {server.id} has orphane nanny metadata cleaning now")
+                if server['is_locked']:
+                    self.api.compute.unlock_server(server.id)
+                    log.info(f"Server name : {server.name} and UUID {server.id} has orphane nanny server lock cleaning now")
+                self.api.compute.delete_server_metadata(server.id, ["nanny_metadata"])
