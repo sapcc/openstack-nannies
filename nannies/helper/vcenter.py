@@ -387,40 +387,23 @@ class VCenterHelper:
         else:
             return False
 
-    def vmotion_inside_bb(self,vc,openstack_obj,big_vm_name_uuid,free_node_name,data):
-
-        """
-        # connection for vm
-        openstack_obj = OpenstackHelper(os.getenv('REGION'), os.getenv('OS_USER_DOMAIN_NAME'),
-                                        os.getenv('OS_PROJECT_DOMAIN_NAME'), os.getenv('OS_PROJECT_NAME'),
-                                        os.getenv('OS_USERNAME'), os.getenv('OS_PASSWORD'))
-
-        vc = VCenterHelper(host=os.getenv('VM_BALANCE_VCHOST'), user=os.getenv('VM_BALANCE_VCUSER'),
-                           password=os.getenv('VM_BALANCE_VCPASSWORD'))
-
-        big_vm_name_uuid = input("Enter BIG VM Instance UUID: ")
-
-
-        servers = openstack_obj.api.compute.servers(details=True, all_projects=True)
-
-        for i in servers:
-            print(i)
-        """
+    def vmotion_inside_bb(self,openstack_obj,big_vm_name_uuid,free_node_name,data):
 
         # details about vm and  free node
-        vm = vc.find_server(big_vm_name_uuid)
-        free_node_name = input("Enter Free Node name like(node*-bb*.cc.*-*-*.cloud.sap):")
-        vhost = vc.get_object_by_name(vim.HostSystem, free_node_name)
+        vm = self.find_server(big_vm_name_uuid)
+        # if vm not found on vcenter return
+        vhost = self.get_object_by_name(vim.HostSystem, free_node_name)
         log.info("INFO:  vmotion of instance uuid %s started to target node %s", big_vm_name_uuid, free_node_name)
 
         # capture the status of server
         # check metadata and lock if exist
         loc_check = openstack_obj.api.compute.get_server(big_vm_name_uuid)
+        # if vm not found on vcenter return
         log.info("INFO: instance uuid %s lock status %s", big_vm_name_uuid, loc_check['is_locked'])
 
         # setting metadata and lock for nanny
-        metadata_check = openstack_obj.api.compute.set_server_metadata(big_vm_name_uuid, metadata="nanny_big_vm_handle")
-        loc = openstack_obj.api.compute.lock_server(big_vm_name_uuid)
+        openstack_obj.api.compute.set_server_metadata(big_vm_name_uuid, nanny_metadata=data)
+        openstack_obj.api.compute.lock_server(big_vm_name_uuid)
         loc_check = openstack_obj.api.compute.get_server(big_vm_name_uuid)
         log.info("INFO: instance uuid %s lock status set by nanny %s", big_vm_name_uuid, loc_check['is_locked'])
 
@@ -429,7 +412,7 @@ class VCenterHelper:
         spec.host = vhost
         task = vm.RelocateVM_Task(spec)
         try:
-            state = WaitForTask(task, si=vc.api)
+            state = WaitForTask(task, si=self.api)
         except Exception as e:
             logging.error("ERROR: failed to relocate big vm %s to target node %s with error message =>%s",
                           str(big_vm_name_uuid), str(free_node_name), str(e.msg))
@@ -439,11 +422,11 @@ class VCenterHelper:
 
         # if result failed through alert
         # unlock the server and unset nanny metadata
-        unloc = openstack_obj.api.compute.unlock_server(big_vm_name_uuid)
-        metadata_check = openstack_obj.api.compute.delete_server_metadata(big_vm_name_uuid, ['metadata'])
+        openstack_obj.api.compute.unlock_server(big_vm_name_uuid)
+        openstack_obj.api.compute.delete_server_metadata(big_vm_name_uuid, ['nanny_metadata'])
 
         # check unlock succesfully done
         unloc_check = openstack_obj.api.compute.get_server(big_vm_name_uuid)
         log.info("INFO: instance uuid %s unlock status %s done", big_vm_name_uuid, unloc_check['is_locked'])
 
-        # check status of server
+        return state
