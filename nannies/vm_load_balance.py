@@ -36,7 +36,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
 def run_check(args, vcenter_data):
     while True:
-        log.info("- INFO - starting new loop run")
+        log.info("- INFO - starting new loop run with automation %s ", args.automated)
         # convert iterations from string to integer and avoid off by one error
         # below  object creation for prometheus collector metric
         vm_move_suggestions(args,vcenter_data)
@@ -53,6 +53,11 @@ def vm_move_suggestions(args, vcenter_data):
     log.info("- INFO - connecting to openstack to region %s", args.region)
     openstack_obj = openstack.OpenstackHelper(args.region, args.user_domain_name,
                                               args.project_domain_name,args.project_name,args.username, args.password)
+
+    # cleaning-up last nanny job orphne cleanup
+    nanny_metadata_handle = "nanny_big_vm_handle"
+    openstack_obj.delete_nanny_metadata(nanny_metadata_handle)
+
     percentage = args.percentage
     bb_consume  = {}
     bb_overall = {}
@@ -158,21 +163,27 @@ def vm_move_suggestions(args, vcenter_data):
         log.info("- INFO - big_vm list here %s ", big_vm_to_move_list)
         log.info("- Alert - found here %s",len(big_vm_to_move_list))
         log.info("- Printing - suggestion for vmotion below")
-        big_vm_movement_suggestion(big_vm_to_move_list,target_host,args.min_vm_size,vcenter_data)
+        big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_host,vcenter_data,nanny_metadata_handle)
 
-def big_vm_movement_suggestion(big_vm_to_move_list,target_host,min_vm_size,vcenter_data):
+def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_host,vcenter_data,nanny_metadata_handle):
+    vm_uuid_re = re.compile('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
     for big_vm in big_vm_to_move_list:
         node = re.findall(r"[0-9]+", big_vm[0])[1]
         for target_h in target_host[:]:
             if node == re.findall(r"[0-9]+", target_h[0])[1]:
                 if target_h[1] - big_vm[2] > 0:
-                    log.info("- INFO - big Vm %s of size %.2f is move from source %s to target %s "
-                             "having %.2f memory and left with memory %.2f after vmotion"
-                             ,big_vm[1], big_vm[2], big_vm[0], target_h[0], target_h[1], target_h[1] - big_vm[2])
-                    vcenter_data.set_data_in('vm_balance_nanny_suggestion_bytes',int(big_vm[2]*1024),
-                                       [big_vm[0],target_h[0],big_vm[1]])
+                    log.info(f"- INFO - big Vm {big_vm[1]} of size {round(big_vm[2],2)} is move from source {big_vm[0]} to target {target_h[0]}  having {round(target_h[1],2)} memory and left with memory {round((target_h[1] - big_vm[2]),2)} after vmotion")
+                    vcenter_data.set_data_in('vm_balance_nanny_suggestion_bytes', int(big_vm[2] * 1024),[big_vm[0], target_h[0], big_vm[1]])
                     # automation script for vmotion called here
-                    if (target_h[1] - big_vm[2]) >= min_vm_size:
+                    if vm_uuid_re.match(re.split("\(|\)", big_vm[1])[-2]):
+                        big_vm_uuid = re.split("\(|\)", big_vm[1])[-2]
+                    else:
+                        log.info("- INFO - VM UUID cant grab VM detail %s",big_vm[1])
+                        break
+                    if args.automated:
+                        status = vc.vmotion_inside_bb(openstack_obj, big_vm_uuid, target_h[0], nanny_metadata_handle)
+                        log.info(f"- INFO - big Vm {big_vm[1]} of size {round(big_vm[2],2)} is move from source {big_vm[0]} to target {target_h[0]} with {status}")
+                    if (target_h[1] - big_vm[2]) >= args.min_vm_size:
                         target_host.append((target_h[0], target_h[1] - big_vm[2]))
                         target_host.remove(target_h)
                         target_host = sorted(target_host, key=lambda x: x[1], reverse=True)
@@ -198,7 +209,7 @@ def main():
     parser.add_argument("--min_vm_size", type=int, default=231056, help="Min Big_Vm size to handle 500000 ")
     parser.add_argument("--max_vm_size", type=int, default=1050000, help="Max Big_Vm size to handle")
     parser.add_argument("--percentage", type=int, default=3, help="percentage of overbooked")
-    #parser.add_argument("--debug", required=True)
+    parser.add_argument("--automated", type=bool, default=False, help="debug or automated")
     vcenter_data = PromDataClass()
     mymetrics = PromMetricsClass()
     mymetrics.set_metrics('vm_balance_nanny_host_size_bytes', 'des:vm_balance_nanny_host_size_bytes', ['nodename'])
