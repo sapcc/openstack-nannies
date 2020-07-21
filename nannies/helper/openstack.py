@@ -98,6 +98,18 @@ class OpenstackHelper:
         else:
             return "{}/{}".format(self.get_project_path(project.domain_id), project.name)
 
+    def get_shard_vcenter_all(self, vc_host):
+        filter_host = self.get_building_block_all()
+        agg = self.api.compute.aggregates()
+        for vc in agg:
+            if vc.name in vc_host:
+                match = re.search(r"^vc-[a-z]-[0-9]$", vc.name)
+                if match:
+                    if vc.name not in vc_host:
+                        continue
+                    hosts = [str(host) for host in vc.hosts if str(host) in filter_host]
+        return hosts
+
     def get_shard_vcenter(self, vc_host):
         filter_host = self.get_building_block_filter()
         agg = self.api.compute.aggregates()
@@ -198,11 +210,12 @@ class OpenstackHelper:
     def set_nanny_metadata(self):
         pass
 
-    def delete_nanny_metadata(self,nanny_metadata,avail_zone):
+    def delete_nanny_metadata(self,nanny_metadata,avail_zone,shard_vcenter_all):
         for server in self.api.compute.servers(details=True, all_projects=True,availability_zone=avail_zone):
             if server.metadata.get("nanny_metadata") == nanny_metadata:
                 log.info(f"Server name : {server.name} and UUID {server.id} has orphane nanny metadata cleaning now")
-                if server['is_locked']:
-                    self.api.compute.unlock_server(server.id)
-                    log.info(f"Server name : {server.name} and UUID {server.id} has orphane nanny server lock cleaning now")
-                self.api.compute.delete_server_metadata(server.id, ["nanny_metadata"])
+                if server.compute_host in shard_vcenter_all:
+                    if server['is_locked']:
+                        self.api.compute.unlock_server(server.id)
+                        log.info(f"Server name : {server.name} and UUID {server.id} has orphane nanny server lock cleaning now")
+                    self.api.compute.delete_server_metadata(server.id, ["nanny_metadata"])
