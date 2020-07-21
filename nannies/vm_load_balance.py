@@ -56,8 +56,9 @@ def vm_move_suggestions(args, vcenter_data):
 
     # cleaning-up last nanny job orphne cleanup
     nanny_metadata_handle = "nanny_big_vm_handle"
+    shard_vcenter_all = openstack_obj.get_shard_vcenter_all(args.vc_host)
     avail_zone = args.region.lower() + re.split("-",args.vc_host)[1].lower()
-    openstack_obj.delete_nanny_metadata(nanny_metadata_handle,avail_zone)
+    openstack_obj.delete_nanny_metadata(nanny_metadata_handle,avail_zone,shard_vcenter_all)
 
     percentage = args.percentage
     bb_consume  = {}
