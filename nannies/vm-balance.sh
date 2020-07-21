@@ -18,14 +18,13 @@
 
 echo -n "INFO: vm balancing (dry-run only for now) - "
 date
-if [ "$VM_BALANCE_DRY_RUN" = "False" ] || [ "$VM_BALANCE_DRY_RUN" = "false" ]; then
-    DRY_RUN=""
+if [ "$VM_BALANCE_AUTO" = "False" ] || [ "$VM_BALANCE_AUTO" = "false" ]; then
+    AUTOMATION =""
 else
-    # DRY_RUN="--dry-run"
-    DRY_RUN=""
+    AUTOMATION ="--automated"
 fi
 
-python3 /scripts/vm_load_balance.py $DRY_RUN --vc_host $VM_BALANCE_VCHOST --vc_user $VM_BALANCE_VCUSER --vc_password $VM_BALANCE_VCPASSWORD --region $REGION --username $OS_USERNAME --password $OS_PASSWORD --user_domain_name $OS_USER_DOMAIN_NAME --project_name $OS_PROJECT_NAME --project_domain_name $OS_PROJECT_DOMAIN_NAME --interval $VM_BALANCE_INTERVAL
+python3 /scripts/vm_load_balance.py $AUTOMATION --vc_host $VM_BALANCE_VCHOST --vc_user $VM_BALANCE_VCUSER --vc_password $VM_BALANCE_VCPASSWORD --region $REGION --username $OS_USERNAME --password $OS_PASSWORD --user_domain_name $OS_USER_DOMAIN_NAME --project_name $OS_PROJECT_NAME --project_domain_name $OS_PROJECT_DOMAIN_NAME --interval $VM_BALANCE_INTERVAL
 
 
 
