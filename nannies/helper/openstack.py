@@ -156,7 +156,7 @@ class OpenstackHelper:
     def unlock_volume(self, volume_uuid):
         try:
             vol = self.api.block_storage.get_volume(volume_uuid)
-            if not self.check_volume_metadata(volume_uuid, 'netapp_balancing', 'in_progress') and not dry_run:
+            if not self.check_volume_metadata(volume_uuid, 'netapp_balancing', 'in_progress'):
                 logging.warning("- PLEASE IGNORE - WARNING - unlock_volume: volume {} has no volume_balancing property".format(volume_uuid))
                 return False
             else:
@@ -198,8 +198,8 @@ class OpenstackHelper:
     def set_nanny_metadata(self):
         pass
 
-    def delete_nanny_metadata(self,nanny_metadata):
-        for server in self.api.compute.servers(details=True, all_projects=True):
+    def delete_nanny_metadata(self,nanny_metadata,avail_zone):
+        for server in self.api.compute.servers(details=True, all_projects=True,availability_zone=avail_zone):
             if server.metadata.get("nanny_metadata") == nanny_metadata:
                 log.info(f"Server name : {server.name} and UUID {server.id} has orphane nanny metadata cleaning now")
                 if server['is_locked']:
