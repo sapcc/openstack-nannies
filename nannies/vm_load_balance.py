@@ -57,6 +57,7 @@ def vm_move_suggestions(args, vcenter_data):
     # cleaning-up last nanny job orphne cleanup
     nanny_metadata_handle = "nanny_big_vm_handle"
     shard_vcenter_all = openstack_obj.get_shard_vcenter_all(args.vc_host)
+    log.info("- INFO - all building block number %s which is enabled/disable from openstack of region %s",shard_vcenter_all, args.region)
     avail_zone = args.region.lower() + re.split("-",args.vc_host)[1].lower()
     openstack_obj.delete_nanny_metadata(nanny_metadata_handle,avail_zone,shard_vcenter_all)
 
@@ -72,7 +73,7 @@ def vm_move_suggestions(args, vcenter_data):
         bb_consume[bb] = 0
         bb_overall[bb] = 0
         bb_bigvm_consume[bb] = 0
-    log.info("- INFO - all building block number %s which is enabled from openstack of region %s",bb_name,args.region)
+    log.info("- INFO - all building block number %s which is enabled from openstack of region %s",shard_vcenter,args.region)
 
     # vcenter info
     log.info("- INFO - connecting to vcenter to host %s", args.vc_host)
