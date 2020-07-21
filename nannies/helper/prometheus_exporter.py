@@ -37,7 +37,7 @@ class CustomCollector():
     def collect(self):
         metric = self.metricsobject.get_metrics()
         gauge = dict()
-        metrics_data = self.dataobject.get_data_out()
+        metrics_data = self.dataobject.get_data()
         if len(metrics_data)>0:
             # metric = metricname, metric[0] = description, metric[1] = labelnames
             for data in metrics_data:
@@ -61,17 +61,14 @@ class PromDataClass:
         self.values_in = dict()
         self.values_out = dict()
 
-    def set_data_in(self, metricname, datavalue, labelvalues):
+    def set_data(self, metricname, datavalue, labelvalues):
         self.values_in[(metricname,tuple(labelvalues))] = { 'values': datavalue, 'labels': labelvalues }
 
-    def get_data_in(self):
-        return self.values_in
-
-    def sync_data_out(self):
+    def sync_data(self):
         self.values_out = self.values_in.copy()
         self.values_in.clear()
 
-    def get_data_out(self):
+    def get_data(self):
         return self.values_out
 
 # start prometheus exporter if needed
