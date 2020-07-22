@@ -213,7 +213,6 @@ class OpenstackHelper:
     def delete_nanny_metadata(self,nanny_metadata,avail_zone,shard_vcenter_all):
         for server in self.api.compute.servers(details=True, all_projects=True,availability_zone=avail_zone):
             if server.metadata.get("nanny_metadata") == nanny_metadata:
-                log.info(f"Server name : {server.name} and UUID {server.id} has orphane nanny metadata cleaning now")
                 if server.compute_host in shard_vcenter_all:
                     if server['is_locked']:
                         self.api.compute.unlock_server(server.id)
