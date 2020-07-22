@@ -34,6 +34,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 def main():
 
     # connection for vm
+    nanny_metadata_handle = "nanny_big_vm_handle"
     openstack_obj = OpenstackHelper(os.getenv('REGION'), os.getenv('OS_USER_DOMAIN_NAME'),
                                     os.getenv('OS_PROJECT_DOMAIN_NAME'),os.getenv('OS_PROJECT_NAME'),
                                     os.getenv('OS_USERNAME'), os.getenv('OS_PASSWORD'))
@@ -41,16 +42,6 @@ def main():
     vc = VCenterHelper(host=os.getenv('VM_BALANCE_VCHOST'),user=os.getenv('VM_BALANCE_VCUSER'),password=os.getenv('VM_BALANCE_VCPASSWORD'))
 
     big_vm_name_uuid = input("Enter BIG VM Instance UUID: ")
-
-    """
-    servers = openstack_obj.api.compute.servers(details=True, all_projects=True)
-
-    for i in servers:
-        print(i)
-        Enter BIG VM Instance UUID: ...
-        Enter Free Node name: ...
-    """
-
     # details about vm and  free node
     vm = vc.find_server(big_vm_name_uuid)
     free_node_name = input("Enter Free Node name like(node*-bb*.cc.*-*-*.cloud.sap):")
@@ -63,7 +54,7 @@ def main():
     log.info("INFO: instance uuid %s lock status %s", big_vm_name_uuid, loc_check['is_locked'])
 
     # setting metadata and lock for nanny
-    metadata_check = openstack_obj.api.compute.set_server_metadata(big_vm_name_uuid, metadata="nanny_big_vm_handle")
+    metadata_check = openstack_obj.api.compute.set_server_metadata(big_vm_name_uuid, nanny_metadata=nanny_metadata_handle)
     loc = openstack_obj.api.compute.lock_server(big_vm_name_uuid)
     loc_check = openstack_obj.api.compute.get_server(big_vm_name_uuid)
     log.info("INFO: instance uuid %s lock status set by nanny %s", big_vm_name_uuid, loc_check['is_locked'])
@@ -83,7 +74,7 @@ def main():
     # if result failed through alert
     # unlock the server and unset nanny metadata
     unloc = openstack_obj.api.compute.unlock_server(big_vm_name_uuid)
-    metadata_check = openstack_obj.api.compute.delete_server_metadata(big_vm_name_uuid,['metadata'])
+    metadata_check = openstack_obj.api.compute.delete_server_metadata(big_vm_name_uuid,['nanny_metadata'])
 
     # check unlock succesfully done
     unloc_check = openstack_obj.api.compute.get_server(big_vm_name_uuid)
