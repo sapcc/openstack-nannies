@@ -178,6 +178,11 @@ def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_
                     else:
                         log.info("- INFO - VM UUID cant grab VM detail %s",big_vm[1])
                         break
+                    try:
+                        openstack_obj.api.compute.get_server(big_vm_uuid)
+                    except openstack.exceptions.ResourceNotFound:
+                        log.info("- INFO - BIG_VM %s Not exist anymore", big_vm_uuid)
+                        break
                     # automation script for vmotion called here
                     if args.automated:
                         status = vc.vmotion_inside_bb(openstack_obj, big_vm_uuid, target_h[0], nanny_metadata_handle)
