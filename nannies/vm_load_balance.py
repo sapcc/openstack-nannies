@@ -37,12 +37,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 def run_check(args, vcenter_data):
     while True:
         log.info("- INFO - starting new loop run with automation %s ", args.automated)
-        # convert iterations from string to integer and avoid off by one error
-        # below  object creation for prometheus collector metric
         vm_move_suggestions(args,vcenter_data)
+        vcenter_data.sync_data()
         # wait the interval time
         log.info("- INFO - waiting %s minutes before starting the next loop run \n \n", str(args.interval))
-        vcenter_data.sync_data()
         time.sleep(60 * int(args.interval))
 
 
@@ -54,7 +52,7 @@ def vm_move_suggestions(args, vcenter_data):
     openstack_obj = openstack.OpenstackHelper(args.region, args.user_domain_name,
                                               args.project_domain_name,args.project_name,args.username, args.password)
 
-    # cleaning-up last nanny job orphne cleanup
+    # cleaning-up last nanny job orphaned cleanup
     nanny_metadata_handle = "nanny_big_vm_handle"
     shard_vcenter_all = openstack_obj.get_shard_vcenter_all(args.vc_host)
     log.info("- INFO - all building block number %s which is enabled/disable from openstack of region %s",shard_vcenter_all, args.region)
@@ -66,7 +64,6 @@ def vm_move_suggestions(args, vcenter_data):
     bb_overall = {}
     bb_bigvm_consume = {}
     shard_vcenter = openstack_obj.get_shard_vcenter(args.vc_host)
-    #openstack_re = re.compile("^name")
     log.info("- INFO - getting building block info from openstack of region %s", args.region)
     bb_name = [int(re.search(r"[0-9]+", i).group(0)) for i in shard_vcenter]
     for bb in bb_name:
@@ -93,7 +90,7 @@ def vm_move_suggestions(args, vcenter_data):
     big_vm_to_move_list = []
     target_host = []
 
-    # added runtime details please
+    # looping over each esxi node(which is random order)
     for host in hosts:
         if host['runtime'].inMaintenanceMode == True or host['runtime'].inQuarantineMode == True or \
                         host['runtime'].connectionState == "notResponding":
@@ -120,9 +117,6 @@ def vm_move_suggestions(args, vcenter_data):
                     continue
                 if not vm.config.annotation:
                     continue
-                #if not openstack_re.match(vm.config.annotation):
-                #    continue
-                #log.info("- INFO - vm name {} and size {}".format(vm.name,vm.config.hardware.memoryMB))
                 host_consumed_size = host_consumed_size + vm.config.hardware.memoryMB
                 if vm.config.hardware.memoryMB > args.min_vm_size:
                     log.info("- INFO - vm name %s is big vm and size %.2f GB",vm.name, vm.config.hardware.memoryMB/1024)
@@ -150,7 +144,7 @@ def vm_move_suggestions(args, vcenter_data):
                 target_host.append((host['name'],host_size - host_consumed_size))
 
         if big_vm_total_size >= host_size*(1+percentage/100):
-            log.info("- INFO - Alert Alert host name {} over utilised with BIG_VM Alert Alert".format(host['name']))
+            log.info("- INFO - Alert host name {} over utilised with BIG_VM Alert Alert".format(host['name']))
             big_vm_to_move_list.append((host['name'],big_vm_to_move, max_big_vm_size_handle))
         log.info("- INFO - node end here %s ",host['name'])
 
@@ -172,18 +166,19 @@ def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_
     vcenter_error_count = 0
     vm_uuid_re = re.compile('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
     for big_vm in big_vm_to_move_list:
+        # to handle certain bb like bb56
         node = re.findall(r"[0-9]+", big_vm[0])[1]
         for target_h in target_host[:]:
             if node == re.findall(r"[0-9]+", target_h[0])[1]:
                 if target_h[1] - big_vm[2] > 0:
                     log.info(f"- INFO - big Vm {big_vm[1]} of size {round(big_vm[2],2)} is move from source {big_vm[0]} to target {target_h[0]}  having {round(target_h[1],2)} memory and left with memory {round((target_h[1] - big_vm[2]),2)} after vmotion")
                     vcenter_data.set_data('vm_balance_nanny_suggestion_bytes', int(big_vm[2] * 1024),[big_vm[0], target_h[0], big_vm[1]])
-                    # automation script for vmotion called here
                     if vm_uuid_re.match(re.split("\(|\)", big_vm[1])[-2]):
                         big_vm_uuid = re.split("\(|\)", big_vm[1])[-2]
                     else:
                         log.info("- INFO - VM UUID cant grab VM detail %s",big_vm[1])
                         break
+                    # automation script for vmotion called here
                     if args.automated:
                         status = vc.vmotion_inside_bb(openstack_obj, big_vm_uuid, target_h[0], nanny_metadata_handle)
                         log.info(f"- INFO - big Vm {big_vm[1]} of size {round(big_vm[2],2)} is move from source {big_vm[0]} to target {target_h[0]} with {status}")
