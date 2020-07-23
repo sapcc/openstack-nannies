@@ -416,6 +416,7 @@ class VCenterHelper:
         except Exception as e:
             logging.error("ERROR: failed to relocate big vm %s to target node %s with error message =>%s",
                           str(big_vm_name_uuid), str(free_node_name), str(e.msg))
+            state = "Vmotion_failed"
         else:
             log.info("INFO: vmotion done big vm %s to target node %s and state %s", str(big_vm_name_uuid),
                      str(free_node_name), str(state))
