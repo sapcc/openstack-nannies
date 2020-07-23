@@ -86,4 +86,4 @@ def main():
 
 if __name__ == '__main__':
     state = main()
-    print(state)
+    log.info("INFO: vmotion %s",state)
