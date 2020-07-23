@@ -129,7 +129,7 @@ def get_aggr_usage_list(nh, netapp_host, denylist, nanny_metrics_data):
                 .format(aggr['aggregate-name'], int(aggr['aggr-space-attributes']['size-total']) / 1024**3, aggr['aggr-space-attributes']['percent-used-capacity']))
             aggr_usage.append((netapp_host, aggr['aggregate-name'],
                                 int(aggr['aggr-space-attributes']['percent-used-capacity']),int(aggr['aggr-space-attributes']['size-total'])))
-            nanny_metrics_data.set_data_in('netapp_balancing_nanny_aggregate_usage', int(aggr['aggr-space-attributes']['percent-used-capacity']),[aggr['aggregate-name']])
+            nanny_metrics_data.set_data('netapp_balancing_nanny_aggregate_usage', int(aggr['aggr-space-attributes']['percent-used-capacity']),[aggr['aggregate-name']])
     return aggr_usage
 
 # return a list of (netapp_host, volume_name, containing-aggregate-name, size-used, size-total) per flexvol
@@ -142,7 +142,7 @@ def get_flexvol_usage_list(nh, netapp_host, nanny_metrics_data):
                 .format(flexvol['volume-id-attributes']['name'], int(flexvol['volume-space-attributes']['size-used']) / 1024**3, int(flexvol['volume-space-attributes']['size-total']) / 1024**3))
             flexvol_usage.append((netapp_host, flexvol['volume-id-attributes']['name'], flexvol['volume-id-attributes']['containing-aggregate-name'],
                                 int(flexvol['volume-space-attributes']['size-used']),int(flexvol['volume-space-attributes']['size-total'])))
-            nanny_metrics_data.set_data_in('netapp_balancing_nanny_flexvol_usage', int(flexvol['volume-space-attributes']['size-used']),[flexvol['volume-id-attributes']['name']])
+            nanny_metrics_data.set_data('netapp_balancing_nanny_flexvol_usage', int(flexvol['volume-space-attributes']['size-used']),[flexvol['volume-id-attributes']['name']])
     return flexvol_usage
     # (netapphost1, flexvol01, aggr1, 50, 100)
     # (netapphost1, flexvol02, aggr2, 60, 100)
@@ -215,7 +215,7 @@ def check_loop(args, nanny_metrics_data):
             # then balance out aggregates
             move_suggestions_aggr(args, nanny_metrics_data)
             # sync metrics to prometheus exporter
-            nanny_metrics_data.sync_data_out()
+            nanny_metrics_data.sync_data()
             # wait the interval time
             log.info("INFO: waiting %s minutes before starting the next loop run", str(args.interval))
             time.sleep(60 * int(args.interval))
@@ -228,8 +228,8 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
     gauge_value_move_suggestions_detached = 0
     gauge_value_move_suggestions_attached = 0
     # send the empty metric now already in case we are returning before setting a new value
-    nanny_metrics_data.set_data_in('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_detached, ['flexvol', 'detached'])
-    nanny_metrics_data.set_data_in('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_attached, ['flexvol', 'attached'])
+    nanny_metrics_data.set_data('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_detached, ['flexvol', 'detached'])
+    nanny_metrics_data.set_data('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_attached, ['flexvol', 'attached'])
 
     # used for log output
     if args.dry_run:
@@ -477,8 +477,8 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
     if flexvol_most_used_current_size > (args.flexvol_size_limit * 1024**3):
         log.info("- INFO - there are not enough (or no) attached volumes within the current min/max limits to bring the flexvol {} below the limit of {:.0f} gb - maybe limits should be adjusted?".format(flexvol_most_used[1], args.flexvol_size_limit))
 
-    nanny_metrics_data.set_data_in('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_detached,['flexvol', 'detached'])
-    nanny_metrics_data.set_data_in('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_attached,['flexvol', 'attached'])
+    nanny_metrics_data.set_data('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_detached,['flexvol', 'detached'])
+    nanny_metrics_data.set_data('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_attached,['flexvol', 'attached'])
 
 # print out suggestions which volumes should be moved
 # for now this is: suggest to move the largest attached volumes from the fullest netapp aggregate to the emptiest
@@ -488,8 +488,8 @@ def move_suggestions_aggr(args, nanny_metrics_data):
     gauge_value_move_suggestions_detached = 0
     gauge_value_move_suggestions_attached = 0
     # send the empty metric now already in case we are returning before setting a new value
-    nanny_metrics_data.set_data_in('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_detached, ['aggregate', 'detached'])
-    nanny_metrics_data.set_data_in('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_attached, ['aggregate', 'attached'])
+    nanny_metrics_data.set_data('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_detached, ['aggregate', 'detached'])
+    nanny_metrics_data.set_data('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_attached, ['aggregate', 'attached'])
 
     # used for log output
     if args.dry_run:
@@ -722,8 +722,8 @@ def move_suggestions_aggr(args, nanny_metrics_data):
     if aggr_most_used_current_size > aggr_most_used_target_size:
         log.info("- INFO - there are not enough (or no) attached volumes within the current min/max limits to bring the aggregate {} below the limit of {:.0f} gb - maybe limits should be adjusted?".format(aggr_most_used[1], aggr_most_used_target_size / 1024**3))
 
-    nanny_metrics_data.set_data_in('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_detached,['aggregate', 'detached'])
-    nanny_metrics_data.set_data_in('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_attached,['aggregate', 'attached'])
+    nanny_metrics_data.set_data('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_detached,['aggregate', 'detached'])
+    nanny_metrics_data.set_data('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_attached,['aggregate', 'attached'])
 
 
 
@@ -734,9 +734,9 @@ def main():
     nanny_metrics_data = prometheus_exporter_setup(args)
 
     # set some fixed threshold value metrics based on the cmdline args
-    nanny_metrics_data.set_data_in('netapp_balancing_nanny_flexvol_usage_threshold', args.flexvol_size_limit,['dummy'])
-    nanny_metrics_data.set_data_in('netapp_balancing_nanny_aggregate_usage_threshold', args.max_threshold,['dummy'])
-    nanny_metrics_data.set_data_in('netapp_balancing_nanny_move_suggestions_max', args.max_move_vms,['dummy'])
+    nanny_metrics_data.set_data('netapp_balancing_nanny_flexvol_usage_threshold', args.flexvol_size_limit,['dummy'])
+    nanny_metrics_data.set_data('netapp_balancing_nanny_aggregate_usage_threshold', args.max_threshold,['dummy'])
+    nanny_metrics_data.set_data('netapp_balancing_nanny_move_suggestions_max', args.max_move_vms,['dummy'])
 
     check_loop(args, nanny_metrics_data)
 
