@@ -20,6 +20,9 @@ import xmltodict
 
 import ssl
 import urllib
+import logging
+
+log = logging.getLogger(__name__)
 
 class NetAppHelper:
     api_major = 1
@@ -157,7 +160,11 @@ class NetAppHelper:
         lun_result = []
         # lun_result = [lun for lun in luns if lun['volume'] in flexvol_list]
         for lun in luns:
-            if lun['volume'] in flexvol_list:
-                lun_result.append(lun)
+            # there was the case that lun somehow was not a dict, so better check for that
+            if isinstance(lun, dict):
+                if lun['volume'] in flexvol_list:
+                    lun_result.append(lun)
+            else:
+                log.warning('WARNING: lun is not a dict - lun: %s', str(lun))
 
         return lun_result
