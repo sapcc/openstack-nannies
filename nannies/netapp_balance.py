@@ -45,17 +45,18 @@ def parse_commandline():
     parser.add_argument("--netapp-user", required=True, help="Netapp username")
     parser.add_argument("--netapp-password", required=True, help="Netapp user password")
     parser.add_argument("--region", required=True, help="(Openstack) region")
-    parser.add_argument("--denylist", nargs='*', required=False, help="ignore those aggregates")
     parser.add_argument("--flexvol-size-limit", type=int, default=5500,
                         help="Maximum size in gb for a healthy flexvol")
     parser.add_argument("--lun-min-size-flexvol", type=int, default=20,
                         help="Minimum size (>=) in gb for a volume to move for flexvol balancing")
     parser.add_argument("--lun-max-size-flexvol", type=int, default=550,
                         help="Maximum size (<) in gb for a volume to move for flexvol balancing")
+    parser.add_argument("--denylist-flexvol", nargs='*', required=False, help="ignore those flexvols")
     parser.add_argument("--lun-min-size-aggr", type=int, default=550,
                         help="Minimum size (>=) in gb for a volume to move for aggregate balancing")
     parser.add_argument("--lun-max-size-aggr", type=int, default=2050,
                         help="Maximum size (<=) in gb for a volume to move for aggregate balancing")
+    parser.add_argument("--denylist-aggr", nargs='*', required=False, help="ignore those aggregates")
     parser.add_argument("--max-move-vms", type=int, default=100,
                         help="Maximum number of VMs to (propose to) move")
     parser.add_argument("--min-threshold", type=int, default=60,
@@ -117,16 +118,16 @@ def get_netapp_hosts(vc, region):
     return netapp_hosts
 
 # return a list of (netapp_host, aggregate-name, percent-used-capacity, size-totoal) per aggregates
-def get_aggr_usage_list(nh, netapp_host, denylist, nanny_metrics_data):
+def get_aggr_usage_list(nh, netapp_host, denylist_aggr, nanny_metrics_data):
     aggr_usage = []
     # get aggregates
     for aggr in nh.get_aggregate_usage():
 
-        # print info for denylisted aggregates
-        if aggr['aggregate-name'] in denylist:
-            log.info("- INFO -   aggregate {} is denylisted via cmdline".format(aggr['aggregate-name']))
+        # print info for denylist_aggred aggregates
+        if aggr['aggregate-name'] in denylist_aggr:
+            log.info("- INFO -   aggregate {} is denylist_aggr'ed via cmdline".format(aggr['aggregate-name']))
 
-        if aggr['aggr-raid-attributes']['is-root-aggregate'] == 'false' and aggr['aggregate-name'] not in denylist:
+        if aggr['aggr-raid-attributes']['is-root-aggregate'] == 'false' and aggr['aggregate-name'] not in denylist_aggr:
             log.info("- INFO -   aggregate {} of size {:.0f} gb is at {}% utilization"
                 .format(aggr['aggregate-name'], int(aggr['aggr-space-attributes']['size-total']) / 1024**3, aggr['aggr-space-attributes']['percent-used-capacity']))
             aggr_usage.append((netapp_host, aggr['aggregate-name'],
@@ -135,11 +136,16 @@ def get_aggr_usage_list(nh, netapp_host, denylist, nanny_metrics_data):
     return aggr_usage
 
 # return a list of (netapp_host, flexvol_name, containing-aggregate-name, size-used, size-total) per flexvol
-def get_flexvol_usage_list(nh, netapp_host, nanny_metrics_data):
+def get_flexvol_usage_list(nh, netapp_host, denylist_flexvol, nanny_metrics_data):
     flexvol_usage = []
     # get flexvols
     for flexvol in nh.get_volume_usage():
-        if flexvol['volume-id-attributes']['name'].lower().startswith('vv0_'):
+
+        # print info for denylist_flexvoled aggregates
+        if flexvol['volume-id-attributes']['name'] in denylist_flexvol:
+            log.info("- INFO -   flexvol {} is denylist_flexvol'ed via cmdline".format(flexvol['volume-id-attributes']['name']))
+
+        if flexvol['volume-id-attributes']['name'].lower().startswith('vv0_') and flexvol['volume-id-attributes']['name'] not in denylist_flexvol:
             log.info("- INFO -   flexvol {} of size {:.0f} gb of a total size {:.0f} gb"
                 .format(flexvol['volume-id-attributes']['name'], int(flexvol['volume-space-attributes']['size-used']) / 1024**3, int(flexvol['volume-space-attributes']['size-total']) / 1024**3))
             flexvol_usage.append((netapp_host, flexvol['volume-id-attributes']['name'], flexvol['volume-id-attributes']['containing-aggregate-name'],
@@ -267,17 +273,23 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
         vi = nh.get_single("system-get-version")
         log.info("- INFO -  {} is on version {}".format(netapp_host, vi['version']))
 
-        # make denylist an empty list if not set via cmdline
-        if args.denylist:
-            denylist = args.denylist
+        # make denylist_flexvol an empty list if not set via cmdline
+        if args.denylist_flexvol:
+            denylist_flexvol = args.denylist_flexvol
         else:
-            denylist = []
+            denylist_flexvol = []
+
+        # make denylist_aggr an empty list if not set via cmdline
+        if args.denylist_aggr:
+            denylist_aggr = args.denylist_aggr
+        else:
+            denylist_aggr = []
 
         # collect flexvol usage across all netapp hosts
-        flexvol_usage += get_flexvol_usage_list(nh, netapp_host, nanny_metrics_data)
+        flexvol_usage += get_flexvol_usage_list(nh, netapp_host, denylist_flexvol, nanny_metrics_data)
 
         # collect aggregate usage across all netapp hosts
-        aggr_usage += get_aggr_usage_list(nh, netapp_host, denylist, nanny_metrics_data)
+        aggr_usage += get_aggr_usage_list(nh, netapp_host, denylist_aggr, nanny_metrics_data)
 
     # sort the flexvols top down to start with the biggest ones
     flexvol_usage.sort(key=lambda x: x[3], reverse=True)
@@ -531,14 +543,14 @@ def move_suggestions_aggr(args, nanny_metrics_data):
         vi = nh.get_single("system-get-version")
         log.info("- INFO -  {} is on version {}".format(netapp_host, vi['version']))
 
-        # make denylist an empty list if not set via cmdline
-        if args.denylist:
-            denylist = args.denylist
+        # make denylist_aggr an empty list if not set via cmdline
+        if args.denylist_aggr:
+            denylist_aggr = args.denylist_aggr
         else:
-            denylist = []
+            denylist_aggr = []
 
         # collect aggregate usage across all netapp hosts
-        aggr_usage += get_aggr_usage_list(nh, netapp_host, denylist, nanny_metrics_data)
+        aggr_usage += get_aggr_usage_list(nh, netapp_host, denylist_aggr, nanny_metrics_data)
 
     # sort the aggregates top down to start with the highest usage percentage
     aggr_usage.sort(key=lambda x: x[2], reverse=True)
