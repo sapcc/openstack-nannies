@@ -45,16 +45,18 @@ def parse_commandline():
     parser.add_argument("--netapp-user", required=True, help="Netapp username")
     parser.add_argument("--netapp-password", required=True, help="Netapp user password")
     parser.add_argument("--region", required=True, help="(Openstack) region")
-    parser.add_argument("--flexvol-size-limit", type=int, default=5500,
+    # 4600 is about 90% of 5tb
+    parser.add_argument("--flexvol-size-limit", type=int, required=False, default=4600,
                         help="Maximum size in gb for a healthy flexvol")
-    parser.add_argument("--lun-min-size-flexvol", type=int, default=20,
+    parser.add_argument("--lun-min-size-flexvol", type=int, required=False, default=20,
                         help="Minimum size (>=) in gb for a volume to move for flexvol balancing")
-    parser.add_argument("--lun-max-size-flexvol", type=int, default=550,
+    parser.add_argument("--lun-max-size-flexvol", type=int, required=False, default=1200,
                         help="Maximum size (<) in gb for a volume to move for flexvol balancing")
     parser.add_argument("--denylist-flexvol", nargs='*', required=False, help="ignore those flexvols")
-    parser.add_argument("--lun-min-size-aggr", type=int, default=550,
+    parser.add_argument("--lun-min-size-aggr", type=int, required=False, default=1200,
                         help="Minimum size (>=) in gb for a volume to move for aggregate balancing")
-    parser.add_argument("--lun-max-size-aggr", type=int, default=2050,
+    # 2050 is about 2tb
+    parser.add_argument("--lun-max-size-aggr", type=int, required=False, default=2050,
                         help="Maximum size (<=) in gb for a volume to move for aggregate balancing")
     parser.add_argument("--denylist-aggr", nargs='*', required=False, help="ignore those aggregates")
     parser.add_argument("--max-move-vms", type=int, default=100,
