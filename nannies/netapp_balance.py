@@ -59,7 +59,7 @@ def parse_commandline():
     parser.add_argument("--lun-max-size-aggr", type=int, required=False, default=2050,
                         help="Maximum size (<=) in gb for a volume to move for aggregate balancing")
     parser.add_argument("--denylist-aggr", nargs='*', required=False, help="ignore those aggregates")
-    parser.add_argument("--max-move-vms", type=int, default=100,
+    parser.add_argument("--max-move-vms", type=int, default=10,
                         help="Maximum number of VMs to (propose to) move")
     parser.add_argument("--min-threshold", type=int, default=60,
                         help="Target aggregate usage must be below this value to do a move")
@@ -136,6 +136,8 @@ def get_aggr_usage_list(nh, netapp_host, denylist_aggr, nanny_metrics_data):
                                 int(aggr['aggr-space-attributes']['percent-used-capacity']),int(aggr['aggr-space-attributes']['size-total'])))
             nanny_metrics_data.set_data('netapp_balancing_nanny_aggregate_usage', int(aggr['aggr-space-attributes']['percent-used-capacity']),[aggr['aggregate-name']])
     return aggr_usage
+    # examples:
+    # (netapphost1, aggregate01, 50, 10000000)
 
 # return a list of (netapp_host, flexvol_name, containing-aggregate-name, size-used, size-total) per flexvol
 def get_flexvol_usage_list(nh, netapp_host, denylist_flexvol, nanny_metrics_data):
@@ -154,6 +156,7 @@ def get_flexvol_usage_list(nh, netapp_host, denylist_flexvol, nanny_metrics_data
                                 int(flexvol['volume-space-attributes']['size-used']),int(flexvol['volume-space-attributes']['size-total'])))
             nanny_metrics_data.set_data('netapp_balancing_nanny_flexvol_usage', int(flexvol['volume-space-attributes']['size-used']),[flexvol['volume-id-attributes']['name']])
     return flexvol_usage
+    # examples:
     # (netapphost1, flexvol01, aggr1, 50, 100)
     # (netapphost1, flexvol02, aggr2, 60, 100)
     # (netapphost1, flexvol03, aggr1, 60, 100)
@@ -195,6 +198,8 @@ def get_vcenter_info(vc):
 
     return vms, attached_volumes
 
+# we move the lun/volume between the netapps by telling the vcenter to move the attached
+# storage of the corresponding shadow vm to another datastore (i.e. anorther netapp)
 def move_shadow_vm(vc, volume_uuid, target_ds, dry_run):
     # vm = vc.get_object_by_name(vim.VirtualMachine, volume_uuid)
     vm = vc.find_server(volume_uuid)
@@ -234,6 +239,7 @@ def check_loop(args, nanny_metrics_data):
 # for now this is: suggest to move the largest attached volumes from the fullest netapp aggregate to the emptiest
 def move_suggestions_flexvol(args, nanny_metrics_data):
 
+    # TODO this might go maybe as we will not need the metrics in some return cases
     # a counter for move suggestions
     gauge_value_move_suggestions_detached = 0
     gauge_value_move_suggestions_attached = 0
@@ -275,12 +281,14 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
         vi = nh.get_single("system-get-version")
         log.info("- INFO -  {} is on version {}".format(netapp_host, vi['version']))
 
+        # TODO this can go maybe by changing the function to use an empty list by default
         # make denylist_flexvol an empty list if not set via cmdline
         if args.denylist_flexvol:
             denylist_flexvol = args.denylist_flexvol
         else:
             denylist_flexvol = []
 
+        # TODO this can go maybe by changing the function to use an empty list by default
         # make denylist_aggr an empty list if not set via cmdline
         if args.denylist_aggr:
             denylist_aggr = args.denylist_aggr
@@ -322,12 +330,15 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
 
     # to keep things simple we only work on the largest aggr on each nanny run
     # find aggr with highest usage, aggr with lowest usage (that is not on highest usage host)
+    # TODO see todo above - we need to check that the least used aggr is not the containing aggr of the most used flexvol
+    #      in that case we want to use the second least used aggregate
     aggr_most_used = aggr_usage[0]
     aggr_least_used = None
     for aggr in reversed(aggr_usage):
         if aggr[0] != aggr_most_used[0]:
             aggr_least_used = aggr
             break
+    # TODO this should be double checked and combined with the todo from above
     else:
         log.error("- ERROR - no aggregate found that is not on the same netapp")
         return 1
@@ -336,7 +347,7 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
     log.info("- INFO - using it as target for balancing volume movements")
     log.info("- INFO - calculating volume move suggestions for automatic flexvol balancing ... this may take a moment")
 
-    # NOTE we do not use the comments in the end - we map via vcenter backing
+    # TODO we do not use the comments in the end - we map via vcenter backing
     # <uuid>_brick.vmdk - DATA
     # <uuid>.vmdk - DATA
     # <uuid>_1.vmdk - DATA
@@ -381,6 +392,7 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
     vmvmdks_flexvol = dict()
     for vm in vms:
         # the double condition is just for safety - they usually should never both match
+        # TODO i think we already check for them to be a shadow vm in get_vcenter_info -> double check
         if vc.is_shadow_vm(vm) and not vc.is_openstack_vm(vm):
             # find disk backing
             for device in vm['config.hardware.device']:
