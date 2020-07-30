@@ -335,7 +335,8 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
     aggr_most_used = aggr_usage[0]
     aggr_least_used = None
     for aggr in reversed(aggr_usage):
-        if aggr[0] != aggr_most_used[0]:
+        # make sure we are not on the same netapp and not on the netapp of the source flexvol
+        if aggr[0] != aggr_most_used[0] and aggr[0] != flexvol_most_used[0]:
             aggr_least_used = aggr
             break
     # TODO this should be double checked and combined with the todo from above
@@ -440,7 +441,7 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
                     log.info("- PLEASE IGNORE - the volume {} seems to be attached to instance {} meanwhile - doing nothing # size {:.0f} gb".format(vmvmdks_flexvol.get(vmdk[1])[0], oh.api.block_store.get_volume(vmvmdks_flexvol.get(vmdk[1])[0]).attachments[0]['server_id'], vmdk[2] / 1024**3))
                 else:
                     # this should be DEBUG later
-                    log.info("==> before - lun size: {:.0f} gb - flexvol usage: {:.0f} gb - target aggr usage: {:.0f} gb".format(vmdk[2] / 1024**3, flexvol_most_used_current_size / 1024**3, aggr_least_used_current_size / 1024**3))
+                    log.debug("==> before - lun size: {:.0f} gb - flexvol usage: {:.0f} gb - target aggr usage: {:.0f} gb".format(vmdk[2] / 1024**3, flexvol_most_used_current_size / 1024**3, aggr_least_used_current_size / 1024**3))
                     log.info("- PLEASE IGNORE - plan: move volume {} from flexvol {} to {} # size {:.0f} gb".format(vmvmdks_flexvol.get(vmdk[1])[0], flexvol_most_used[1], bb_name_from_aggregate_name(aggr_least_used[1]), vmdk[2] / 1024**3))
                     # debug
                     log.info("- PLEASE IGNORE -  {} locking volume {} before moving it".format(action_string, vmvmdks_flexvol.get(vmdk[1])[0]))
@@ -458,7 +459,7 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
                     #aggr_least_used_current_size += vmdk[2]
                     aggr_least_used_current_size += int(vmdk[2])
                     # this should be DEBUG later
-                    log.info("==> after - lun size: {:.0f} gb - flexvol usage: {:.0f} gb - target aggr usage: {:.0f} gb".format(vmdk[2] / 1024**3, flexvol_most_used_current_size / 1024**3, aggr_least_used_current_size / 1024**3))
+                    log.debug("==> after - lun size: {:.0f} gb - flexvol usage: {:.0f} gb - target aggr usage: {:.0f} gb".format(vmdk[2] / 1024**3, flexvol_most_used_current_size / 1024**3, aggr_least_used_current_size / 1024**3))
                     gauge_value_move_suggestions_detached += 1
                     if gauge_value_move_suggestions_detached >= args.max_move_vms:
                         log.info("- PLEASE IGNORE - max-move-vms of {} reached - stopping here".format(args.max_move_vms))
@@ -492,14 +493,14 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
                 if (flexvol_most_used_current_size < (args.flexvol_size_limit * 1024**3)) and (optional_string == ''):
                     optional_string = ' (optional)'
                 # this should be DEBUG later
-                log.info("==> before - lun size: {:.0f} gb - flexvol usage: {:.0f} gb - target aggr usage: {:.0f} gb".format(vmdk[2] / 1024**3, flexvol_most_used_current_size / 1024**3, aggr_least_used_current_size / 1024**3))
+                log.debug("==> before - lun size: {:.0f} gb - flexvol usage: {:.0f} gb - target aggr usage: {:.0f} gb".format(vmdk[2] / 1024**3, flexvol_most_used_current_size / 1024**3, aggr_least_used_current_size / 1024**3))
                 # print out info for the manual volume move
-                log.info("- INFO - netapp flexvol balancing - ./svmotion_cinder.py {} vVOL_{} # from flexvol {} - size {:.0f} gb{}".format(vmvmdks_flexvol.get(vmdk[1])[0], bb_name_from_aggregate_name(aggr_least_used[1]), flexvol_most_used[1], vmdk[2] / 1024**3, optional_string))
+                log.info("- INFO - netapp flexvol balancing - ./svmotion_cinder_v2.py {} vVOL_{} # from flexvol {} on {} - size {:.0f} gb{}".format(vmvmdks_flexvol.get(vmdk[1])[0], bb_name_from_aggregate_name(aggr_least_used[1]), flexvol_most_used[1], flexvol_most_used[2], vmdk[2] / 1024**3, optional_string))
                 # trying to keep track of the actual usage of the participating flexvols and aggregates
                 flexvol_most_used_current_size -= int(vmdk[2])
                 aggr_least_used_current_size += int(vmdk[2])
                 # this should be DEBUG later
-                log.info("==> after - lun size: {:.0f} gb - flexvol usage: {:.0f} gb - target aggr usage: {:.0f} gb".format(vmdk[2] / 1024**3, flexvol_most_used_current_size / 1024**3, aggr_least_used_current_size / 1024**3))
+                log.debug("==> after - lun size: {:.0f} gb - flexvol usage: {:.0f} gb - target aggr usage: {:.0f} gb".format(vmdk[2] / 1024**3, flexvol_most_used_current_size / 1024**3, aggr_least_used_current_size / 1024**3))
                 gauge_value_move_suggestions_attached += 1
                 if gauge_value_move_suggestions_attached >= args.max_move_vms:
                     log.info("- IMPORTANT - please stop with movements - max-move-vms of {} reached".format(args.max_move_vms))
@@ -742,15 +743,15 @@ def move_suggestions_aggr(args, nanny_metrics_data):
                 if (aggr_most_used_current_size < aggr_most_used_target_size) and (optional_string == ''):
                     optional_string = ' (optional)'
                 # this should be DEBUG later
-                log.info("==> before - lun size: {:.0f} gb - source aggr usage: {:.0f} gb - target aggr usage: {:.0f} gb".format(vmdk[2] / 1024**3, aggr_most_used_current_size / 1024**3, aggr_least_used_current_size / 1024**3))
+                log.debug("==> before - lun size: {:.0f} gb - source aggr usage: {:.0f} gb - target aggr usage: {:.0f} gb".format(vmdk[2] / 1024**3, aggr_most_used_current_size / 1024**3, aggr_least_used_current_size / 1024**3))
                 # trying to keep track of the actual usage of the participating aggregates
                 aggr_most_used_current_size -= vmdk[2]
                 aggr_least_used_current_size += vmdk[2]
                 gauge_value_move_suggestions_attached += 1
                 # print out info for the manual volume move
-                log.info("- INFO - netapp aggregate balancing - ./svmotion_cinder.py {} vVOL_{} # from {} - size {:.0f} gb{}".format(vmvmdks.get(vmdk[1])[0], bb_name_from_aggregate_name(aggr_least_used[1]), aggr_most_used[1], vmdk[2] / 1024**3, optional_string))
+                log.info("- INFO - netapp aggregate balancing - ./svmotion_cinder_v2.py {} vVOL_{} # from {} - size {:.0f} gb{}".format(vmvmdks.get(vmdk[1])[0], bb_name_from_aggregate_name(aggr_least_used[1]), aggr_most_used[1], vmdk[2] / 1024**3, optional_string))
                 # this should be DEBUG later
-                log.info("==> after - lun size: {:.0f} gb - source aggr usage: {:.0f} gb - target aggr usage: {:.0f} gb".format(vmdk[2] / 1024**3, aggr_most_used_current_size / 1024**3, aggr_least_used_current_size / 1024**3))
+                log.debug("==> after - lun size: {:.0f} gb - source aggr usage: {:.0f} gb - target aggr usage: {:.0f} gb".format(vmdk[2] / 1024**3, aggr_most_used_current_size / 1024**3, aggr_least_used_current_size / 1024**3))
                 if gauge_value_move_suggestions_attached >= args.max_move_vms:
                     log.info("- IMPORTANT - please stop with movements - max-move-vms of {} reached".format(args.max_move_vms))
                     optional_string = ' (no move)'
