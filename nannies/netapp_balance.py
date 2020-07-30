@@ -48,17 +48,17 @@ def parse_commandline():
     # 4600 is about 90% of 5tb
     parser.add_argument("--flexvol-size-limit", type=int, required=False, default=4600,
                         help="Maximum size in gb for a healthy flexvol")
-    parser.add_argument("--lun-min-size-flexvol", type=int, required=False, default=20,
+    parser.add_argument("--flexvol-lun-min-size", type=int, required=False, default=20,
                         help="Minimum size (>=) in gb for a volume to move for flexvol balancing")
-    parser.add_argument("--lun-max-size-flexvol", type=int, required=False, default=1200,
+    parser.add_argument("--flexvol-lun-max-size", type=int, required=False, default=1200,
                         help="Maximum size (<) in gb for a volume to move for flexvol balancing")
-    parser.add_argument("--denylist-flexvol", nargs='*', required=False, help="ignore those flexvols")
-    parser.add_argument("--lun-min-size-aggr", type=int, required=False, default=1200,
+    parser.add_argument("--flexvol-denylist", nargs='*', required=False, help="ignore those flexvols")
+    parser.add_argument("--aggr-lun-min-size", type=int, required=False, default=1200,
                         help="Minimum size (>=) in gb for a volume to move for aggregate balancing")
     # 2050 is about 2tb
-    parser.add_argument("--lun-max-size-aggr", type=int, required=False, default=2050,
+    parser.add_argument("--aggr-lun-max-size", type=int, required=False, default=2050,
                         help="Maximum size (<=) in gb for a volume to move for aggregate balancing")
-    parser.add_argument("--denylist-aggr", nargs='*', required=False, help="ignore those aggregates")
+    parser.add_argument("--aggr-denylist", nargs='*', required=False, help="ignore those aggregates")
     parser.add_argument("--max-move-vms", type=int, default=10,
                         help="Maximum number of VMs to (propose to) move")
     parser.add_argument("--min-threshold", type=int, default=60,
@@ -120,16 +120,16 @@ def get_netapp_hosts(vc, region):
     return netapp_hosts
 
 # return a list of (netapp_host, aggregate-name, percent-used-capacity, size-totoal) per aggregates
-def get_aggr_usage_list(nh, netapp_host, denylist_aggr, nanny_metrics_data):
+def get_aggr_usage_list(nh, netapp_host, aggr_denylist, nanny_metrics_data):
     aggr_usage = []
     # get aggregates
     for aggr in nh.get_aggregate_usage():
 
-        # print info for denylist_aggred aggregates
-        if aggr['aggregate-name'] in denylist_aggr:
-            log.info("- INFO -   aggregate {} is denylist_aggr'ed via cmdline".format(aggr['aggregate-name']))
+        # print info for aggr_denylisted aggregates
+        if aggr['aggregate-name'] in aggr_denylist:
+            log.info("- INFO -   aggregate {} is aggr_denylist'ed via cmdline".format(aggr['aggregate-name']))
 
-        if aggr['aggr-raid-attributes']['is-root-aggregate'] == 'false' and aggr['aggregate-name'] not in denylist_aggr:
+        if aggr['aggr-raid-attributes']['is-root-aggregate'] == 'false' and aggr['aggregate-name'] not in aggr_denylist:
             log.info("- INFO -   aggregate {} of size {:.0f} gb is at {}% utilization"
                 .format(aggr['aggregate-name'], int(aggr['aggr-space-attributes']['size-total']) / 1024**3, aggr['aggr-space-attributes']['percent-used-capacity']))
             aggr_usage.append((netapp_host, aggr['aggregate-name'],
@@ -140,16 +140,16 @@ def get_aggr_usage_list(nh, netapp_host, denylist_aggr, nanny_metrics_data):
     # (netapphost1, aggregate01, 50, 10000000)
 
 # return a list of (netapp_host, flexvol_name, containing-aggregate-name, size-used, size-total) per flexvol
-def get_flexvol_usage_list(nh, netapp_host, denylist_flexvol, nanny_metrics_data):
+def get_flexvol_usage_list(nh, netapp_host, flexvol_denylist, nanny_metrics_data):
     flexvol_usage = []
     # get flexvols
     for flexvol in nh.get_volume_usage():
 
-        # print info for denylist_flexvoled aggregates
-        if flexvol['volume-id-attributes']['name'] in denylist_flexvol:
-            log.info("- INFO -   flexvol {} is denylist_flexvol'ed via cmdline".format(flexvol['volume-id-attributes']['name']))
+        # print info for flexvol_denylisted aggregates
+        if flexvol['volume-id-attributes']['name'] in flexvol_denylist:
+            log.info("- INFO -   flexvol {} is flexvol_denylist'ed via cmdline".format(flexvol['volume-id-attributes']['name']))
 
-        if flexvol['volume-id-attributes']['name'].lower().startswith('vv0_') and flexvol['volume-id-attributes']['name'] not in denylist_flexvol:
+        if flexvol['volume-id-attributes']['name'].lower().startswith('vv0_') and flexvol['volume-id-attributes']['name'] not in flexvol_denylist:
             log.info("- INFO -   flexvol {} of size {:.0f} gb of a total size {:.0f} gb"
                 .format(flexvol['volume-id-attributes']['name'], int(flexvol['volume-space-attributes']['size-used']) / 1024**3, int(flexvol['volume-space-attributes']['size-total']) / 1024**3))
             flexvol_usage.append((netapp_host, flexvol['volume-id-attributes']['name'], flexvol['volume-id-attributes']['containing-aggregate-name'],
@@ -282,24 +282,24 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
         log.info("- INFO -  {} is on version {}".format(netapp_host, vi['version']))
 
         # TODO this can go maybe by changing the function to use an empty list by default
-        # make denylist_flexvol an empty list if not set via cmdline
-        if args.denylist_flexvol:
-            denylist_flexvol = args.denylist_flexvol
+        # make flexvol_denylist an empty list if not set via cmdline
+        if args.flexvol_denylist:
+            flexvol_denylist = args.flexvol_denylist
         else:
-            denylist_flexvol = []
+            flexvol_denylist = []
 
         # TODO this can go maybe by changing the function to use an empty list by default
-        # make denylist_aggr an empty list if not set via cmdline
-        if args.denylist_aggr:
-            denylist_aggr = args.denylist_aggr
+        # make aggr_denylist an empty list if not set via cmdline
+        if args.aggr_denylist:
+            aggr_denylist = args.aggr_denylist
         else:
-            denylist_aggr = []
+            aggr_denylist = []
 
         # collect flexvol usage across all netapp hosts
-        flexvol_usage += get_flexvol_usage_list(nh, netapp_host, denylist_flexvol, nanny_metrics_data)
+        flexvol_usage += get_flexvol_usage_list(nh, netapp_host, flexvol_denylist, nanny_metrics_data)
 
         # collect aggregate usage across all netapp hosts
-        aggr_usage += get_aggr_usage_list(nh, netapp_host, denylist_aggr, nanny_metrics_data)
+        aggr_usage += get_aggr_usage_list(nh, netapp_host, aggr_denylist, nanny_metrics_data)
 
     # sort the flexvols top down to start with the biggest ones
     flexvol_usage.sort(key=lambda x: x[3], reverse=True)
@@ -318,7 +318,7 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
 
     # filter luns for desired size range
     luns_on_flexvol_most_used = [lun for lun in luns_on_flexvol_most_used
-        if args.lun_min_size_flexvol * 1024**3 <= int(lun['size-used']) < args.lun_max_size_flexvol * 1024**3]
+        if args.flexvol_lun_min_size * 1024**3 <= int(lun['size-used']) < args.flexvol_lun_max_size * 1024**3]
 
     # we can only balance if there are any luns to balance on the flexvol within the given min and max regions
     if len(luns_on_flexvol_most_used) == 0:
@@ -558,14 +558,14 @@ def move_suggestions_aggr(args, nanny_metrics_data):
         vi = nh.get_single("system-get-version")
         log.info("- INFO -  {} is on version {}".format(netapp_host, vi['version']))
 
-        # make denylist_aggr an empty list if not set via cmdline
-        if args.denylist_aggr:
-            denylist_aggr = args.denylist_aggr
+        # make aggr_denylist an empty list if not set via cmdline
+        if args.aggr_denylist:
+            aggr_denylist = args.aggr_denylist
         else:
-            denylist_aggr = []
+            aggr_denylist = []
 
         # collect aggregate usage across all netapp hosts
-        aggr_usage += get_aggr_usage_list(nh, netapp_host, denylist_aggr, nanny_metrics_data)
+        aggr_usage += get_aggr_usage_list(nh, netapp_host, aggr_denylist, nanny_metrics_data)
 
     # sort the aggregates top down to start with the highest usage percentage
     aggr_usage.sort(key=lambda x: x[2], reverse=True)
@@ -599,7 +599,7 @@ def move_suggestions_aggr(args, nanny_metrics_data):
 
     # filter luns for desired size range
     luns = [lun for lun in luns
-            if args.lun_min_size_aggr * 1024**3 <= int(lun['size-used']) <= args.lun_max_size_aggr * 1024**3]
+            if args.aggr_lun_min_size * 1024**3 <= int(lun['size-used']) <= args.aggr_lun_max_size * 1024**3]
     luns.sort(key=lambda lun: int(lun['size-used']), reverse=True)
 
     # we can only balance if there are any luns to balance on the aggregate within the given min and max regions
