@@ -24,7 +24,7 @@ else
     AUTOMATION=""
 fi
 
-python3 /scripts/vm_load_balance.py $AUTOMATION --vc_host $VM_BALANCE_VCHOST --vc_user $VM_BALANCE_VCUSER --vc_password $VM_BALANCE_VCPASSWORD --region $REGION --username $OS_USERNAME --password $OS_PASSWORD --user_domain_name $OS_USER_DOMAIN_NAME --project_name $OS_PROJECT_NAME --project_domain_name $OS_PROJECT_DOMAIN_NAME --interval $VM_BALANCE_INTERVAL
+python3 /scripts/vm_load_balance.py $AUTOMATION --vc_host $VM_BALANCE_VCHOST --vc_user $VM_BALANCE_VCUSER --vc_password $VM_BALANCE_VCPASSWORD --region $REGION --username $OS_USERNAME --password $OS_PASSWORD --user_domain_name $OS_USER_DOMAIN_NAME --project_name $OS_PROJECT_NAME --project_domain_name $OS_PROJECT_DOMAIN_NAME --interval $VM_BALANCE_INTERVAL --denial_list $DENIAL_BB_LIST
 
 
 
