@@ -59,6 +59,12 @@ def vm_move_suggestions(args, vcenter_data):
     avail_zone = args.region.lower() + re.split("-",args.vc_host)[1].lower()
     openstack_obj.delete_nanny_metadata(nanny_metadata_handle,avail_zone,shard_vcenter_all)
 
+    log.info("- INFO - all denial_list_hosts %s ", args.denial_list)
+    if args.denial_list:
+        denial_bb_name = [int(re.search(r"[0-9]+", i).group(0)) for i in args.denial_list]
+    else:
+        denial_bb_name = []
+
     percentage = args.percentage
     bb_consume  = {}
     bb_overall = {}
@@ -98,6 +104,8 @@ def vm_move_suggestions(args, vcenter_data):
         if host['config.host'] in big_vm_host or host['config.host'] in fail_over_hosts:
             continue
         if int(re.findall(r"[0-9]+",host['name'])[1]) not in bb_name:
+            continue
+        if int(re.findall(r"[0-9]+",host['name'])[1]) in denial_bb_name:
             continue
         if not host['parent'].name.startswith("production"):
             continue
@@ -218,6 +226,7 @@ def main():
     parser.add_argument("--max_vm_size", type=int, default=1050000, help="Max Big_Vm size to handle")
     parser.add_argument("--percentage", type=int, default=3, help="percentage of overbooked")
     parser.add_argument("--automated",action="store_true", help='false as automation of big_vm not doing vmotion only suggestion')
+    parser.add_argument("--denial_list",nargs='*',required=False,default=None,help='all building block ignored by nanny')
     vcenter_data = PromDataClass()
     mymetrics = PromMetricsClass()
     mymetrics.set_metrics('vm_balance_nanny_host_size_bytes', 'des:vm_balance_nanny_host_size_bytes', ['nodename'])
