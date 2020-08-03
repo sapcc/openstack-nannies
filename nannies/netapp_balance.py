@@ -304,7 +304,12 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
     # sort the flexvols top down to start with the biggest ones
     flexvol_usage.sort(key=lambda x: x[3], reverse=True)
     # to keep things simple we only work on the largest flexvol on each nanny run
-    flexvol_most_used = flexvol_usage[0]
+    if flexvol_usage:
+        flexvol_most_used = flexvol_usage[0]
+    else:
+        log.warning("- WARNING - either flexvols are not named properly or maybe no flexvols at all")
+        return
+
     # we only have to balance flexvols in case we are over the limit with the largest one
     if flexvol_most_used[3] <= args.flexvol_size_limit * 1024**3:
         log.info("- INFO - all flexvols are fine - nothing to be done")
