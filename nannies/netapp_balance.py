@@ -312,7 +312,7 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
 
     # we only have to balance flexvols in case we are over the limit with the largest one
     if flexvol_most_used[3] <= args.flexvol_size_limit * 1024**3:
-        log.info("- INFO - all flexvols are fine - nothing to be done")
+        log.info("- INFO - all flexvols are fine - nothing to be done - largest is {} at size {:.0f} gb".format(flexvol_most_used[1], flexvol_most_used[3] / 1024**3))
         return
 
     # TODO check if containing aggr is not least used aggr
@@ -346,7 +346,7 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
             break
     # TODO this should be double checked and combined with the todo from above
     else:
-        log.error("- ERROR - no aggregate found that is not on the same netapp")
+        log.warning("- WARNING - no aggregate found that is not on the same netapp")
         return 1
 
     log.info("- INFO - least utilized aggregate is {1} on {0} with a usage of {2}%".format(*aggr_least_used))
@@ -582,7 +582,7 @@ def move_suggestions_aggr(args, nanny_metrics_data):
             aggr_least_used = aggr
             break
     else:
-        log.error("- ERROR - no aggregate found that is not on the same netapp")
+        log.warning("- WARNING - no aggregate found that is not on the same netapp")
         return 1
 
     log.info("- INFO - most utilized aggregate is {1} on {0} with a usage of {2}%".format(*aggr_most_used))
