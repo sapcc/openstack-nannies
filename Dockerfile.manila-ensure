@@ -16,4 +16,4 @@ FROM __MANILA_NANNY_BASE_IMAGE__
 
 USER root
 
-ADD scripts/netapp-manila-* /scripts/
+ADD scripts/manila-ensure-* /scripts/
