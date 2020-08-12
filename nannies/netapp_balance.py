@@ -85,6 +85,8 @@ def prometheus_exporter_setup(args):
             'space usage per netapp aggregate in percent', ['aggregate'])
     nanny_metrics.set_metrics('netapp_balancing_nanny_aggregate_usage_threshold',
             'usage per netapp aggregate above which balancing should be done', ['dummy'])
+    nanny_metrics.set_metrics('netapp_balancing_nanny_aggregate_usage_avg',
+            'average space usage of all aggregates in percent', ['dummy'])
     nanny_metrics.set_metrics('netapp_balancing_nanny_move_suggestions',
             'number of suggested volume moves', ['type', 'attach_state'])
     nanny_metrics.set_metrics('netapp_balancing_nanny_move_suggestions_max',
@@ -587,6 +589,14 @@ def move_suggestions_aggr(args, nanny_metrics_data):
 
     log.info("- INFO - most utilized aggregate is {1} on {0} with a usage of {2}%".format(*aggr_most_used))
     log.info("- INFO - least utilized aggregate is {1} on {0} with a usage of {2}%".format(*aggr_least_used))
+    vvol_aggr_total_size = 0
+    vvol_aggr_used_size = 0
+    for aggr in aggr_usage:
+        vvol_aggr_total_size += aggr[3]
+        vvol_aggr_used_size += aggr[2] / 100 * aggr[3]
+    vvol_aggr_used_percentage_avg = 100 * vvol_aggr_used_size / vvol_aggr_total_size
+    log.info("- INFO - average usage of all vvol aggregates is {:.0f}% at a total used size of {:.0f} gb".format(vvol_aggr_used_percentage_avg, vvol_aggr_used_size / 1024**3))
+    nanny_metrics_data.set_data('netapp_balancing_nanny_aggregate_usage_avg',vvol_aggr_used_percentage_avg ,['dummy'])
 
     if int(aggr_most_used[2]) < args.max_threshold:
         log.info("- INFO - netapp aggregate balancing - usage of most used source aggregate {} of {}% is below threshold of {}% - doing nothing".format(aggr_most_used[1], aggr_most_used[2], args.max_threshold))
