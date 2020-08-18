@@ -151,7 +151,7 @@ def get_flexvol_usage_list(nh, netapp_host, flexvol_denylist, nanny_metrics_data
         if flexvol['volume-id-attributes']['name'] in flexvol_denylist:
             log.info("- INFO -   flexvol {} is flexvol_denylist'ed via cmdline".format(flexvol['volume-id-attributes']['name']))
 
-        if flexvol['volume-id-attributes']['name'].lower().startswith('vv0_') and flexvol['volume-id-attributes']['name'] not in flexvol_denylist:
+        if flexvol['volume-id-attributes']['name'].lower().startswith('vv') and flexvol['volume-id-attributes']['name'] not in flexvol_denylist:
             log.info("- INFO -   flexvol {} of size {:.0f} gb of a total size {:.0f} gb"
                 .format(flexvol['volume-id-attributes']['name'], int(flexvol['volume-space-attributes']['size-used']) / 1024**3, int(flexvol['volume-space-attributes']['size-total']) / 1024**3))
             flexvol_usage.append((netapp_host, flexvol['volume-id-attributes']['name'], flexvol['volume-id-attributes']['containing-aggregate-name'],
@@ -610,7 +610,7 @@ def move_suggestions_aggr(args, nanny_metrics_data):
 
     log.info("- INFO -  getting luns from the netapp")
     nh_most_used = netapps[aggr_most_used[0]]
-    luns = nh_most_used.get_luns_for_aggr(aggr_most_used[1], "vv0_BB")
+    luns = nh_most_used.get_luns_for_aggr(aggr_most_used[1], "vv")
 
     # filter luns for desired size range
     luns = [lun for lun in luns
