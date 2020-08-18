@@ -147,7 +147,7 @@ class NetAppHelper:
         query = {'volume-attributes': {'volume-id-attributes': {'containing-aggregate-name': aggr_name}}}
         flexvols = self.get_list('volume-get-iter', des_result=desired_attrs, query=query)
         flexvol_list = [v['volume-id-attributes']['name'] for v in flexvols
-                       if v['volume-id-attributes']['name'].lower().startswith("vv0_bb")]
+                       if v['volume-id-attributes']['name'].lower().startswith(vol_prefix)]
 
         # get all luns
         # filtering for flexvol took ~1s per query, all luns took 6s in qa
