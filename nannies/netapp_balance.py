@@ -92,7 +92,7 @@ def prometheus_exporter_setup(args):
     nanny_metrics.set_metrics('netapp_balancing_nanny_move_suggestions_max',
             'maximum number of suggested volume moves', ['dummy'])
     nanny_metrics.set_metrics('netapp_balancing_nanny_error_count',
-            'number of errors we run into during a nanny run', ['error-type'])
+            'number of errors we run into during a nanny run', ['error_type'])
     REGISTRY.register(CustomCollector(nanny_metrics, nanny_metrics_data))
     prometheus_http_start(int(args.prometheus_port))
     return nanny_metrics_data
