@@ -245,11 +245,12 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
     # a counter for move suggestions
     gauge_value_move_suggestions_detached = 0
     gauge_value_move_suggestions_attached = 0
-    error_count_not_enough = 0
     # send the empty metric now already in case we are returning before setting a new value
     nanny_metrics_data.set_data('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_detached, ['flexvol', 'detached'])
     nanny_metrics_data.set_data('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_attached, ['flexvol', 'attached'])
-    nanny_metrics_data.set_data('netapp_balancing_nanny_error_count', error_count_not_enough,['flexvol_not_enough'])
+    nanny_metrics_data.set_data('netapp_balancing_nanny_error_count', 0,['flexvol_not_in_range'])
+    nanny_metrics_data.set_data('netapp_balancing_nanny_error_count', 0,['flexvol_not_enough_auto'])
+    nanny_metrics_data.set_data('netapp_balancing_nanny_error_count', 0,['flexvol_not_enough_manual'])
 
     # used for log output
     if args.dry_run:
@@ -330,6 +331,7 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
     # we can only balance if there are any luns to balance on the flexvol within the given min and max regions
     if len(luns_on_flexvol_most_used) == 0:
         log.info("- PLEASE IGNORE - there are no movable volumes within the current min/max limits on flexvol {} - maybe limits should be adjusted?".format(flexvol_most_used[1]))
+        nanny_metrics_data.set_data('netapp_balancing_nanny_error_count', 1,['flexvol_not_in_range'])
         return
 
     # sort the aggregates top down to start with the highest usage percentage
@@ -479,7 +481,7 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
                         break
     if flexvol_most_used_current_size > (args.flexvol_size_limit * 1024**3):
         log.info("- PLEASE IGNORE - there are not enough (or no) detached volumes within the current min/max limits to bring the flexvol {} below the limit of {:.0f} gb - stopping here".format(flexvol_most_used[1], args.flexvol_size_limit))
-        error_count_not_enough += 1
+        nanny_metrics_data.set_data('netapp_balancing_nanny_error_count', 1,['flexvol_not_enough_auto'])
 
     # when the balancing goal is reached an "optional" string is appended to the recommendations
     optional_string = ''
@@ -515,11 +517,10 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
 
     if flexvol_most_used_current_size > (args.flexvol_size_limit * 1024**3):
         log.info("- INFO - there are not enough (or no) attached volumes within the current min/max limits to bring the flexvol {} below the limit of {:.0f} gb - maybe limits should be adjusted?".format(flexvol_most_used[1], args.flexvol_size_limit))
-        error_count_not_enough += 1
+        nanny_metrics_data.set_data('netapp_balancing_nanny_error_count', 1,['flexvol_not_enough_manual'])
 
     nanny_metrics_data.set_data('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_detached,['flexvol', 'detached'])
     nanny_metrics_data.set_data('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_attached,['flexvol', 'attached'])
-    nanny_metrics_data.set_data('netapp_balancing_nanny_error_count', error_count_not_enough,['flexvol_not_enough'])
 
 # print out suggestions which volumes should be moved
 # for now this is: suggest to move the largest attached volumes from the fullest netapp aggregate to the emptiest
@@ -528,11 +529,12 @@ def move_suggestions_aggr(args, nanny_metrics_data):
     # a counter for move suggestions
     gauge_value_move_suggestions_detached = 0
     gauge_value_move_suggestions_attached = 0
-    error_count_not_enough = 0
     # send the empty metric now already in case we are returning before setting a new value
     nanny_metrics_data.set_data('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_detached, ['aggregate', 'detached'])
     nanny_metrics_data.set_data('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_attached, ['aggregate', 'attached'])
-    nanny_metrics_data.set_data('netapp_balancing_nanny_error_count', error_count_not_enough,['aggregate_not_enough'])
+    nanny_metrics_data.set_data('netapp_balancing_nanny_error_count', 0,['aggregate_not_in_range'])
+    nanny_metrics_data.set_data('netapp_balancing_nanny_error_count', 0,['aggregate_not_enough_auto'])
+    nanny_metrics_data.set_data('netapp_balancing_nanny_error_count', 0,['aggregate_not_enough_manual'])
 
     # used for log output
     if args.dry_run:
@@ -620,6 +622,7 @@ def move_suggestions_aggr(args, nanny_metrics_data):
     # we can only balance if there are any luns to balance on the aggregate within the given min and max regions
     if len(luns) == 0:
         log.info("- IMPORTANT - there are no movable volumes within the current min/max limits on aggregate {} - maybe limits should be adjusted?".format(aggr_most_used[1]))
+        nanny_metrics_data.set_data('netapp_balancing_nanny_error_count', 1,['aggregate_not_in_range'])
         return
 
     # NOTE we do not use the comments in the end - we map via vcenter backing
@@ -737,7 +740,7 @@ def move_suggestions_aggr(args, nanny_metrics_data):
                     break
     if aggr_most_used_current_size > aggr_most_used_target_size:
         log.info("- PLEASE IGNORE - there are not enough (or no) detached volumes within the current min/max limits to bring the aggregate {} below the limit of {:.0f} gb - stopping here".format(aggr_most_used[1], aggr_most_used_target_size))
-        error_count_not_enough += 1
+        nanny_metrics_data.set_data('netapp_balancing_nanny_error_count', 1,['aggregate_not_enough_auto'])
 
     # when the balancing goal is reached an "optional" string is appended to the recommendations
     optional_string = ''
@@ -773,11 +776,10 @@ def move_suggestions_aggr(args, nanny_metrics_data):
 
     if aggr_most_used_current_size > aggr_most_used_target_size:
         log.info("- INFO - there are not enough (or no) attached volumes within the current min/max limits to bring the aggregate {} below the limit of {:.0f} gb - maybe limits should be adjusted?".format(aggr_most_used[1], aggr_most_used_target_size / 1024**3))
-        error_count_not_enough += 1
+        nanny_metrics_data.set_data('netapp_balancing_nanny_error_count', 1,['aggregate_not_enough_manual'])
 
     nanny_metrics_data.set_data('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_detached,['aggregate', 'detached'])
     nanny_metrics_data.set_data('netapp_balancing_nanny_move_suggestions', gauge_value_move_suggestions_attached,['aggregate', 'attached'])
-    nanny_metrics_data.set_data('netapp_balancing_nanny_error_count', error_count_not_enough,['aggregate_not_enough'])
 
 
 def main():
