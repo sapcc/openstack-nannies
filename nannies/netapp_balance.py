@@ -231,6 +231,12 @@ def check_loop(args, nanny_metrics_data):
             move_suggestions_flexvol(args, nanny_metrics_data)
             # then balance out aggregates
             move_suggestions_aggr(args, nanny_metrics_data)
+
+            # set some fixed threshold value metrics based on the cmdline args
+            nanny_metrics_data.set_data('netapp_balancing_nanny_flexvol_usage_threshold', args.flexvol_size_limit,['dummy'])
+            nanny_metrics_data.set_data('netapp_balancing_nanny_aggregate_usage_threshold', args.max_threshold,['dummy'])
+            nanny_metrics_data.set_data('netapp_balancing_nanny_move_suggestions_max', args.max_move_vms,['dummy'])
+
             # sync metrics to prometheus exporter
             nanny_metrics_data.sync_data()
             # wait the interval time
@@ -787,11 +793,6 @@ def main():
     args = parse_commandline()
 
     nanny_metrics_data = prometheus_exporter_setup(args)
-
-    # set some fixed threshold value metrics based on the cmdline args
-    nanny_metrics_data.set_data('netapp_balancing_nanny_flexvol_usage_threshold', args.flexvol_size_limit,['dummy'])
-    nanny_metrics_data.set_data('netapp_balancing_nanny_aggregate_usage_threshold', args.max_threshold,['dummy'])
-    nanny_metrics_data.set_data('netapp_balancing_nanny_move_suggestions_max', args.max_move_vms,['dummy'])
 
     check_loop(args, nanny_metrics_data)
 
