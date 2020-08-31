@@ -71,7 +71,7 @@ def vm_move_suggestions(args, vcenter_data):
     bb_bigvm_consume = {}
     shard_vcenter = openstack_obj.get_shard_vcenter(args.vc_host)
     log.info("- INFO - getting building block info from openstack of region %s", args.region)
-    bb_name = [int(re.search(r"[0-9]+", i).group(0)) for i in shard_vcenter]
+    bb_name = [int(re.search(r"[0-9]+", i).group(0)) for i in shard_vcenter if i not in args.denial_list]
     for bb in bb_name:
         bb_consume[bb] = 0
         bb_overall[bb] = 0
@@ -206,6 +206,7 @@ def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_
                     break
         else:
             log.info("- INFO - big Vm %s is move from source %s to big_vm_node as no node left ", big_vm[1], big_vm[0])
+            vcenter_data.set_data('vm_balance_too_building_block', int(big_vm[2] * 1024), [str(big_vm[0])])
 
     vcenter_data.set_data('vm_balance_error_count', vcenter_error_count,["vmotion_error"])
 
@@ -246,6 +247,7 @@ def main():
                           'des:vm_balance_building_block_total_siz_bytes',
                           ['Building_block'])
     mymetrics.set_metrics('vm_balance_error_count','des:vm_balance_error_count',['error_type'])
+    mymetrics.set_metrics('vm_balance_too_full_building_block','des:vm_balance_too_full_building_block', ['consolidated_needed'])
     args = parser.parse_args()
     REGISTRY.register(CustomCollector(mymetrics, vcenter_data))
     prometheus_http_start(int(args.prometheus_port))
