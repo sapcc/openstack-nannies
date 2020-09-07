@@ -13,6 +13,7 @@
 #
 
 FROM __NOVA_NANNY_BASE_IMAGE__
+LABEL source_repository="https://github.com/sapcc/openstack-nannies"
 
 USER root
 
