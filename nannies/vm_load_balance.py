@@ -105,8 +105,6 @@ def vm_move_suggestions(args, vcenter_data):
             continue
         if int(re.findall(r"[0-9]+",host['name'])[1]) not in bb_name:
             continue
-        if int(re.findall(r"[0-9]+",host['name'])[1]) in denial_bb_name:
-            continue
         if not host['parent'].name.startswith("production"):
             continue
         log.info("- INFO - node started here %s and its status %s",host['name'],host['runtime'].connectionState)
@@ -197,7 +195,7 @@ def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_
                     # automation script for vmotion called here
                     if args.automated:
                         if int(re.findall(r"[0-9]+", target_h[0])[1]) in denial_bb_name:
-                            log.info(f"- INFO - Manual movement of big Vm {big_vm[1]} of size {round(big_vm[2],2)} is move from source {big_vm[0]} to target {target_h[0]} as BB in denial_list")
+                            log.info(f"- INFO - Manual movement needed for big Vm  {big_vm[1]} of size {round(big_vm[2],2)} is move from source {big_vm[0]} to target {target_h[0]} as BB in denial_list")
                         else:
                             status = vc.vmotion_inside_bb(openstack_obj, big_vm_uuid, target_h[0], nanny_metadata_handle)
                             log.info(f"- INFO - big Vm {big_vm[1]} of size {round(big_vm[2],2)} is move from source {big_vm[0]} to target {target_h[0]} with {status}")
