@@ -206,7 +206,7 @@ def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_
                     break
         else:
             log.info("- INFO - big Vm %s is move from source %s to big_vm_node as no node left ", big_vm[1], big_vm[0])
-            vcenter_data.set_data('vm_balance_too_building_block', int(big_vm[2] * 1024), [str(big_vm[0])])
+            vcenter_data.set_data('vm_balance_too_full_building_block', int(big_vm[2] * 1024), [str(big_vm[0])])
 
     vcenter_data.set_data('vm_balance_error_count', vcenter_error_count,["vmotion_error"])
 
