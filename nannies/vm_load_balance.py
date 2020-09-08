@@ -168,9 +168,9 @@ def vm_move_suggestions(args, vcenter_data):
         log.info("- INFO - big_vm list here %s ", big_vm_to_move_list)
         log.info("- Alert - found here %s",len(big_vm_to_move_list))
         log.info("- Printing - suggestion for vmotion below")
-        big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_host,vcenter_data,nanny_metadata_handle)
+        big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_host,vcenter_data,nanny_metadata_handle,denial_bb_name)
 
-def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_host,vcenter_data,nanny_metadata_handle):
+def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_host,vcenter_data,nanny_metadata_handle,denial_bb_name):
     vcenter_error_count = 0
     vm_uuid_re = re.compile('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
     for big_vm in big_vm_to_move_list:
@@ -180,7 +180,10 @@ def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_
             if node == re.findall(r"[0-9]+", target_h[0])[1]:
                 if target_h[1] - big_vm[2] > 0:
                     log.info(f"- INFO - big Vm {big_vm[1]} of size {round(big_vm[2],2)} is move from source {big_vm[0]} to target {target_h[0]}  having {round(target_h[1],2)} memory and left with memory {round((target_h[1] - big_vm[2]),2)} after vmotion")
-                    vcenter_data.set_data('vm_balance_nanny_suggestion_bytes', int(big_vm[2] * 1024),[big_vm[0], target_h[0], big_vm[1]])
+                    if int(re.findall(r"[0-9]+", target_h[0])[1]) in denial_bb_name:
+                        vcenter_data.set_data('vm_balance_nanny_manual_suggestion_bytes', int(big_vm[2] * 1024),[big_vm[0], target_h[0], big_vm[1]])
+                    else:
+                        vcenter_data.set_data('vm_balance_nanny_suggestion_bytes', int(big_vm[2] * 1024),[big_vm[0], target_h[0], big_vm[1]])
                     if vm_uuid_re.match(re.split("\(|\)", big_vm[1])[-2]):
                         big_vm_uuid = re.split("\(|\)", big_vm[1])[-2]
                     else:
@@ -193,10 +196,13 @@ def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_
                         break
                     # automation script for vmotion called here
                     if args.automated:
-                        status = vc.vmotion_inside_bb(openstack_obj, big_vm_uuid, target_h[0], nanny_metadata_handle)
-                        log.info(f"- INFO - big Vm {big_vm[1]} of size {round(big_vm[2],2)} is move from source {big_vm[0]} to target {target_h[0]} with {status}")
-                        if status != "success":
-                            vcenter_error_count += 1
+                        if int(re.findall(r"[0-9]+", target_h[0])[1]) in denial_bb_name:
+                            log.info(f"- INFO - Manual movement of big Vm {big_vm[1]} of size {round(big_vm[2],2)} is move from source {big_vm[0]} to target {target_h[0]} as BB in denial_list")
+                        else:
+                            status = vc.vmotion_inside_bb(openstack_obj, big_vm_uuid, target_h[0], nanny_metadata_handle)
+                            log.info(f"- INFO - big Vm {big_vm[1]} of size {round(big_vm[2],2)} is move from source {big_vm[0]} to target {target_h[0]} with {status}")
+                            if status != "success":
+                                vcenter_error_count += 1
                     if (target_h[1] - big_vm[2]) >= args.min_vm_size:
                         target_host.append((target_h[0], target_h[1] - big_vm[2]))
                         target_host.remove(target_h)
@@ -236,6 +242,8 @@ def main():
     mymetrics.set_metrics('vm_balance_nanny_host_size_consume_big_vm_bytes',
                           'des:vm_balance_nanny_host_size_consume_big_vm_bytes', ['nodename'])
     mymetrics.set_metrics('vm_balance_nanny_suggestion_bytes', 'des:vm_balance_nanny_suggestion_bytes',
+                          ['source_node', 'target_node', 'big_vm_name', 'big_vm_size'])
+    mymetrics.set_metrics('vm_balance_nanny_manual_suggestion_bytes', 'des:vm_balance_nanny_manual_suggestion_bytes',
                           ['source_node', 'target_node', 'big_vm_name', 'big_vm_size'])
     mymetrics.set_metrics('vm_balance_building_block_consume_all_vm_bytes',
                           'des:vm_balance_building_block_consume_all_vm_bytes',
