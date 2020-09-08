@@ -71,7 +71,7 @@ def vm_move_suggestions(args, vcenter_data):
     bb_bigvm_consume = {}
     shard_vcenter = openstack_obj.get_shard_vcenter(args.vc_host)
     log.info("- INFO - getting building block info from openstack of region %s", args.region)
-    bb_name = [int(re.search(r"[0-9]+", i).group(0)) for i in shard_vcenter if i not in args.denial_list]
+    bb_name = [int(re.search(r"[0-9]+", i).group(0)) for i in shard_vcenter]
     for bb in bb_name:
         bb_consume[bb] = 0
         bb_overall[bb] = 0
