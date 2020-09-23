@@ -24,7 +24,7 @@ unset http_proxy https_proxy all_proxy no_proxy
 echo "INFO: copying manila config files to /etc/manila"
 cp -v /manila-etc/* /etc/manila
 
-echo "INFO: working on manila share server"
+echo "INFO: working on manila share snapshot"
 /var/lib/openstack/bin/python /scripts/manila-share-snapshot.py \
     --config /etc/manila/manila.conf \
     --interval $MANILA_NANNY_INTERVAL \
