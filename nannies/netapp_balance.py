@@ -105,19 +105,20 @@ def get_netapp_hosts(vc, region):
     dstores = vc.find_all_of_type(vc.vim.Datastore).view
     for dstore in dstores:
         name = dstore.name.lower()
-        if name.startswith("vvol_"):
+        if name.startswith("vvol_bb"):
             # example for the pattern: vvol_bb123
             m = re.match("^(?:vvol)_bb(?P<bb>\d+)$", name)
-            bbnum = int(m.group('bb'))
-            # one of our netapps is inconsistent in its naming - handle this here
-            if bbnum == 56:
-                stnpa_num = 0
-            else:
-                stnpa_num = 1
-            # e.g. stnpca1-bb123.cc.<region>.cloud.sap - those are the netapp cluster addresses (..np_c_a1..)
-            netapp_name = "stnpca{}-bb{:03d}.cc.{}.cloud.sap".format(stnpa_num, bbnum, region)
-            # build a list of netapps
-            netapp_hosts.append(netapp_name)
+            if m:
+                bbnum = int(m.group('bb'))
+                # one of our netapps is inconsistent in its naming - handle this here
+                if bbnum == 56:
+                    stnpa_num = 0
+                else:
+                    stnpa_num = 1
+                # e.g. stnpca1-bb123.cc.<region>.cloud.sap - those are the netapp cluster addresses (..np_c_a1..)
+                netapp_name = "stnpca{}-bb{:03d}.cc.{}.cloud.sap".format(stnpa_num, bbnum, region)
+                # build a list of netapps
+                netapp_hosts.append(netapp_name)
 
     return netapp_hosts
 
