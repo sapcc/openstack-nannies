@@ -132,8 +132,11 @@ class NetAppHelper:
         lun_result = []
         # lun_result = [lun for lun in luns if lun['flexvol'] in flexvol_list]
         for lun in luns:
-            if lun['volume'] == flexvol_name:
-                lun_result.append(lun)
+            try:
+                if lun['volume'] == flexvol_name:
+                    lun_result.append(lun)
+            except TypeError:
+                log.info("INFO: we seem to have gotten some garbage from the netapp api, but this should usually not be a problem")
 
         return lun_result
 
