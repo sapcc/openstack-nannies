@@ -483,9 +483,6 @@ class ConsistencyCheck:
 
         # TODO better exception handling
 
-        # reset dry_run flag to cmdline value
-        self.dry_run = self.cmdline_dry_run
-
         # clear the old lists
         self.vc_all_volumes *= 0
 
@@ -563,6 +560,7 @@ class ConsistencyCheck:
                                             log.warn("- PLEASE CHECK MANUALLY - volume on instance '%s' without uuid in backing store config - shadow vm uuid extraction from its vcenter filename '%s' failed", str(k.get('config.name')), str(j.backing.fileName))
                                         my_volume_uuid = None
                                         # in this case force dry run mode as we seem to have volumes we cannot trust anymore
+                                        log.error("- PLEASE CHECK MANUALLY - volume without uuid in backing store config and wrong filename %s on datastore - forcing dry-run mode!", str(j.backing.fileName))
                                         self.gauge_value_vcenter_volume_uuid_missing += 1
                                         self.dry_run = True
                                 # so we have a uuid in the backing store config
@@ -1010,11 +1008,6 @@ class ConsistencyCheck:
             if self.gauge_value_bb_not_in_aggregate != 0:
                 log.error("- PLEASE CHECK MANUALLY - some vc hosts seem to be not connected to vc-* aggregates - forcing dry-run mode!")
                 self.dry_run = True
-            elif self.dry_run != self.cmdline_dry_run:
-                # in case we forced dry-run on and everything is connected properly again
-                # go back to the original dry-run setting from the cmdline
-                log.error("- PLEASE CHECK MANUALLY - vc hosts seem to be properly connected to vc-* aggregates again - leaving forced dry-run mode!")
-                self.dry_run = self.cmdline_dry_run
 
             # determine the vc-* aggregate per server
             vc_from_server_uuid = dict()
@@ -1697,6 +1690,8 @@ class ConsistencyCheck:
         self.nova_db_disconnect()
 
     def run_check_loop(self, iterations):
+        # reset dry_run flag to cmdline value in case we have forced it on in the last loop run
+        self.dry_run = self.cmdline_dry_run
         if self.dry_run:
             log.info("- INFO - running in dry run mode")
         # clean the lists of canditates for uuid rewrite and instance reload
