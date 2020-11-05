@@ -162,6 +162,8 @@ class ConsistencyCheck:
                                                   'how many volumes got a uuid mismatch adjusted in the vcenter')
         self.gauge_vcenter_volume_uuid_missing = Gauge('vcenter_nanny_consistency_vcenter_volume_uuid_missing',
                                                   'how many volumes are missing a uuid in the vcenter backing store config')
+        self.gauge_vcenter_volume_fs_uuid_missing = Gauge('vcenter_nanny_consistency_vcenter_volume_fs_uuid_missing',
+                                                  'how many volumes are missing a uuid in the vcenter vmdk file')
         self.gauge_vcenter_volume_zero_size = Gauge('vcenter_nanny_consistency_vcenter_volume_zero_size',
                                                   'how many volumes have a size of zero in the vcenter')
         self.gauge_vcenter_instance_state_gray = Gauge('vcenter_nanny_consistency_vcenter_instance_status_gray',
@@ -183,6 +185,7 @@ class ConsistencyCheck:
         self.gauge_value_vcenter_volume_uuid_mismatch = 0
         self.gauge_value_vcenter_volume_uuid_adjustment = 0
         self.gauge_value_vcenter_volume_uuid_missing = 0
+        self.gauge_value_vcenter_volume_fs_uuid_missing = 0
         self.gauge_value_vcenter_volume_zero_size = 0
         self.gauge_value_vcenter_instance_state_gray = 0
         self.gauge_value_no_autofix = 0
@@ -480,6 +483,9 @@ class ConsistencyCheck:
 
         # TODO better exception handling
 
+        # reset dry_run flag to cmdline value
+        self.dry_run = self.cmdline_dry_run
+
         # clear the old lists
         self.vc_all_volumes *= 0
 
@@ -556,6 +562,9 @@ class ConsistencyCheck:
                                         if not self.interactive:
                                             log.warn("- PLEASE CHECK MANUALLY - volume on instance '%s' without uuid in backing store config - shadow vm uuid extraction from its vcenter filename '%s' failed", str(k.get('config.name')), str(j.backing.fileName))
                                         my_volume_uuid = None
+                                        # in this case force dry run mode as we seem to have volumes we cannot trust anymore
+                                        self.gauge_value_vcenter_volume_uuid_missing += 1
+                                        self.dry_run = True
                                 # so we have a uuid in the backing store config
                                 else:
                                     # check if we can extract a uuid from the filename too and if both differ and are both in cinder something is wrong
@@ -1409,6 +1418,7 @@ class ConsistencyCheck:
         self.gauge_value_vcenter_volume_uuid_mismatch = 0
         self.gauge_value_vcenter_volume_uuid_adjustment = 0
         self.gauge_value_vcenter_volume_uuid_missing = 0
+        self.gauge_value_vcenter_volume_fs_uuid_missing = 0
         self.gauge_value_vcenter_volume_zero_size = 0
         self.gauge_value_vcenter_instance_state_gray = 0
         self.gauge_value_no_autofix = 0
@@ -1623,6 +1633,7 @@ class ConsistencyCheck:
         self.gauge_vcenter_volume_uuid_mismatch.set(self.gauge_value_vcenter_volume_uuid_mismatch)
         self.gauge_vcenter_volume_uuid_adjustment.set(self.gauge_value_vcenter_volume_uuid_adjustment)
         self.gauge_vcenter_volume_uuid_missing.set(self.gauge_value_vcenter_volume_uuid_missing)
+        self.gauge_vcenter_volume_fs_uuid_missing.set(self.gauge_value_vcenter_volume_fs_uuid_missing)
         self.gauge_vcenter_volume_zero_size.set(self.gauge_value_vcenter_volume_zero_size)
         self.gauge_vcenter_instance_state_gray.set(self.gauge_value_vcenter_instance_state_gray)
         self.gauge_no_autofix.set(self.gauge_value_no_autofix)
