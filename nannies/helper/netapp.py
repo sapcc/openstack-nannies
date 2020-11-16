@@ -83,6 +83,9 @@ class NetAppHelper:
 
         result = []
         result_iter = self.invoke_api(*args, **kwargs)
+
+        print()
+
         key = None
         for item in result_iter:
             item = xmltodict.parse(item.to_string())
@@ -118,6 +121,7 @@ class NetAppHelper:
                 'volume-space-attributes': ['size-total', 'size-used']
             }
         }
+
         return self.get_list('volume-get-iter', des_result=desired_attrs)
 
     def get_luns_for_flexvol(self, flexvol_name):

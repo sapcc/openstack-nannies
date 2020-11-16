@@ -149,15 +149,21 @@ def get_flexvol_usage_list(nh, netapp_host, flexvol_denylist, nanny_metrics_data
     for flexvol in nh.get_volume_usage():
 
         # print info for flexvol_denylisted aggregates
-        if flexvol['volume-id-attributes']['name'] in flexvol_denylist:
-            log.info("- INFO -   flexvol {} is flexvol_denylist'ed via cmdline".format(flexvol['volume-id-attributes']['name']))
+        try:
+            if flexvol['volume-id-attributes']['name'] in flexvol_denylist:
+                log.info("- INFO -   flexvol {} is flexvol_denylist'ed via cmdline".format(flexvol['volume-id-attributes']['name']))
 
-        if flexvol['volume-id-attributes']['name'].lower().startswith('vv') and flexvol['volume-id-attributes']['name'] not in flexvol_denylist:
-            log.info("- INFO -   flexvol {} of size {:.0f} gb of a total size {:.0f} gb"
-                .format(flexvol['volume-id-attributes']['name'], int(flexvol['volume-space-attributes']['size-used']) / 1024**3, int(flexvol['volume-space-attributes']['size-total']) / 1024**3))
-            flexvol_usage.append((netapp_host, flexvol['volume-id-attributes']['name'], flexvol['volume-id-attributes']['containing-aggregate-name'],
-                                int(flexvol['volume-space-attributes']['size-used']),int(flexvol['volume-space-attributes']['size-total'])))
-            nanny_metrics_data.set_data('netapp_balancing_nanny_flexvol_usage', int(flexvol['volume-space-attributes']['size-used']),[flexvol['volume-id-attributes']['name']])
+        
+            if flexvol['volume-id-attributes']['name'].lower().startswith('vv') and flexvol['volume-id-attributes']['name'] not in flexvol_denylist:
+                log.info("- INFO -   flexvol {} of size {:.0f} gb of a total size {:.0f} gb"
+                    .format(flexvol['volume-id-attributes']['name'], int(flexvol['volume-space-attributes']['size-used']) / 1024**3, int(flexvol['volume-space-attributes']['size-total']) / 1024**3))
+                flexvol_usage.append((netapp_host, flexvol['volume-id-attributes']['name'], flexvol['volume-id-attributes']['containing-aggregate-name'],
+                                    int(flexvol['volume-space-attributes']['size-used']),int(flexvol['volume-space-attributes']['size-total'])))
+                nanny_metrics_data.set_data('netapp_balancing_nanny_flexvol_usage', int(flexvol['volume-space-attributes']['size-used']),[flexvol['volume-id-attributes']['name']])
+
+        except TypeError:
+            log.info("INFO: we seem to have gotten some garbage from the netapp api, but this should usually not be a problem")
+
     return flexvol_usage
     # examples:
     # (netapphost1, flexvol01, aggr1, 50, 100)
