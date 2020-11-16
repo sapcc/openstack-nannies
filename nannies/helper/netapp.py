@@ -84,8 +84,6 @@ class NetAppHelper:
         result = []
         result_iter = self.invoke_api(*args, **kwargs)
 
-        print()
-
         key = None
         for item in result_iter:
             item = xmltodict.parse(item.to_string())
