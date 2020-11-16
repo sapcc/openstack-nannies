@@ -57,7 +57,8 @@ class ManilaQuotaSyncNanny(ManilaNanny):
                                       snapshots_t.c.share_size,
                                       share_instances_t.c.share_type_id],
                              whereclause=and_(snapshots_t.c.deleted == "False",
-                                              snapshots_t.c.project_id == project_id)
+                                              snapshots_t.c.project_id == project_id,
+                                              share_instances_t.c.deleted == "False")
                              ).select_from(q)
         return snapshots_q.execute()
 
@@ -71,7 +72,8 @@ class ManilaQuotaSyncNanny(ManilaNanny):
                                    shares_t.c.size,
                                    share_instances_t.c.share_type_id],
                           whereclause=and_(shares_t.c.deleted == "False",
-                                           shares_t.c.project_id == project_id)
+                                           shares_t.c.project_id == project_id,
+                                           share_instances_t.c.deleted == "False")
                           ).select_from(q)
         return shares_q.execute()
 
