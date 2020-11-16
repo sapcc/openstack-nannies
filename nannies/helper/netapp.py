@@ -94,7 +94,10 @@ class NetAppHelper:
                 if len(keys) > 1:
                     raise ValueError("Found more than one possible key for unpack: {}".format(keys))
                 key = keys[0]
-            result.extend(item['results']['attributes-list'][key])
+            objs = item['results']['attributes-list'][key]
+            if not isinstance(objs, list):
+                objs = [objs]
+            result.extend(objs)
 
         return result
 
@@ -134,11 +137,8 @@ class NetAppHelper:
         lun_result = []
         # lun_result = [lun for lun in luns if lun['flexvol'] in flexvol_list]
         for lun in luns:
-            try:
-                if lun['volume'] == flexvol_name:
-                    lun_result.append(lun)
-            except TypeError:
-                log.info("INFO: we seem to have gotten some garbage from the netapp api, but this should usually not be a problem")
+            if lun['volume'] == flexvol_name:
+                lun_result.append(lun)
 
         return lun_result
 
