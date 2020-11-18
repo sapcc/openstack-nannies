@@ -530,96 +530,98 @@ class ConsistencyCheck:
                     for j in k.get('config.hardware.device'):
                         # we are only interested in disks for ghost volumes ...
                         # old test was: if 2000 <= j.key < 3000:
-                        if isinstance(j, vim.vm.device.VirtualDisk):
-                            # we only care for vvols - in the past we checked starting with 2001 as 2000 usual was the eph
-                            # storage, but it looks like eph can also be on another id and 2000 could be a vvol as well ...
-                            if j.backing.fileName.lower().startswith('[vvol_') or j.backing.fileName.lower().startswith('[vmfs_'):
-                                # try to find an openstack uuid in the filename
-                                filename_uuid_search_result = filename_uuid_re.search(j.backing.fileName)
-                                # warn about any volumes without a uuid set in the backing store config
-                                if not j.backing.uuid:
-                                    self.gauge_value_vcenter_volume_uuid_missing += 1
-                                    # check if we can extract a uuid from the vcenter filename
-                                    if filename_uuid_search_result and filename_uuid_search_result.group(1):
-                                        # if yes - is that uuid known to cinder then
-                                        if filename_uuid_search_result.group(1) in self.cinder_os_all_volumes:
-                                            # do the consistency check logging only in non interactive mode
-                                            if not self.interactive:
-                                                log.warn("- PLEASE CHECK MANUALLY - volume on instance '%s' without uuid in backing store config - shadow vm uuid extracted from its vcenter filename '%s' is %s", str(k.get('config.name')), str(j.backing.fileName), str(filename_uuid_search_result.group(1)))
-                                            # if yes - use that uuid later
-                                            my_volume_uuid = filename_uuid_search_result.group(1)
-                                        # if no - we do not have any useable uuid
-                                        else:
-                                            # do the consistency check logging only in non interactive mode
-                                            if not self.interactive:
-                                                log.warn("- PLEASE CHECK MANUALLY - volume on instance '%s' without uuid in backing store config - shadow vm uuid extracted from its vcenter filename '%s' is %s but is not in cinder", str(k.get('config.name')), str(j.backing.fileName), str(filename_uuid_search_result.group(1)))
-                                            my_volume_uuid = None
-                                    # if we cannot extract a uuid from the vcenter filename we do not have any useable uuid
-                                    else:
-                                        # do the consistency check logging only in non interactive mode
-                                        if not self.interactive:
-                                            log.warn("- PLEASE CHECK MANUALLY - volume on instance '%s' without uuid in backing store config - shadow vm uuid extraction from its vcenter filename '%s' failed", str(k.get('config.name')), str(j.backing.fileName))
-                                        my_volume_uuid = None
-                                        # in this case force dry run mode as we seem to have volumes we cannot trust anymore
-                                        log.error("- PLEASE CHECK MANUALLY - volume without uuid in backing store config and wrong filename %s on datastore - forcing dry-run mode!", str(j.backing.fileName))
-                                        self.gauge_value_vcenter_volume_uuid_missing += 1
-                                        self.dry_run = True
-                                # so we have a uuid in the backing store config
+                        if not isinstance(j, vim.vm.device.VirtualDisk):
+                            continue
+                        # we only care for vvols - in the past we checked starting with 2001 as 2000 usual was the eph
+                        # storage, but it looks like eph can also be on another id and 2000 could be a vvol as well ...
+                        if not j.backing.fileName.lower().startswith('[vvol_') and not j.backing.fileName.lower().startswith('[vmfs_'):
+                            continue
+                        # try to find an openstack uuid in the filename
+                        filename_uuid_search_result = filename_uuid_re.search(j.backing.fileName)
+                        # warn about any volumes without a uuid set in the backing store config
+                        if not j.backing.uuid:
+                            self.gauge_value_vcenter_volume_uuid_missing += 1
+                            # check if we can extract a uuid from the vcenter filename
+                            if filename_uuid_search_result and filename_uuid_search_result.group(1):
+                                # if yes - is that uuid known to cinder then
+                                if filename_uuid_search_result.group(1) in self.cinder_os_all_volumes:
+                                    # do the consistency check logging only in non interactive mode
+                                    if not self.interactive:
+                                        log.warn("- PLEASE CHECK MANUALLY - volume on instance '%s' without uuid in backing store config - shadow vm uuid extracted from its vcenter filename '%s' is %s", str(k.get('config.name')), str(j.backing.fileName), str(filename_uuid_search_result.group(1)))
+                                    # if yes - use that uuid later
+                                    my_volume_uuid = filename_uuid_search_result.group(1)
+                                # if no - we do not have any useable uuid
                                 else:
-                                    # check if we can extract a uuid from the filename too and if both differ and are both in cinder something is wrong
-                                    if filename_uuid_search_result and (j.backing.uuid != filename_uuid_search_result.group(1)) and (j.backing.uuid in self.cinder_os_all_volumes) \
-                                        and (filename_uuid_search_result.group(1) in self.cinder_os_all_volumes):
-                                        # do the consistency check logging only in non interactive mode
-                                        if not self.interactive:
-                                            log.warn("- PLEASE CHECK MANUALLY - volume on instance '%s' with uuid %s in backing store config in cinder and different shadow vm uuid %s extracted from its vcenter filename '%s' in cinder too", str(k.get('config.name')), str(j.backing.uuid), str(filename_uuid_search_result.group(1)), str(j.backing.fileName))
-                                        # set my_volume_uuid to the backing uuid as after some manual moves of volumes in
-                                        # the vcenter the filename might have changed and we can trust the backing uuid more
-                                        # in this case
-                                        my_volume_uuid = j.backing.uuid
-                                    # ok - they are either equal or we only have a backing uuid - check if it is in cinder and if yes - use it
-                                    elif j.backing.uuid in self.cinder_os_all_volumes:
-                                        my_volume_uuid = j.backing.uuid
-                                    # hmmm - so no backing uuid - lets see if we can extract a uuid from the filename and if it is in cinder - if yes - use it
-                                    elif filename_uuid_search_result and (filename_uuid_search_result.group(1) in self.cinder_os_all_volumes):
-                                        if not self.interactive:
-                                            log.warn("- PLEASE CHECK MANUALLY - volume on instance '%s' with uuid in backing store config %s not in cinder - shadow vm uuid extracted from its vcenter filename '%s' is %s", str(k.get('config.name')), str(j.backing.uuid), str(j.backing.fileName), str(filename_uuid_search_result.group(1)))
-                                        my_volume_uuid = filename_uuid_search_result.group(1)
-                                    # looks like we simply cannot find a useable uuid
-                                    else:
-                                        # do the consistency check logging only in non interactive mode
-                                        if not self.interactive:
-                                            log.warn("- PLEASE CHECK MANUALLY - volume on instance '%s' with uuid %s in backing store config not in cinder and no shadow vm uuid extractable from its vcenter filename", str(k.get('config.name')), str(j.backing.uuid))
-                                        my_volume_uuid = None
-
-                                # check if the backing uuid setting is proper: it should be the same as the uuid extracted from the filename:
-                                # TODO: in theory this should also be applied to shadow vms, i.e. without a config.annotation
+                                    # do the consistency check logging only in non interactive mode
+                                    if not self.interactive:
+                                        log.warn("- PLEASE CHECK MANUALLY - volume on instance '%s' without uuid in backing store config - shadow vm uuid extracted from its vcenter filename '%s' is %s but is not in cinder", str(k.get('config.name')), str(j.backing.fileName), str(filename_uuid_search_result.group(1)))
+                                    my_volume_uuid = None
+                            # if we cannot extract a uuid from the vcenter filename we do not have any useable uuid
+                            else:
                                 # do the consistency check logging only in non interactive mode
                                 if not self.interactive:
-                                    if filename_uuid_search_result and filename_uuid_search_result.group(1):
-                                        if j.backing.uuid != filename_uuid_search_result.group(1):
-                                            log.warn("- PLEASE CHECK MANUALLY - volume backing uuid mismatch: backing uuid=%s, filename='%s', instance name='%s'", str(j.backing.uuid), str(j.backing.fileName), str(k['config.name']))
-                                            self.gauge_value_vcenter_volume_backing_uuid_mismatch += 1
-                                    else:
-                                        log.warn("- PLEASE CHECK MANUALLY - no shadow vm uuid found in filename='%s' on instance '%s'", str(j.backing.fileName), str(k['config.name']))
+                                    log.warn("- PLEASE CHECK MANUALLY - volume on instance '%s' without uuid in backing store config - shadow vm uuid extraction from its vcenter filename '%s' failed", str(k.get('config.name')), str(j.backing.fileName))
+                                my_volume_uuid = None
+                                # in this case force dry run mode as we seem to have volumes we cannot trust anymore
+                                log.error("- PLEASE CHECK MANUALLY - volume without uuid in backing store config and wrong filename %s on datastore - forcing dry-run mode!", str(j.backing.fileName))
+                                self.gauge_value_vcenter_volume_uuid_missing += 1
+                                self.dry_run = True
+                        # so we have a uuid in the backing store config
+                        else:
+                            # check if we can extract a uuid from the filename too and if both differ and are both in cinder something is wrong
+                            if filename_uuid_search_result and (j.backing.uuid != filename_uuid_search_result.group(1)) and (j.backing.uuid in self.cinder_os_all_volumes) \
+                                and (filename_uuid_search_result.group(1) in self.cinder_os_all_volumes):
+                                # do the consistency check logging only in non interactive mode
+                                if not self.interactive:
+                                    log.warn("- PLEASE CHECK MANUALLY - volume on instance '%s' with uuid %s in backing store config in cinder and different shadow vm uuid %s extracted from its vcenter filename '%s' in cinder too", str(k.get('config.name')), str(j.backing.uuid), str(filename_uuid_search_result.group(1)), str(j.backing.fileName))
+                                # set my_volume_uuid to the backing uuid as after some manual moves of volumes in
+                                # the vcenter the filename might have changed and we can trust the backing uuid more
+                                # in this case
+                                my_volume_uuid = j.backing.uuid
+                            # ok - they are either equal or we only have a backing uuid - check if it is in cinder and if yes - use it
+                            elif j.backing.uuid in self.cinder_os_all_volumes:
+                                my_volume_uuid = j.backing.uuid
+                            # hmmm - so no backing uuid - lets see if we can extract a uuid from the filename and if it is in cinder - if yes - use it
+                            elif filename_uuid_search_result and (filename_uuid_search_result.group(1) in self.cinder_os_all_volumes):
+                                if not self.interactive:
+                                    log.warn("- PLEASE CHECK MANUALLY - volume on instance '%s' with uuid in backing store config %s not in cinder - shadow vm uuid extracted from its vcenter filename '%s' is %s", str(k.get('config.name')), str(j.backing.uuid), str(j.backing.fileName), str(filename_uuid_search_result.group(1)))
+                                my_volume_uuid = filename_uuid_search_result.group(1)
+                            # looks like we simply cannot find a useable uuid
+                            else:
+                                # do the consistency check logging only in non interactive mode
+                                if not self.interactive:
+                                    log.warn("- PLEASE CHECK MANUALLY - volume on instance '%s' with uuid %s in backing store config not in cinder and no shadow vm uuid extractable from its vcenter filename", str(k.get('config.name')), str(j.backing.uuid))
+                                my_volume_uuid = None
 
-                                    # check for volumes with a size of 0 which should not happen in a perfect world
-                                    if my_volume_uuid and (j.capacityInBytes == 0):
-                                        log.warn("- PLEASE CHECK MANUALLY - volume %s on instance '%s' with zero size - filename is '%s'", str(my_volume_uuid), str(k['config.name']), str(j.backing.fileName))
-                                        # build a candidate list of instances to reload to get rid of their buggy zero volume sizes
-                                        # disable the automatic reload for now
-                                        #self.instance_reload_candidates.add(k['config.instanceUuid'])
-                                        self.gauge_value_vcenter_volume_zero_size += 1
+                        # check if the backing uuid setting is proper: it should be the same as the uuid extracted from the filename:
+                        # TODO: in theory this should also be applied to shadow vms, i.e. without a config.annotation
+                        # do the consistency check logging only in non interactive mode
+                        if not self.interactive:
+                            if filename_uuid_search_result and filename_uuid_search_result.group(1):
+                                if j.backing.uuid != filename_uuid_search_result.group(1):
+                                    log.warn("- PLEASE CHECK MANUALLY - volume backing uuid mismatch: backing uuid=%s, filename='%s', instance name='%s'", str(j.backing.uuid), str(j.backing.fileName), str(k['config.name']))
+                                    self.gauge_value_vcenter_volume_backing_uuid_mismatch += 1
+                            else:
+                                log.warn("- PLEASE CHECK MANUALLY - no shadow vm uuid found in filename='%s' on instance '%s'", str(j.backing.fileName), str(k['config.name']))
 
-                                # if we have my_volume_uuid, which is either the uuid from the backing config or (if that does not exist or is not
-                                # in cinder) will be extracted from the filename, then we assume this volume uuid to be attached to the instance
-                                # and we only care about openstack instances (with annotations) here
-                                if my_volume_uuid and openstack_re.match(k.get('config.annotation', 'no_annotation')):
-                                    # map attached volume id to instance uuid - used later
-                                    self.vc_server_uuid_with_mounted_volume[my_volume_uuid] = k['config.instanceUuid']
-                                    # map attached volume id to instance name - used later for more detailed logging
-                                    self.vc_server_name_with_mounted_volume[my_volume_uuid] = k['config.name']
-                                    log.debug("==> mount - instance: %s - volume: %s", str(k['config.instanceUuid']), str(my_volume_uuid))
-                                    has_volume_attachments[k['config.instanceUuid']] = True
+                            # check for volumes with a size of 0 which should not happen in a perfect world
+                            if my_volume_uuid and (j.capacityInBytes == 0):
+                                log.warn("- PLEASE CHECK MANUALLY - volume %s on instance '%s' with zero size - filename is '%s'", str(my_volume_uuid), str(k['config.name']), str(j.backing.fileName))
+                                # build a candidate list of instances to reload to get rid of their buggy zero volume sizes
+                                # disable the automatic reload for now
+                                #self.instance_reload_candidates.add(k['config.instanceUuid'])
+                                self.gauge_value_vcenter_volume_zero_size += 1
+
+                        # if we have my_volume_uuid, which is either the uuid from the backing config or (if that does not exist or is not
+                        # in cinder) will be extracted from the filename, then we assume this volume uuid to be attached to the instance
+                        # and we only care about openstack instances (with annotations) here
+                        if my_volume_uuid and openstack_re.match(k.get('config.annotation', 'no_annotation')):
+                            # map attached volume id to instance uuid - used later
+                            self.vc_server_uuid_with_mounted_volume[my_volume_uuid] = k['config.instanceUuid']
+                            # map attached volume id to instance name - used later for more detailed logging
+                            self.vc_server_name_with_mounted_volume[my_volume_uuid] = k['config.name']
+                            log.debug("==> mount - instance: %s - volume: %s", str(k['config.instanceUuid']), str(my_volume_uuid))
+                            has_volume_attachments[k['config.instanceUuid']] = True
 
                     # try to find an openstack uuid in the instance name
                     instancename_uuid_search_result = uuid_re.search(k['name'])
