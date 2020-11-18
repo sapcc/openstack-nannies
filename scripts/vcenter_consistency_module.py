@@ -380,6 +380,7 @@ class ConsistencyCheck:
         except Exception as e:
                 log.info("- PLEASE CHECK MANUALLY - error renaming volume backing uuid %s on server %s - %s", old_volume_uuid, vm_handle.config.instanceUuid, str(e.msg))
 
+    /* this will no longer be used as it is not safe in all situations */
     def vc_rename_instance_uuid(self,instance_uuid,uuid_from_instance_name):
 
         vm_handle = self.vc_get_instance_handle(instance_uuid)
@@ -641,16 +642,18 @@ class ConsistencyCheck:
                             self.gauge_value_vcenter_volume_uuid_mismatch += 1
                             if self.cinder_os_volume_status.get(str(instancename_uuid_search_result.group(0))):
                                 if not self.cinder_os_volume_status.get(str(k['config.instanceUuid'])):
-                                    # do the instance uuid fixing only in non interactive mode
-                                    if not self.interactive:
-                                        my_volume_status = self.cinder_db_get_volume_status(my_volume_uuid)
-                                        if my_volume_uuid and (my_volume_status in ['backing-up','restoring-backup','maintenance']):
-                                            log.info("- plan: renaming instanceUuid %s to uuid %s extracted from instance name ('%s') - delayed as the attached volume %s is in state '%s'", \
-                                                str(k['config.instanceUuid']),str(instancename_uuid_search_result.group(0)), str(k['config.name']), str(my_volume_uuid), \
-                                                    str(my_volume_status))
-                                        else:
-                                            self.vc_rename_instance_uuid(str(k['config.instanceUuid']),str(instancename_uuid_search_result.group(0)))
-                                            self.gauge_value_vcenter_volume_uuid_adjustment += 1
+                                    pass
+                                    # we no longer do the below renaming as it seems to be not safe in some situations
+                                    # # do the instance uuid fixing only in non interactive mode
+                                    # if not self.interactive:
+                                    #     my_volume_status = self.cinder_db_get_volume_status(my_volume_uuid)
+                                    #     if my_volume_uuid and (my_volume_status in ['backing-up','restoring-backup','maintenance']):
+                                    #         log.info("- plan: renaming instanceUuid %s to uuid %s extracted from instance name ('%s') - delayed as the attached volume %s is in state '%s'", \
+                                    #             str(k['config.instanceUuid']),str(instancename_uuid_search_result.group(0)), str(k['config.name']), str(my_volume_uuid), \
+                                    #                 str(my_volume_status))
+                                    #     else:
+                                    #         self.vc_rename_instance_uuid(str(k['config.instanceUuid']),str(instancename_uuid_search_result.group(0)))
+                                    #         self.gauge_value_vcenter_volume_uuid_adjustment += 1
                                 else:
                                     # do the consistency check logging only in non interactive mode
                                     if not self.interactive:
