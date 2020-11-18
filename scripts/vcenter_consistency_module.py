@@ -380,7 +380,7 @@ class ConsistencyCheck:
         except Exception as e:
                 log.info("- PLEASE CHECK MANUALLY - error renaming volume backing uuid %s on server %s - %s", old_volume_uuid, vm_handle.config.instanceUuid, str(e.msg))
 
-    /* this will no longer be used as it is not safe in all situations */
+    # this will no longer be used as it is not safe in all situations
     def vc_rename_instance_uuid(self,instance_uuid,uuid_from_instance_name):
 
         vm_handle = self.vc_get_instance_handle(instance_uuid)
