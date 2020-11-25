@@ -87,7 +87,11 @@ class ConsistencyCheck:
         self.nova_os_servers_with_attached_volume = dict()
         self.cinder_os_servers_with_attached_volume = dict()
         self.vc_server_uuid_with_mounted_volume = dict()
+        # fnb = file name based, i.e. uuid extracted from the filename
+        self.vc_server_uuid_with_mounted_volume_fnb = dict()
         self.vc_server_name_with_mounted_volume = dict()
+        self.vc_server_name_with_mounted_volume_fnb = dict()
+        self.vc_vmdk_filename_for_backing_uuid = dict()
         self.cinder_volume_attaching_for_too_long = dict()
         self.cinder_volume_detaching_for_too_long = dict()
         self.cinder_volume_creating_for_too_long = dict()
@@ -489,7 +493,10 @@ class ConsistencyCheck:
 
         # clean all old dicts
         self.vc_server_uuid_with_mounted_volume.clear()
+        self.vc_server_uuid_with_mounted_volume_fnb.clear()
         self.vc_server_name_with_mounted_volume.clear()
+        self.vc_server_name_with_mounted_volume_fnb.clear()
+        self.vc_vmdk_filename_for_backing_uuid.clear()
         self.vcenter_instances_without_mounts.clear()
 
         has_volume_attachments = dict()
@@ -503,6 +510,7 @@ class ConsistencyCheck:
             "config.instanceUuid",
             "config.template",
             "config.annotation",
+            "config.extraConfig",
             "overallStatus",
             "name"
         ]
@@ -522,8 +530,22 @@ class ConsistencyCheck:
                 if k.get('name') != k.get('config.name'):
                     log.warn("- PLEASE CHECK MANUALLY - name property '%s' differs from config.name property '%s'", k.get('name'), k.get('config.name'))
                     self.gauge_value_vcenter_instance_name_mismatch += 1
-                # try to find an openstack uuid in the instance name
-                instancename_uuid_search_result = uuid_re.search(k['name'])
+                # get the volume attachment which nova has written into the extraConfig
+                # this should always point to the proper shadow vm even if thigs are not ok anymore
+                if k.get('config.extraConfig'):
+                    for j in k.get('config.extraConfig'):
+                        match = re.search(r"^volume-(.*)", j.key)
+                        if match:
+                            # map attached volume id to instance uuid - used later
+                            self.vc_server_uuid_with_mounted_volume[str(match.group(1))] = k['config.instanceUuid']
+                            # map attached volume id to instance name - used later for more detailed logging
+                            self.vc_server_name_with_mounted_volume[str(match.group(1))] = k['config.name']
+                            has_volume_attachments[k['config.instanceUuid']] = True
+                            # some debugging code just in case
+                            log.debug("==> key: {} - value: {} - match: {} - instance: {}".format(str(j.key), str(j.value), str(match.group(1)),str(k['config.instanceUuid'])))
+                            # warn if key and value does not match here, which should not happen
+                            if str(j.value) != str(match.group(1)):
+                                log.warn("- PLEASE CHECK MANUALLY - key and value uuid not matching for extraConfig volume entry - key: {} - value: {} - instance: {}".format(str(j.key),str(j.key),str(k['config.instanceUuid'])))
                 # get the config.hardware.device property out of the data dict and iterate over its elements
                 # this check seems to be required as in one bb i got a key error otherwise - looks like a vm without that property
                 if k.get('config.hardware.device'):
@@ -612,16 +634,29 @@ class ConsistencyCheck:
                                 #self.instance_reload_candidates.add(k['config.instanceUuid'])
                                 self.gauge_value_vcenter_volume_zero_size += 1
 
-                        # if we have my_volume_uuid, which is either the uuid from the backing config or (if that does not exist or is not
-                        # in cinder) will be extracted from the filename, then we assume this volume uuid to be attached to the instance
-                        # and we only care about openstack instances (with annotations) here
-                        if my_volume_uuid and openstack_re.match(k.get('config.annotation', 'no_annotation')):
-                            # map attached volume id to instance uuid - used later
-                            self.vc_server_uuid_with_mounted_volume[my_volume_uuid] = k['config.instanceUuid']
-                            # map attached volume id to instance name - used later for more detailed logging
-                            self.vc_server_name_with_mounted_volume[my_volume_uuid] = k['config.name']
-                            log.debug("==> mount - instance: %s - volume: %s", str(k['config.instanceUuid']), str(my_volume_uuid))
-                            has_volume_attachments[k['config.instanceUuid']] = True
+                        # this section now collects some information we need later for consistency checking
+                        # and detailed logging in case of inconsistencies
+                        # if we can extract a uuid from the vmdk filename via disk backing entry then
+                        # note it down in case it is a valid openstack volume uuid
+                        if filename_uuid_search_result and openstack_re.match(k.get('config.annotation', 'no_annotation')):
+                            if filename_uuid_search_result.group(1) in self.cinder_os_all_volumes:
+                                self.vc_server_uuid_with_mounted_volume_fnb[filename_uuid_search_result.group(1)] = k['config.instanceUuid']
+                                self.vc_server_name_with_mounted_volume_fnb[filename_uuid_search_result.group(1)] = k['config.name']
+                        # save the filename from the backing node here as well
+                        if j.backing.uuid:
+                                    self.vc_vmdk_filename_for_backing_uuid[str(j.backing.uuid)] = j.backing.fileName
+
+                        # we no longer use this code path as my_volume_uuid might not be reliable oin some cases
+                        # # if we have my_volume_uuid, which is either the uuid from the backing config or (if that does not exist or is not
+                        # # in cinder) will be extracted from the filename, then we assume this volume uuid to be attached to the instance
+                        # # and we only care about openstack instances (with annotations) here
+                        # if my_volume_uuid and openstack_re.match(k.get('config.annotation', 'no_annotation')):
+                        #     # map attached volume id to instance uuid - used later
+                        #     self.vc_server_uuid_with_mounted_volume[my_volume_uuid] = k['config.instanceUuid']
+                        #     # map attached volume id to instance name - used later for more detailed logging
+                        #     self.vc_server_name_with_mounted_volume[my_volume_uuid] = k['config.name']
+                        #     log.debug("==> mount - instance: %s - volume: %s", str(k['config.instanceUuid']), str(my_volume_uuid))
+                        #     has_volume_attachments[k['config.instanceUuid']] = True
 
                     # try to find an openstack uuid in the instance name
                     instancename_uuid_search_result = uuid_re.search(k['name'])
@@ -688,6 +723,13 @@ class ConsistencyCheck:
                                 log.debug("==> shadow vm mount - instance: %s - volume / backing uuid: %s", str(k['config.instanceUuid']), str(j.backing.uuid))
                 else:
                     log.warn("- PLEASE CHECK MANUALLY - instance without hardware - this should not happen!")
+
+        # check if the mounts we got from the extra options differed from the ones based on filenames
+        for k in self.vc_server_uuid_with_mounted_volume:
+            log.debug("==> mapping - volume: {} - instance: {}".format(str(k),self.vc_server_uuid_with_mounted_volume.get(k)))
+            log.debug("====> fs mapping - instance: {}".format(self.vc_server_uuid_with_mounted_volume_fnb.get(k)))
+            if self.vc_server_uuid_with_mounted_volume.get(k) != self.vc_server_uuid_with_mounted_volume_fnb.get(k):
+                log.warn("- PLEASE CHECK MANUALLY - volume uuid mismatch for volume (from extraConfig volume entry) {} - instance: {} - shadow vm uuid via vmdk filename in backing: {} - vmdk filename for backing uuid: {}".format(str(k),str(self.vc_server_uuid_with_mounted_volume.get(k)),str(self.vc_server_uuid_with_mounted_volume_fnb.get(k)),str(self.vc_vmdk_filename_for_backing_uuid.get(k))))
 
         return True
 
