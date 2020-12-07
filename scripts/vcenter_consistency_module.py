@@ -532,20 +532,20 @@ class ConsistencyCheck:
                     self.gauge_value_vcenter_instance_name_mismatch += 1
                 # get the volume attachment which nova has written into the extraConfig
                 # this should always point to the proper shadow vm even if thigs are not ok anymore
-                if k.get('config.extraConfig'):
-                    for j in k.get('config.extraConfig'):
-                        match = re.search(r"^volume-(.*)", j.key)
-                        if match:
-                            # map attached volume id to instance uuid - used later
-                            self.vc_server_uuid_with_mounted_volume[str(match.group(1))] = k['config.instanceUuid']
-                            # map attached volume id to instance name - used later for more detailed logging
-                            self.vc_server_name_with_mounted_volume[str(match.group(1))] = k['config.name']
-                            has_volume_attachments[k['config.instanceUuid']] = True
-                            # some debugging code just in case
-                            log.debug("==> key: {} - value: {} - match: {} - instance: {}".format(str(j.key), str(j.value), str(match.group(1)),str(k['config.instanceUuid'])))
-                            # warn if key and value does not match here, which should not happen
-                            if str(j.value) != str(match.group(1)):
-                                log.warn("- PLEASE CHECK MANUALLY - key and value uuid not matching for extraConfig volume entry - key: {} - value: {} - instance: {}".format(str(j.key),str(j.key),str(k['config.instanceUuid'])))
+                for j in k.get('config.extraConfig', []):
+                    match = re.search(r"^volume-(.*)", j.key)
+                    if not match:
+                        continue
+                    # map attached volume id to instance uuid - used later
+                    self.vc_server_uuid_with_mounted_volume[str(match.group(1))] = k['config.instanceUuid']
+                    # map attached volume id to instance name - used later for more detailed logging
+                    self.vc_server_name_with_mounted_volume[str(match.group(1))] = k['config.name']
+                    has_volume_attachments[k['config.instanceUuid']] = True
+                    # some debugging code just in case
+                    log.debug("==> key: {} - value: {} - match: {} - instance: {}".format(str(j.key), str(j.value), str(match.group(1)),str(k['config.instanceUuid'])))
+                    # warn if key and value does not match here, which should not happen
+                    if str(j.value) != str(match.group(1)):
+                        log.warn("- PLEASE CHECK MANUALLY - key and value uuid not matching for extraConfig volume entry - key: {} - value: {} - instance: {}".format(str(j.key),str(j.key),str(k['config.instanceUuid'])))
                 # get the config.hardware.device property out of the data dict and iterate over its elements
                 # this check seems to be required as in one bb i got a key error otherwise - looks like a vm without that property
                 if k.get('config.hardware.device'):
@@ -679,6 +679,8 @@ class ConsistencyCheck:
                             self.gauge_value_vcenter_volume_uuid_mismatch += 1
                             if self.cinder_os_volume_status.get(str(instancename_uuid_search_result.group(0))):
                                 if not self.cinder_os_volume_status.get(str(k['config.instanceUuid'])):
+                                    if not self.interactive:
+                                        log.warn("- PLEASE CHECK MANUALLY - instanceUuid to instance name mismatch for shadow vm with instanceUuid not in cinder: instanceUuid=%s, uuid from instance name=%s, instance name='%s'", k['config.instanceUuid'], instancename_uuid_search_result.group(0), str(k['config.name']))
                                     pass
                                     # we no longer do the below renaming as it seems to be not safe in some situations
                                     # # do the instance uuid fixing only in non interactive mode
