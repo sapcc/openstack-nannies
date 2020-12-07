@@ -308,6 +308,7 @@ class VCenterHelper:
 
     #missing getattr check, if failover not present in production cluster.
     def get_failover_host(self,cluster_view,failover_host=0):
+        #by default it will return first set of failover_host
         failoverhosts = []
         clusters = self.collect_properties(cluster_view,vim.ClusterComputeResource,
                             ['name', 'configuration.dasConfig.admissionControlPolicy'], include_mors=True)
