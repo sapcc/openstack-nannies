@@ -307,17 +307,18 @@ class VCenterHelper:
         pass
 
     #missing getattr check, if failover not present in production cluster.
-    def get_failover_host(self,cluster_view):
+    def get_failover_host(self,cluster_view,failover_host=0):
         failoverhosts = []
         clusters = self.collect_properties(cluster_view,vim.ClusterComputeResource,
                             ['name', 'configuration.dasConfig.admissionControlPolicy'], include_mors=True)
         for cluster in clusters:
             if cluster['name'].startswith("production"):
                 try:
-                    failoverhosts.append(cluster['configuration.dasConfig.admissionControlPolicy'].failoverHosts[0])
+                    failoverhosts.append(cluster['configuration.dasConfig.admissionControlPolicy'].failoverHosts[failover_host])
                 except AttributeError as error:
                     log.info("- INFO - No failoverhosts policy defined with error %s",error)
-
+                except IndexError as error:
+                    log.info("- INFO - second failoverhosts not defind for BB %s",cluster['name'])
         #failoverhosts = [cluster['configuration.dasConfig.admissionControlPolicy'].failoverHosts[0] for cluster in clusters if cluster['name'].startswith("production")]
         return failoverhosts
 
