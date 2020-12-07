@@ -37,7 +37,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 def run_check(args, vcenter_data):
     while True:
         log.info("- INFO - starting new loop run with automation %s ", args.automated)
-        vm_move_suggestions(args,vcenter_data)
+        vm_move_suggestions(args, vcenter_data)
         vcenter_data.sync_data()
         # wait the interval time
         log.info("- INFO - waiting %s minutes before starting the next loop run \n \n", str(args.interval))
@@ -50,7 +50,7 @@ def vm_move_suggestions(args, vcenter_data):
     log.info("- INFO - Nanny Handle Big VM size between %s and %s", args.min_vm_size,args.max_vm_size)
     log.info("- INFO - connecting to openstack to region %s", args.region)
     openstack_obj = openstack.OpenstackHelper(args.region, args.user_domain_name,
-                                              args.project_domain_name,args.project_name,args.username, args.password)
+                                              args.project_domain_name, args.project_name,args.username, args.password)
 
     # cleaning-up last nanny job orphaned cleanup
     nanny_metadata_handle = "nanny_big_vm_handle"
@@ -85,7 +85,8 @@ def vm_move_suggestions(args, vcenter_data):
     cluster_view = vc.find_all_of_type(vc.vim.ClusterComputeResource)
     big_vm_host = vc.get_big_vm_host(cluster_view)
     log.info("- INFO - all Big_VM_backup_hosts %s ",[ big_vm.name for big_vm in big_vm_host])
-    fail_over_hosts = vc.get_failover_host(cluster_view)
+    fail_over_hosts = vc.get_failover_host(cluster_view,failover_host=0)
+    fail_over_hosts.extend(vc.get_failover_host(cluster_view,failover_host=1))
     log.info("- INFO - all fail over hosts %s ", [ fail_over.name for fail_over in fail_over_hosts])
     cluster_view.Destroy()
     log.info("- INFO - getting hostview view info from vcenter host %s", args.vc_host)
@@ -211,6 +212,7 @@ def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_
         else:
             log.info("- INFO - big Vm %s is move from source %s to big_vm_node as no node left ", big_vm[1], big_vm[0])
             vcenter_data.set_data('vm_balance_too_full_building_block', int(big_vm[2] * 1024), [str(big_vm[0])])
+            #consolidation needed for building block
 
     vcenter_data.set_data('vm_balance_error_count', vcenter_error_count,["vmotion_error"])
 
