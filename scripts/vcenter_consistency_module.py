@@ -707,7 +707,8 @@ class ConsistencyCheck:
                     # i.e. for checking against the vcenter the value is relevant
                     if str(j.value) not in backing_uuid_list:
                         self.gauge_value_vcenter_extraconfig_backing_uuid_missing += 1
-                        log.warn("- PLEASE CHECK MANUALLY - no backing uuid found for extraConfig volume uuid value {} on instance {}".format(str(j.value),str(k['config.instanceUuid'])))
+                        if not self.interactive:
+                            log.warn("- PLEASE CHECK MANUALLY - no backing uuid found for extraConfig volume uuid value {} on instance {}".format(str(j.value),str(k['config.instanceUuid'])))
                     else:
                         # remove all volume uuids we were able to map in extraConfig
                         backing_uuid_list.remove(str(j.value))
@@ -728,7 +729,8 @@ class ConsistencyCheck:
                         # only do this for real openstack vms and not shadow vms
                         if openstack_re.match(k.get('config.annotation', 'no_annotation')):
                             self.gauge_value_vcenter_backing_uuid_extraconfig_missing += 1
-                            log.warn("- PLEASE CHECK MANUALLY - volume with backing uuid {} on instance {} has no mapping in extraConfig".format(l,k['config.instanceUuid']))
+                            if not self.interactive:
+                                log.warn("- PLEASE CHECK MANUALLY - volume with backing uuid {} on instance {} has no mapping in extraConfig".format(l,k['config.instanceUuid']))
                 if not has_volume_attachments.get(k['config.instanceUuid']):
                     self.vcenter_instances_without_mounts[k['config.instanceUuid']] = k['config.name']
 
@@ -756,7 +758,7 @@ class ConsistencyCheck:
         for k in self.vc_server_uuid_with_mounted_volume:
             log.debug("==> mapping - volume: {} - instance: {}".format(str(k),self.vc_server_uuid_with_mounted_volume.get(k)))
             log.debug("====> fs mapping - instance: {}".format(self.vc_server_uuid_with_mounted_volume_fnb.get(k)))
-            if self.vc_server_uuid_with_mounted_volume.get(k) != self.vc_server_uuid_with_mounted_volume_fnb.get(k):
+            if self.vc_server_uuid_with_mounted_volume.get(k) != self.vc_server_uuid_with_mounted_volume_fnb.get(k) and not self.interactive:
                 log.warn("- PLEASE CHECK MANUALLY - volume uuid mismatch for volume (from extraConfig volume entry) {} - instance: {} - shadow vm uuid via vmdk filename in backing: {} - vmdk filename for backing uuid: {}".format(str(k),str(self.vc_server_uuid_with_mounted_volume.get(k)),str(self.vc_server_uuid_with_mounted_volume_fnb.get(k)),str(self.vc_vmdk_filename_for_backing_uuid.get(k))))
 
         return True
