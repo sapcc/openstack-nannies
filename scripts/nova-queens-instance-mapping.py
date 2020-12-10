@@ -19,14 +19,33 @@
 
 
 import sys
-import psycopg2
+import mysql.connector
 import ConfigParser
 import argparse
 import logging
+import re
 
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
+
+def dsn_to_args(api_db_url):
+  db_url_splitted = re.search(r"^.*://(.*):(.*)@(.*)/(.*)\?.*", api_db_url)
+  db_url_port = re.search(r"^(.*):(.*)", str(db_url_splitted.group(3)))
+  if db_url_port:
+    db_port = str(db_url_port.group(2))
+    db_host = str(db_url_port.group(1))
+  else:
+    db_port = '3306'
+    db_host = str(db_url_splitted.group(3))
+  db_args = {
+    'user': str(db_url_splitted.group(1)),
+    'password': str(db_url_splitted.group(2)),
+    'host': db_host,
+    'port': db_port,
+    'database': str(db_url_splitted.group(4))
+  }
+  return db_args
 
 
 def get_api_db_url(config_file):
@@ -41,9 +60,9 @@ def get_api_db_url(config_file):
 
 
 def _get_conn(db):
-  db = db.replace('+psycopg2','')
-  conn = psycopg2.connect(db)
-  return conn.cursor()
+  db_args = dsn_to_args(db)
+  conn = mysql.connector.connect(**db_args)
+  return conn
 
 
 def parse_cmdline_args():
@@ -63,8 +82,9 @@ except Exception as e:
   log.error("Check command line arguments (%s)", e.strerror)
 
 # Connect to databases
-api_conn = psycopg2.connect(get_api_db_url(args.config).replace('+psycopg2',''))
-api_cur = api_conn.cursor()
+api_db_args = dsn_to_args(get_api_db_url(args.config))
+api_conn = mysql.connector.connect(**api_db_args)
+api_cur = api_conn.cursor(buffered=True)
 
 # Get list of all cells
 api_cur.execute("SELECT id, name, database_connection FROM cell_mappings")
@@ -88,9 +108,9 @@ for (instance_uuid,) in unmapped_instances:
 
   # Check which cell contains this instance
   for cell in CELLS:
-    cell['db'].execute("SELECT id FROM instances WHERE uuid = %s", (instance_uuid,))
+    cell['db'].cursor(buffered=True).execute("SELECT id FROM instances WHERE uuid = %s", (instance_uuid,))
 
-    if cell['db'].rowcount != 0:
+    if cell['db'].cursor(buffered=True).rowcount != 0:
       instance_cell = cell
       break
 
