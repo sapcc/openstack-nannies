@@ -99,9 +99,9 @@ class ManilaQuotaSyncNanny(ManilaNanny):
 
     def get_projects(self):
         """Return a list of all projects in the database"""
-        shares_t = Table('shares', self.db_metadata, autoload=True)
-        shares_q = select(columns=[shares_t.c.project_id]).group_by(shares_t.c.project_id)
-        return [project[0] for project in shares_q.execute()]
+        quota_usages_t = Table('quota_usages', self.db_metadata, autoload=True)
+        quota_usages_q = select(columns=[quota_usages_t.c.project_id]).group_by(quota_usages_t.c.project_id)
+        return [project[0] for project in quota_usages_q.execute()]
 
     def sync_quota_usages_project(self, project_id, quota_to_sync_by_user, quota_to_sync_by_type):
         """Sync the quota usages of a project from real usages"""
