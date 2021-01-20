@@ -110,6 +110,8 @@ class ConsistencyCheck:
         # this one has the instance uuid as key
         self.nova_os_volumes_attached_at_server = dict()
         self.vcenter_instances_without_mounts = dict()
+        self.old_vcenter_instance_without_backinguuid_for_volume = dict()
+        self.old_vcenter_instance_without_extraconfig_for_volume = dict()
 
         # some dummy initializations
         self.vc_service_instance = None
@@ -158,7 +160,7 @@ class ConsistencyCheck:
                                                   'volumes attachment fixing is denied if there are more than this many attachments to fix')
         self.gauge_vcenter_instance_name_mismatch = Gauge('vcenter_nanny_consistency_vcenter_instance_name_mismatch',
                                                   'how many shadow vms have a mismatch between name and config.name in the vcenter')
-        self.gauge_vcenter_volume_backing_uuid_mismatch = Gauge('vcenter_nanny_consistency_vcenter_volume_backing_uuid_mismatch',
+        self.gauge_vcenter_volume_backinguuid_mismatch = Gauge('vcenter_nanny_consistency_vcenter_volume_backinguuid_mismatch',
                                                   'how many volumes have a volume backing uuid mismatch in the vcenter')
         self.gauge_vcenter_volume_uuid_mismatch = Gauge('vcenter_nanny_consistency_vcenter_volume_uuid_mismatch',
                                                   'how many shadow vms have a uuid to name mismatch in the vcenter')
@@ -166,9 +168,9 @@ class ConsistencyCheck:
                                                   'how many volumes got a uuid mismatch adjusted in the vcenter')
         self.gauge_vcenter_volume_uuid_missing = Gauge('vcenter_nanny_consistency_vcenter_volume_uuid_missing',
                                                   'how many volumes are missing a uuid in the vcenter backing store config')
-        self.gauge_vcenter_backing_uuid_extraconfig_missing = Gauge('vcenter_nanny_consistency_vcenter_backing_uuid_extraconfig_missing',
+        self.gauge_vcenter_backinguuid_extraconfig_missing = Gauge('vcenter_nanny_consistency_vcenter_backinguuid_extraconfig_missing',
                                                   'how many volumes with a backing uuid have no mapping in extraConfig')
-        self.gauge_vcenter_extraconfig_backing_uuid_missing = Gauge('vcenter_nanny_consistency_vcenter_extraconfig_backing_uuid_missing',
+        self.gauge_vcenter_extraconfig_backinguuid_missing = Gauge('vcenter_nanny_consistency_vcenter_extraconfig_backinguuid_missing',
                                                   'how many volumes are missing a backing uuid for volumes in extraConfig')
         self.gauge_vcenter_volume_zero_size = Gauge('vcenter_nanny_consistency_vcenter_volume_zero_size',
                                                   'how many volumes have a size of zero in the vcenter')
@@ -187,12 +189,12 @@ class ConsistencyCheck:
         self.gauge_value_cinder_volume_available_with_attachments = 0
         self.gauge_value_cinder_volume_in_use_without_attachments = 0
         self.gauge_value_vcenter_instance_name_mismatch = 0
-        self.gauge_value_vcenter_volume_backing_uuid_mismatch = 0
+        self.gauge_value_vcenter_volume_backinguuid_mismatch = 0
         self.gauge_value_vcenter_volume_uuid_mismatch = 0
         self.gauge_value_vcenter_volume_uuid_adjustment = 0
         self.gauge_value_vcenter_volume_uuid_missing = 0
-        self.gauge_value_vcenter_backing_uuid_extraconfig_missing = 0
-        self.gauge_value_vcenter_extraconfig_backing_uuid_missing = 0
+        self.gauge_value_vcenter_backinguuid_extraconfig_missing = 0
+        self.gauge_value_vcenter_extraconfig_backinguuid_missing = 0
         self.gauge_value_vcenter_volume_zero_size = 0
         self.gauge_value_vcenter_instance_state_gray = 0
         self.gauge_value_no_autofix = 0
@@ -502,6 +504,11 @@ class ConsistencyCheck:
         self.vc_vmdk_filename_for_backing_uuid.clear()
         self.vcenter_instances_without_mounts.clear()
 
+        # keep a dict of volumes without backing uuid or entraconfig entry in this loop run
+        # key is the volume uuid and value the instance
+        new_vcenter_instance_without_backinguuid_for_volume = dict()
+        new_vcenter_instance_without_extraconfig_for_volume = dict()
+
         has_volume_attachments = dict()
 
         # the properties we want to collect - some of them are not yet used, but will at a later
@@ -615,7 +622,7 @@ class ConsistencyCheck:
                             if filename_uuid_search_result and filename_uuid_search_result.group(1):
                                 if j.backing.uuid != filename_uuid_search_result.group(1):
                                     log.warn("- PLEASE CHECK MANUALLY - volume backing uuid mismatch: backing uuid=%s, filename='%s', instance name='%s'", str(j.backing.uuid), str(j.backing.fileName), str(k['config.name']))
-                                    self.gauge_value_vcenter_volume_backing_uuid_mismatch += 1
+                                    self.gauge_value_vcenter_volume_backinguuid_mismatch += 1
                             else:
                                 log.warn("- PLEASE CHECK MANUALLY - no shadow vm uuid found in filename='%s' on instance '%s'", str(j.backing.fileName), str(k['config.name']))
 
@@ -706,9 +713,13 @@ class ConsistencyCheck:
                     # important: we are checking the value of the extraConfig entry against the backing uuid here!
                     # i.e. for checking against the vcenter the value is relevant
                     if str(j.value) not in backing_uuid_list:
-                        self.gauge_value_vcenter_extraconfig_backing_uuid_missing += 1
-                        if not self.interactive:
-                            log.warn("- PLEASE CHECK MANUALLY - no backing uuid found for extraConfig volume uuid value {} on instance {}".format(str(j.value),str(k['config.instanceUuid'])))
+                        # mark it for the double check in the next loop run
+                        new_vcenter_instance_without_backinguuid_for_volume[j.value] = k['config.instanceUuid']
+                        # check that we did see this during the last run already
+                        if self.old_vcenter_instance_without_backinguuid_for_volume.get(j.value) == k['config.instanceUuid']:
+                            self.gauge_value_vcenter_extraconfig_backinguuid_missing += 1
+                            if not self.interactive:
+                                log.warn("- PLEASE CHECK MANUALLY - no backing uuid found for extraConfig volume uuid value {} on instance {}".format(str(j.value),str(k['config.instanceUuid'])))
                     else:
                         # remove all volume uuids we were able to map in extraConfig
                         backing_uuid_list.remove(str(j.value))
@@ -728,9 +739,13 @@ class ConsistencyCheck:
                     for l in backing_uuid_list:
                         # only do this for real openstack vms and not shadow vms
                         if openstack_re.match(k.get('config.annotation', 'no_annotation')):
-                            self.gauge_value_vcenter_backing_uuid_extraconfig_missing += 1
-                            if not self.interactive:
-                                log.warn("- PLEASE CHECK MANUALLY - volume with backing uuid {} on instance {} has no mapping in extraConfig".format(l,k['config.instanceUuid']))
+                            # mark it for the double check in the next loop run
+                            new_vcenter_instance_without_extraconfig_for_volume[l] = k['config.instanceUuid']
+                            # check that we did see this during the last run already
+                            if self.old_vcenter_instance_without_extraconfig_for_volume.get(l) == k['config.instanceUuid']:
+                                self.gauge_value_vcenter_backinguuid_extraconfig_missing += 1
+                                if not self.interactive:
+                                    log.warn("- PLEASE CHECK MANUALLY - volume with backing uuid {} on instance {} has no mapping in extraConfig".format(l,k['config.instanceUuid']))
                 if not has_volume_attachments.get(k['config.instanceUuid']):
                     self.vcenter_instances_without_mounts[k['config.instanceUuid']] = k['config.name']
 
@@ -760,6 +775,9 @@ class ConsistencyCheck:
             log.debug("====> fs mapping - instance: {}".format(self.vc_server_uuid_with_mounted_volume_fnb.get(k)))
             if self.vc_server_uuid_with_mounted_volume.get(k) != self.vc_server_uuid_with_mounted_volume_fnb.get(k) and not self.interactive:
                 log.warn("- PLEASE CHECK MANUALLY - volume uuid mismatch for volume (from extraConfig volume entry) {} - instance: {} - shadow vm uuid via vmdk filename in backing: {} - vmdk filename for backing uuid: {}".format(str(k),str(self.vc_server_uuid_with_mounted_volume.get(k)),str(self.vc_server_uuid_with_mounted_volume_fnb.get(k)),str(self.vc_vmdk_filename_for_backing_uuid.get(k))))
+
+        self.old_vcenter_instance_without_backinguuid_for_volume = new_vcenter_instance_without_backinguuid_for_volume
+        self.old_vcenter_instance_without_extraconfig_for_volume = new_vcenter_instance_without_extraconfig_for_volume
 
         return True
 
@@ -1484,12 +1502,12 @@ class ConsistencyCheck:
         self.gauge_value_cinder_volume_in_use_without_some_attachments = 0
         self.gauge_value_cinder_volume_in_use_without_attachments = 0
         self.gauge_value_vcenter_instance_name_mismatch = 0
-        self.gauge_value_vcenter_volume_backing_uuid_mismatch = 0
+        self.gauge_value_vcenter_volume_backinguuid_mismatch = 0
         self.gauge_value_vcenter_volume_uuid_mismatch = 0
         self.gauge_value_vcenter_volume_uuid_adjustment = 0
         self.gauge_value_vcenter_volume_uuid_missing = 0
-        self.gauge_value_vcenter_backing_uuid_extraconfig_missing = 0
-        self.gauge_value_vcenter_extraconfig_backing_uuid_missing = 0
+        self.gauge_value_vcenter_backinguuid_extraconfig_missing = 0
+        self.gauge_value_vcenter_extraconfig_backinguuid_missing = 0
         self.gauge_value_vcenter_volume_zero_size = 0
         self.gauge_value_vcenter_instance_state_gray = 0
         self.gauge_value_no_autofix = 0
@@ -1700,12 +1718,12 @@ class ConsistencyCheck:
         self.gauge_cinder_volume_attachment_fix_count.set(len(self.volume_attachment_fix_candidates))
         self.gauge_cinder_volume_attachment_max_fix_count.set(self.max_automatic_fix)
         self.gauge_vcenter_instance_name_mismatch.set(self.gauge_value_vcenter_instance_name_mismatch)
-        self.gauge_vcenter_volume_backing_uuid_mismatch.set(self.gauge_value_vcenter_volume_backing_uuid_mismatch)
+        self.gauge_vcenter_volume_backinguuid_mismatch.set(self.gauge_value_vcenter_volume_backinguuid_mismatch)
         self.gauge_vcenter_volume_uuid_mismatch.set(self.gauge_value_vcenter_volume_uuid_mismatch)
         self.gauge_vcenter_volume_uuid_adjustment.set(self.gauge_value_vcenter_volume_uuid_adjustment)
         self.gauge_vcenter_volume_uuid_missing.set(self.gauge_value_vcenter_volume_uuid_missing)
-        self.gauge_vcenter_backing_uuid_extraconfig_missing.set(self.gauge_value_vcenter_backing_uuid_extraconfig_missing)
-        self.gauge_vcenter_extraconfig_backing_uuid_missing.set(self.gauge_value_vcenter_extraconfig_backing_uuid_missing)
+        self.gauge_vcenter_backinguuid_extraconfig_missing.set(self.gauge_value_vcenter_backinguuid_extraconfig_missing)
+        self.gauge_vcenter_extraconfig_backinguuid_missing.set(self.gauge_value_vcenter_extraconfig_backinguuid_missing)
         self.gauge_vcenter_volume_zero_size.set(self.gauge_value_vcenter_volume_zero_size)
         self.gauge_vcenter_instance_state_gray.set(self.gauge_value_vcenter_instance_state_gray)
         self.gauge_no_autofix.set(self.gauge_value_no_autofix)
