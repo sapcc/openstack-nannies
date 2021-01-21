@@ -381,7 +381,7 @@ def collect_properties(service_instance, view_ref, obj_type, path_set=None,
         data.append(properties)
     return data
 
-def detach_ghost_port(service_instance, vm, mac_address):
+def detach_ghost_port(service_instance, vm, mac_address, dry_run):
     """ Deletes virtual NIC based on mac address
     :param si: Service Instance
     :param vm: Virtual Machine Object
@@ -399,7 +399,10 @@ def detach_ghost_port(service_instance, vm, mac_address):
     if not port_to_detach:
         log.warn("- PLEASE CHECK MANUALLY - the port to be deleted with mac addresss %s on instance %s does not seem to exist", mac_address, vm.config.instanceUuid)
 
-    # log.error("- dry-run: detaching ghost port with mac address %s from instance %s [%s]", mac_address, vm.config.instanceUuid, vm.config.name)
+    if dry_run:
+        log.error("- dry-run: detaching ghost port with mac address %s from instance %s [%s]", mac_address, vm.config.instanceUuid, vm.config.name)
+        return False
+
     log.error("- action: detaching ghost port with mac address %s from instance %s [%s]", mac_address, vm.config.instanceUuid, vm.config.name)
     port_to_detach_spec = vim.vm.device.VirtualDeviceSpec()
     port_to_detach_spec.operation = \
@@ -429,7 +432,7 @@ def detach_ghost_port(service_instance, vm, mac_address):
     return True
 
 
-def detach_ghost_volume(service_instance, vm, volume_uuid):
+def detach_ghost_volume(service_instance, vm, volume_uuid, dry_run):
     """ Deletes virtual NIC based on mac address
     :param si: Service Instance
     :param vm: Virtual Machine Object
@@ -448,7 +451,10 @@ def detach_ghost_volume(service_instance, vm, volume_uuid):
         log.warn(
             "- PLEASE CHECK MANUALLY - the volume to be detached with uuid %s on instance %s does not seem to exist", volume_uuid, vm.config.instanceUuid)
 
-    # log.error("- dry-run: detaching ghost volume with uuid %s from instance %s [%s]", volume_uuid, vm.config.instanceUuid, vm.config.name)
+    if dry_run:
+        log.error("- dry-run: detaching ghost volume with uuid %s from instance %s [%s]", volume_uuid, vm.config.instanceUuid, vm.config.name)
+        return False
+
     log.error("- action: detaching ghost volume with uuid %s from instance %s [%s]", volume_uuid, vm.config.instanceUuid, vm.config.name)
     volume_to_detach_spec = vim.vm.device.VirtualDeviceSpec()
     volume_to_detach_spec.operation = \
@@ -993,7 +999,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                     for ghost_port_detach_candidate in ghost_port_detach_candidates.get(item):
                                         # double check that the port is still a ghost port to avoid accidentally deleting stuff due to timing issues
                                         if not any(True for _ in conn.network.ports(mac_address = ghost_port_detach_candidate)):
-                                            if detach_ghost_port(service_instance, vm, ghost_port_detach_candidate):
+                                            if detach_ghost_port(service_instance, vm, ghost_port_detach_candidate, dry_run):
                                                 gauge_value_ghost_ports_detached += 1
                                                 # here we do not need to worry about multiple ghost ports per instance
                                                 # as the instance is orphan or not, independent of the numer of ghost ports
@@ -1018,7 +1024,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
                                             gauge_value_ghost_volume_ignored += 1
                                         except exceptions.ResourceNotFound:
                                             conn.block_store.volumes(details=False, all_projects=1)
-                                            if detach_ghost_volume(service_instance, vm, ghost_volume_detach_candidate):
+                                            if detach_ghost_volume(service_instance, vm, ghost_volume_detach_candidate, dry_run):
                                                 gauge_value_ghost_volumes_detached += 1
                                                 # here we do not need to worry about multiple ghost volumes per instance
                                                 # as the instance is orphan or not, independent of the numer of ghost volumes
