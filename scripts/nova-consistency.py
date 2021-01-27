@@ -70,7 +70,10 @@ def get_block_device_mappings(meta):
 
     block_device_mappings = {}
     block_device_mapping_t = Table('block_device_mapping', meta, autoload=True)
-    block_device_mapping_q = select(columns=[block_device_mapping_t.c.id, block_device_mapping_t.c.volume_id],whereclause=and_(block_device_mapping_t.c.deleted == 0, block_device_mapping_t.c.destination_type == "volume"))
+    block_device_mapping_q = select(columns=[block_device_mapping_t.c.id, block_device_mapping_t.c.volume_id],
+                                    whereclause=and_(block_device_mapping_t.c.deleted == 0,
+                                                     block_device_mapping_t.c.volume_id.isnot(None),
+                                                     block_device_mapping_t.c.destination_type == "volume"))
 
     # return a dict indexed by block_device_mapping_id and with the value cinder_volume_id for non deleted block_device_mappings
     for (block_device_mapping_id, cinder_volume_id) in block_device_mapping_q.execute():
