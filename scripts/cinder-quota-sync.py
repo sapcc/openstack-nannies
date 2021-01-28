@@ -41,9 +41,9 @@ def get_projects(meta):
     """Return a list of all projects in the database"""
 
     projects = []
-    volumes_t = Table('volumes', meta, autoload=True)
-    volumes_q = select(columns=[volumes_t.c.project_id]). group_by(volumes_t.c.project_id)
-    for project in volumes_q.execute():
+    quota_usages_t = Table('quota_usages', meta, autoload=True)
+    quota_usages_q = select(columns=[quota_usages_t.c.project_id]). group_by(quota_usages_t.c.project_id)
+    for project in quota_usages_q.execute():
         projects.append(project[0])
 
     return projects
