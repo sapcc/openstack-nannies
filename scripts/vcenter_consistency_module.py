@@ -581,7 +581,7 @@ class ConsistencyCheck:
                                     log.warn("- PLEASE CHECK MANUALLY - volume on instance '%s' without uuid in backing store config - shadow vm uuid extraction from its vcenter filename '%s' failed", str(k.get('config.name')), str(j.backing.fileName))
                                 my_volume_uuid = None
                                 # in this case force dry run mode as we seem to have volumes we cannot trust anymore
-                                log.error("- PLEASE CHECK MANUALLY - volume without uuid in backing store config and wrong filename %s on datastore - forcing dry-run mode!", str(j.backing.fileName))
+                                log.error("- PLEASE CHECK MANUALLY - volume on instance %s without uuid in backing store config and wrong filename %s on datastore - forcing dry-run mode!", str(k.get('config.name')), str(j.backing.fileName))
                                 self.gauge_value_vcenter_volume_uuid_missing += 1
                                 self.dry_run = True
                         # so we have a uuid in the backing store config
