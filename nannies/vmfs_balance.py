@@ -44,22 +44,28 @@ def parse_commandline():
     parser.add_argument("--interval", type=int, default=1,
                         help="Interval in minutes between check runs")
     parser.add_argument("--min-usage", type=int, default=60,
-                        help="Target ds usage must be below this value (in %) to do a move")
+                        help="Target ds usage must be below this value in % to do a move")
     parser.add_argument("--max-usage", type=int, default=0,
-                        help="Source ds usage must be above this value (in %) to do a move")
-    parser.add_argument("--min-freespace", type=int, default=60,
-                        help="Target ds free sapce should remain at least this value (in gb) to do a move")
+                        help="Source ds usage must be above this value in % to do a move")
+    parser.add_argument("--min-freespace", type=int, default=2500,
+                        help="Target ds free sapce should remain at least this value in gb to do a move")
     parser.add_argument("--max-move-vms", type=int, default=5,
                         help="Maximum number of VMs to (propose to) move")
     parser.add_argument("--print-max", type=int, default=10,
                         help="Maximum number largest volumes to print per ds")
-    args = parser.parse_args()
+    parser.add_argument("--ds-denylist", nargs='*',
+                        required=False, help="ignore those ds")
+    parser.add_argument("--volume-min-size", type=int, required=False, default=0,
+                        help="Minimum size (>=) in gb for a volume to move for balancing")
+    parser.add_argument("--volume-max-size", type=int, required=False, default=2500,
+                        help="Maximum size (<=) in gb for a volume to move for balancing")
+    args=parser.parse_args()
     return args
 
 
 def prometheus_exporter_setup(args):
-    nanny_metrics_data = PromDataClass()
-    nanny_metrics = PromMetricsClass()
+    nanny_metrics_data=PromDataClass()
+    nanny_metrics=PromMetricsClass()
     nanny_metrics.set_metrics('netapp_balancing_nanny_aggregate_usage',
                               'space usage per netapp aggregate in percent', ['aggregate'])
     REGISTRY.register(CustomCollector(nanny_metrics, nanny_metrics_data))
@@ -73,19 +79,20 @@ class VM:
     """
 
     def __init__(self, vm_element):
-        self.name = vm_element['name']
-        self.hardware = vm_element['config.hardware']
-        self.runtime = vm_element['runtime']
-        self.handle = vm_element['obj']
+        self.name=vm_element['name']
+        self.hardware=vm_element['config.hardware']
+        self.runtime=vm_element['runtime']
+        self.handle=vm_element['obj']
 
     def is_shadow_vm(self):
         if self.hardware.memoryMB == 128 and self.hardware.numCPU == 1 and \
                 self.runtime.powerState == 'poweredOff' and \
                 not any(isinstance(dev, vim.vm.device.VirtualEthernetCard) for dev in self.hardware.device):
-            number_of_disks = sum(isinstance(
+            number_of_disks=sum(isinstance(
                 dev, vim.vm.device.VirtualDisk) for dev in self.hardware.device)
             if number_of_disks == 0:
-                log.warning("- WARN - shadow vm {} without a disk".format(self.name))
+                log.warning(
+                    "- WARN - shadow vm {} without a disk".format(self.name))
                 return False
             if number_of_disks > 1:
                 log.warning(
@@ -97,7 +104,7 @@ class VM:
 
     def get_disksizes(self):
         # return [dev.capacityInBytes for dev in self.hardware.device if isinstance(dev, vim.vm.device.VirtualDisk)]
-        disksizes = []
+        disksizes=[]
         # find the disk device
         for dev in self.hardware.device:
             if isinstance(dev, vim.vm.device.VirtualDisk):
@@ -113,10 +120,10 @@ class VMs:
     """
     this is for all vms we get from the vcenteri
     """
-    elements = []
+    elements=[]
 
     def __init__(self, vc):
-        self.elements = [ VM(vm_element) for vm_element in self.get_vms_dict(vc) ]
+        self.elements=[VM(vm_element) for vm_element in self.get_vms_dict(vc)]
 
     def get_vms_dict(self, vc):
         """
@@ -124,8 +131,8 @@ class VMs:
         return a dict of vms with the vm handles as keys
         """
         log.info("- INFO -  getting vm information from the vcenter")
-        vm_view = vc.find_all_of_type(vc.vim.VirtualMachine)
-        vms_dict = vc.collect_properties(vm_view, vc.vim.VirtualMachine,
+        vm_view=vc.find_all_of_type(vc.vim.VirtualMachine)
+        vms_dict=vc.collect_properties(vm_view, vc.vim.VirtualMachine,
                                          ['name', 'config.hardware', 'runtime'], include_mors=True)
         return vms_dict
 
@@ -144,10 +151,10 @@ class VMs:
             return None
 
     def get_shadow_vms(self, vm_handles=elements):
-        shadow_vms = []
+        shadow_vms=[]
         # iterate over the vms
         for vm in self.elements:
-            if vm.handle in vm_handles and vm.is_shadow_vm(): 
+            if vm.handle in vm_handles and vm.is_shadow_vm():
                 shadow_vms.append(vm)
         return shadow_vms
 
@@ -158,13 +165,13 @@ class DS:
     """
 
     def __init__(self, ds_element):
-        self.name = ds_element['name']
-        self.freespace = ds_element['summary.freeSpace']
-        self.capacity = ds_element['summary.capacity']
-        self.usage = ds_element['summary.freeSpace'] / \
+        self.name=ds_element['name']
+        self.freespace=ds_element['summary.freeSpace']
+        self.capacity=ds_element['summary.capacity']
+        self.usage=ds_element['summary.freeSpace'] / \
             ds_element['summary.capacity']
-        self.vm_handles = ds_element['vm']
-        self.ds_handle = ds_element['obj']
+        self.vm_handles=ds_element['vm']
+        self.ds_handle=ds_element['obj']
 
     def is_below_max_usage(self, args):
         """
@@ -199,7 +206,7 @@ class DS:
         check if the ds free space is above the min freespace given in the args
         returns true or false
         """
-        if self.freespace > args.min_freespace:
+        if self.freespace > args.min_freespace * 1024**3:
             log.debug("- INFO - ds {} with free space {:0.f}G is above the freespace limit of {:.0f}G".format(
                 self.name, self.freespace, args.min_freespace))
             return True
@@ -228,7 +235,7 @@ class DS:
         # add vm to vm list
         self.vm_handles.append(vm.handle)
         # recalc usage
-        self.usage = self.freespace / self.capacity
+        self.usage=self.freespace / self.capacity
 
     def remove_shadow_vm(self, vm):
         """
@@ -240,17 +247,18 @@ class DS:
         # add vm size to freespace
         self.freespace += vm.get_total_disksize()
         # recalc usage
-        self.usage = self.freespace / self.capacity
+        self.usage=self.freespace / self.capacity
 
 
 class DataStores:
     """
     this is for all datastores we get from the vcentera
     """
-    elements = []
+    elements=[]
 
     def __init__(self, vc):
-        self.elements = [DS(ds_element) for ds_element in self.get_datastores_dict(vc)]
+        self.elements=[DS(ds_element)
+                          for ds_element in self.get_datastores_dict(vc)]
 
     def get_datastores_dict(self, vc):
         """
@@ -258,8 +266,8 @@ class DataStores:
         return a dict of datastores with the ds handles as keys
         """
         log.info("- INFO -  getting datastore information from the vcenter")
-        ds_view = vc.find_all_of_type(vc.vim.Datastore)
-        datastores_dict = vc.collect_properties(ds_view, vc.vim.Datastore,
+        ds_view=vc.find_all_of_type(vc.vim.Datastore)
+        datastores_dict=vc.collect_properties(ds_view, vc.vim.Datastore,
                                                 ['name', 'summary.freeSpace',
                                                     'summary.capacity', 'vm'],
                                                 include_mors=True)
@@ -279,17 +287,19 @@ class DataStores:
         else:
             return None
 
-    def vmfs_ds(self):
+    def vmfs_ds(self, ds_denylist=[]):
         """
         filter for only vmfs ds and sort by size
         return a list of datastore elements
         """
-        ds_name_regex_pattern = '^(?:vmfs_vc.*_hdd_bb)(?P<bb>\d+)(_\d+)'
-        # ds_name_regex_pattern = '^(?:vmfs_vc.*_ssd_)(?:.*)'
-        self.elements = [ds for ds in self.elements if re.match(ds_name_regex_pattern, ds.name)]
+        # ds_name_regex_pattern='^(?:vmfs_vc.*_hdd_bb)(?P<bb>\d+)(_\d+)'
+        ds_name_regex_pattern = '^(?:vmfs_vc.*_hdd_).*'
+        self.elements = [ds for ds in self.elements if re.match(
+            ds_name_regex_pattern, ds.name) and not (ds_denylist and ds.name in ds_denylist)]
+        # self.elements=[ds for ds in self.elements if re.match(ds_name_regex_pattern, ds.name)]
 
     def sort_by_usage(self):
-        self.elements.sort(key = lambda element: element.usage, reverse=True)
+        self.elements.sort(key=lambda element: element.usage, reverse=True)
 
 
 def sort_vms_by_total_disksize(vms):
@@ -306,41 +316,54 @@ def move_shadow_vm_from_ds_to_ds(ds1, ds2, vm):
 
 def vmfs_balancing(ds_info, vm_info, args):
     # only vmfs ds are balanced here
-    ds_info.vmfs_ds()
+    ds_info.vmfs_ds(args.ds_denylist)
 
     if len(ds_info.elements) == 0:
         log.warning("- WARN - no vmfs ds in this vcenter")
         return
 
     ds_info.sort_by_usage()
-    
+
+    # first print out some ds and shadow vm info
     for i in ds_info.elements:
-        log.info("- INFO -   ds: {} - {:.1f}% - {:.0f}G free".format(i.name, i.usage, i.freespace/1024**3))
-        shadow_vms = vm_info.get_shadow_vms(i.vm_handles)
-        shadow_vms_sorted_by_disksize = sort_vms_by_total_disksize(shadow_vms)
-        printed = 0
+        if args.ds_denylist and i.name in args.ds_denylist:
+          log.info("- INFO -   ds: {} - {:.1f}% - {:.0f}G free".format(i.name,
+                   i.usage, i.freespace/1024**3))
+        log.info("- INFO -   ds: {} - {:.1f}% - {:.0f}G free".format(i.name,
+                 i.usage, i.freespace/1024**3))
+        shadow_vms=vm_info.get_shadow_vms(i.vm_handles)
+        shadow_vms_sorted_by_disksize=sort_vms_by_total_disksize(shadow_vms)
+        printed=0
         for j in shadow_vms_sorted_by_disksize:
             if printed < args.print_max:
                 log.info(
                     "- INFO -    {} - {:.0f}G".format(j.name, j.get_total_disksize() / 1024**3))
                 printed += 1
 
-    moves_done = 0
+    # balancing loop
+    moves_done=0
     while True:
         if moves_done > args.max_move_vms:
             break
-        most_used_ds = ds_info.elements[0]
-        least_used_ds = ds_info.elements[-1]
+        most_used_ds=ds_info.elements[0]
+        least_used_ds=ds_info.elements[-1]
         if most_used_ds.passes_all_checks(args) and least_used_ds.passes_all_checks(args):
             break
-        shadow_vms_on_most_used_ds = vm_info.get_shadow_vms(most_used_ds.vm_handles)
-        if not shadow_vms_on_most_used_ds:
-            log.warning("- WARN - no more shadow vms to move on most used ds {}".format(most_used_ds.name))
-            break
         if (most_used_ds.usage - least_used_ds.usage) < 1:
-            log.warning("- WARN - usages of most used ds {} and least used ds {} are less than 1% apart".format(most_used_ds.name, least_used_ds.name))
+            log.warning("- WARN - usages of most used ds {} and least used ds {} are less than 1% apart".format(
+                most_used_ds.name, least_used_ds.name))
             break
-        largest_shadow_vm_on_most_used_ds = shadow_vms_on_most_used_ds[0]
+        shadow_vms_on_most_used_ds = []
+        for vm in vm_info.get_shadow_vms(most_used_ds.vm_handles):
+            vm_disksize = vm.get_totoal_disksize() / 1024**3
+            if args.volume_min_size <= vm_disksize <= args.volume_max_size:
+               shadow_vms_on_most_used_dsppend(vm)
+        if not shadow_vms_on_most_used_ds:
+            log.warning(
+                "- WARN - no more shadow vms to move on most used ds {}".format(most_used_ds.name))
+            break
+        largest_shadow_vm_on_most_used_ds=sort_vms_by_total_disksize(
+            shadow_vms_on_most_used_ds)[0]
         # if vm_info.get(largest_shadow_vm_on_largest_ds).get_totoal_disksize() > \
         #         0.5 * (ds_info.get(least_used_ds).freespace - ds.info.get(most_used_ds).freespace):
         #     break
@@ -348,7 +371,7 @@ def vmfs_balancing(ds_info, vm_info, args):
                               largest_shadow_vm_on_largest_ds)
         moves_done += 1
         ds_info.sort_by_usage()
-        
+
 def check_loop(args):
     """
     endless loop of generating move suggestions and wait for the next run
@@ -366,6 +389,7 @@ def check_loop(args):
         vm_info=VMs(vc)
         ds_info=DataStores(vc)
 
+        # do the actual balancing
         vmfs_balancing(ds_info, vm_info, args)
 
         # wait the interval time
