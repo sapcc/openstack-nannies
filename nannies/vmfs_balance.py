@@ -343,20 +343,20 @@ def move_shadow_vm_from_ds_to_ds(ds1, ds2, vm):
 
 def vmfs_balancing(ds_info, vm_info, args):
 
-    log.info("- CMND -  new run starting")
-
     # only vmfs ds are balanced here
     ds_info.vmfs_ds(args.ds_denylist)
+
+    if len(ds_info.elements) == 0:
+        log.warning("- WARN - no vmfs ds in this vcenter")
+        return
+
+    log.info("- CMND -  new run starting")
 
     ds_overall_average_usage = ds_info.get_overall_average_usage()
     log.info("- INFO -  average usage across all vmfs ds is {:.1f}% ({:.0f}G free - {:.0f}G total)"\
             .format(ds_overall_average_usage,\
                     ds_info.get_overall_freespace() / 1024**3,\
                     ds_info.get_overall_capacity() / 1024**3))
-
-    if len(ds_info.elements) == 0:
-        log.warning("- WARN - no vmfs ds in this vcenter")
-        return
 
     ds_info.sort_by_usage()
 
