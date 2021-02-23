@@ -246,8 +246,12 @@ class DataStores:
     elements=[]
 
     def __init__(self, vc):
-        self.elements=[DS(ds_element)
-                          for ds_element in self.get_datastores_dict(vc)]
+        for ds_element in self.get_datastores_dict(vc):
+            # ignore datastores with zero capacity
+            if ds_element.get('summary.capacity') == 0:
+                log.info("- WARN - ds {} has zero capacity!".format(ds_element.get('name', "no name")))
+                continue
+            self.elements.append(DS(ds_element))
 
     def get_datastores_dict(self, vc):
         """
