@@ -33,4 +33,4 @@ else
     fi
 fi
 
-python3 /scripts/vmfs_balance.py $DRY_RUN --vcenter-host $VMFS_BALANCE_VCHOST --vcenter-user $VMFS_BALANCE_VCUSER --vcenter-password $VMFS_BALANCE_VCPASSWORD --interval $VMFS_BALANCE_INTERVAL --min-usage $VMFS_BALANCE_MIN_USAGE--max-usage $VMFS_BALANCE_MAX_USAGE --min-freespace $VMFS_BALANCE_MIN_FREESPACE --max-move-vms $VMFS_BALANCE_MAX_MOVE_VMS --volume-min-size $VMFS_BALANCE_VOLUME_MIN_SIZE --volume-max-size $VMFS_BALANCE_VOLUME_MAX_SIZE $VMFS_BALANCE_AUTOPILOT --print-max $VMFS_BALANCE_PRINT_MAX
+python3 /scripts/vmfs_balance.py $DRY_RUN --vcenter-host $VMFS_BALANCE_VCHOST --vcenter-user $VMFS_BALANCE_VCUSER --vcenter-password $VMFS_BALANCE_VCPASSWORD --interval $VMFS_BALANCE_INTERVAL --min-usage $VMFS_BALANCE_MIN_USAGE --max-usage $VMFS_BALANCE_MAX_USAGE --min-max-difference $VMFS_BALANCE_MIN_MAX_DIFFERENCE --min-freespace $VMFS_BALANCE_MIN_FREESPACE --max-move-vms $VMFS_BALANCE_MAX_MOVE_VMS --volume-min-size $VMFS_BALANCE_VOLUME_MIN_SIZE --volume-max-size $VMFS_BALANCE_VOLUME_MAX_SIZE $VMFS_BALANCE_AUTOPILOT --print-max $VMFS_BALANCE_PRINT_MAX
