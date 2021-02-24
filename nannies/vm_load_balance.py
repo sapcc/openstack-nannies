@@ -80,7 +80,11 @@ def vm_move_suggestions(args, vcenter_data):
 
     # vcenter info
     log.info("- INFO - connecting to vcenter to host %s", args.vc_host)
-    vc = VCenterHelper(args.vc_host,args.vc_user,args.vc_password)
+    try:
+        vc = VCenterHelper(args.vc_host,args.vc_user,args.vc_password)
+    except Exception as err:
+        log.info("- INFO - connecting to vcenter to host %s have an issue with %s", args.vc_host,err)
+        return
     log.info("- INFO - getting cluster view info from vcenter host %s", args.vc_host)
     cluster_view = vc.find_all_of_type(vc.vim.ClusterComputeResource)
     big_vm_host = vc.get_big_vm_host(cluster_view)
