@@ -101,6 +101,7 @@ class OpenstackHelper:
     def get_shard_vcenter_all(self, vc_host):
         filter_host = self.get_building_block_all()
         agg = self.api.compute.aggregates()
+        hosts = []
         for vc in agg:
             if vc.name in vc_host:
                 match = re.search(r"^vc-[a-z]-[0-9]$", vc.name)
@@ -113,6 +114,7 @@ class OpenstackHelper:
     def get_shard_vcenter(self, vc_host):
         filter_host = self.get_building_block_filter()
         agg = self.api.compute.aggregates()
+        hosts = []
         for vc in agg:
             if vc.name in vc_host:
                 match = re.search(r"^vc-[a-z]-[0-9]$", vc.name)
