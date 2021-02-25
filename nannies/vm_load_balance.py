@@ -46,6 +46,7 @@ def run_check(args, vcenter_data):
 
 def vm_move_suggestions(args, vcenter_data):
 
+    vm_uuid_re = re.compile('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
     #  openstack info
     log.info("- INFO - Nanny Handle Big VM size between %s and %s", args.min_vm_size,args.max_vm_size)
     log.info("- INFO - connecting to openstack to region %s", args.region)
@@ -130,7 +131,13 @@ def vm_move_suggestions(args, vcenter_data):
                     continue
                 host_consumed_size = host_consumed_size + vm.config.hardware.memoryMB
                 if vm.config.hardware.memoryMB > args.min_vm_size:
-                    log.info("- INFO - vm name %s is big vm and size %.2f GB",vm.name, vm.config.hardware.memoryMB/1024)
+                    big_vm_name_detail = str(vm.name)
+                    if vm_uuid_re.match(re.split("\(|\)", big_vm_name_detail)[-2]):
+                        big_vm_uuid_detail = re.split("\(|\)", big_vm_name_detail)[-2]
+                        vm_detail = openstack_obj.get_server_detail(big_vm_uuid_detail)
+                        log.info("- INFO - vm name %s is big vm and size %.2f GB and created at: %s",vm.name, vm.config.hardware.memoryMB/1024,vm_detail.created_at)
+                    else:
+                        log.info("- INFO - vm name %s is big vm and size %.2f GB", vm.name,vm.config.hardware.memoryMB / 1024)
                     big_vm_total_size = big_vm_total_size + vm.config.hardware.memoryMB
                     bb_bigvm_consume[int(re.findall(r"[0-9]+", host['name'])[1])] = bb_bigvm_consume[int(
                         re.findall(r"[0-9]+", host['name'])[1])] + vm.config.hardware.memoryMB
