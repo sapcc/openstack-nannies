@@ -149,8 +149,8 @@ class OpenstackHelper:
         server_list = { server.id:[server.name,server.flavor["ram"],server.task_state,server.attached_volumes] for server in servers if server.status == u'ACTIVE' and server.compute_host == nova_compute}
         return server_list
 
-    def get_server_detail(self):
-        pass
+    def get_server_detail(self,id):
+        return self.api.compute.find_server(id)
 
     def lock_volume(self, volume_uuid):
         try:
