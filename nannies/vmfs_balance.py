@@ -126,9 +126,9 @@ class VMs:
     """
     this is for all vms we get from the vcenteri
     """
-    elements=[]
 
     def __init__(self, vc):
+        self.elements=[]
         for vm_element in self.get_vms_dict(vc):
             # ignore instances without a config-hardware node
             if not vm_element.get('config.hardware'):
@@ -161,7 +161,7 @@ class VMs:
         else:
             return None
 
-    def get_shadow_vms(self, vm_handles=elements):
+    def get_shadow_vms(self, vm_handles):
         shadow_vms=[]
         # iterate over the vms
         for vm in self.elements:
@@ -243,9 +243,9 @@ class DataStores:
     """
     this is for all datastores we get from the vcentera
     """
-    elements=[]
 
     def __init__(self, vc):
+        self.elements=[]
         for ds_element in self.get_datastores_dict(vc):
             # ignore datastores with zero capacity
             if ds_element.get('summary.capacity') == 0:
