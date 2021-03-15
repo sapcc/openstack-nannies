@@ -119,6 +119,14 @@ def get_netapp_hosts(vc, region):
                 netapp_name = "stnpca{}-bb{:03d}.cc.{}.cloud.sap".format(stnpa_num, bbnum, region)
                 # build a list of netapps
                 netapp_hosts.append(netapp_name)
+        if name.startswith("vvol_stnpc"):
+            # example for the pattern: vVOL_stnpca3_st030
+            m = re.match("^(?:vvol)_(?P<stname>.*)$", name)
+            if m:
+                # e.g. stnpca3-st030.cc.<region>.cloud.sap - those are the netapp cluster addresses (..np_c_a3..)
+                netapp_name = "{}.cc.{}.cloud.sap".format(str(m.group('stname')).replace('_','-'), region)
+                # build a list of netapps
+                netapp_hosts.append(netapp_name)
 
     return netapp_hosts
 
@@ -166,15 +174,19 @@ def get_flexvol_usage_list(nh, netapp_host, flexvol_denylist, nanny_metrics_data
     # (netapphost1, flexvol03, aggr1, 60, 100)
 
 # generate the vvol datastore name from the name of an aggregate
-def bb_name_from_aggregate_name(aggregate_name):
-    # example for the pattern: aggr_ssd_bb123_1
+def bb_name_from_aggregate_name(netapp_host, aggregate_name):
+    # example for the pattern for bb connected netapps: aggr_ssd_bb123_1
     m = re.match("^(?:aggr_ssd_bb)(?P<bb>\d+)_\d$", aggregate_name)
-    # example ds_name: BB123
-    ds_name = 'BB' + m.group('bb')
-
-    return ds_name
-
-    valid_netapp_ids_flexvol = [vmdk_flexvol[1] for vmdk_flexvol in vmdks_flexvol]
+    if m:
+        # example ds_name: vVOL_BB123
+        ds_name = 'vVOL_BB' + m.group('bb')
+        return ds_name
+    # example for the pattern for not bb connected netapps: aggr_ssd_st030_02
+    m = re.match("^(?:aggr_ssd_)(?P<stname>st.*)_\d+$", aggregate_name)
+    if m:
+        # example ds_name: vVOL_stnpca3_st030
+        ds_name = 'vVOL_' + str(netapp_host).split('.')[0].replace('-','_')
+        return ds_name
 
 def get_vcenter_info(vc):
     # get all vms from vcenter
@@ -216,7 +228,7 @@ def move_shadow_vm(vc, volume_uuid, target_ds, dry_run):
             status = WaitForTask(task,si=vc.api)
         except Exception as e:
             logging.error("- ERROR - failed to move volume %s to data store %s with error message: %s",
-                    str(volume_uuid), str(target_ds), str(e.msg))
+                    str(volume_uuid), str(target_ds), str(e))
             return False
         else:
             log.info("- INFO - move of volume %s to data store %s successful with status %s",
@@ -459,14 +471,14 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
                 else:
                     # this should be DEBUG later
                     log.debug("==> before - lun size: {:.0f} gb - flexvol usage: {:.0f} gb - target aggr usage: {:.0f} gb".format(vmdk[2] / 1024**3, flexvol_most_used_current_size / 1024**3, aggr_least_used_current_size / 1024**3))
-                    log.info("- PLEASE IGNORE - plan: move volume {} from flexvol {} to {} # size {:.0f} gb".format(vmvmdks_flexvol.get(vmdk[1])[0], flexvol_most_used[1], bb_name_from_aggregate_name(aggr_least_used[1]), vmdk[2] / 1024**3))
+                    log.info("- PLEASE IGNORE - plan: move volume {} from flexvol {} to {} # size {:.0f} gb".format(vmvmdks_flexvol.get(vmdk[1])[0], flexvol_most_used[1], bb_name_from_aggregate_name(aggr_least_used[0], aggr_least_used[1]), vmdk[2] / 1024**3))
                     # debug
                     log.info("- PLEASE IGNORE -  {} locking volume {} before moving it".format(action_string, vmvmdks_flexvol.get(vmdk[1])[0]))
                     if not args.dry_run:
                         oh.lock_volume(vmvmdks_flexvol.get(vmdk[1])[0])
-                    log.info("- PLEASE IGNORE -   {} moving shadow vm of volume {} to {}".format(action_string, vmvmdks_flexvol.get(vmdk[1])[0], bb_name_from_aggregate_name(aggr_least_used[1])))
+                    log.info("- PLEASE IGNORE -   {} moving shadow vm of volume {} to {}".format(action_string, vmvmdks_flexvol.get(vmdk[1])[0], bb_name_from_aggregate_name(aggr_least_used[0], aggr_least_used[1])))
                     if not args.dry_run:
-                        move_shadow_vm(vc, vmvmdks_flexvol.get(vmdk[1])[0], "vVOL_" + str(bb_name_from_aggregate_name(aggr_least_used[1])))
+                        move_shadow_vm(vc, vmvmdks_flexvol.get(vmdk[1])[0], str(bb_name_from_aggregate_name(aggr_least_used[0], aggr_least_used[1])))
                     log.info("- PLEASE IGNORE -  {} unlocking volume {} after moving it".format(action_string, vmvmdks_flexvol.get(vmdk[1])[0]))
                     if not args.dry_run:
                         oh.unlock_volume(vmvmdks_flexvol.get(vmdk[1])[0])
@@ -482,7 +494,7 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
                         log.info("- PLEASE IGNORE - max-move-vms of {} reached - stopping here".format(args.max_move_vms))
                         break
                     if aggr_least_used_current_size >= aggr_least_used_target_size:
-                        log.info("- PLEASE IGNORE - further movements would fill up {} too much - stopping here".format(bb_name_from_aggregate_name(aggr_least_used[1])))
+                        log.info("- PLEASE IGNORE - further movements would fill up {} too much - stopping here".format(bb_name_from_aggregate_name(aggr_least_used[0], aggr_least_used[1])))
                         break
                     if flexvol_most_used_current_size < (args.flexvol_size_limit * 1024**3):
                         log.info("- PLEASE IGNORE - the size of the flexvol {} is below the limit of {:.0f} gb now - stopping here".format(flexvol_most_used[1], args.flexvol_size_limit))
@@ -512,7 +524,7 @@ def move_suggestions_flexvol(args, nanny_metrics_data):
                 # this should be DEBUG later
                 log.debug("==> before - lun size: {:.0f} gb - flexvol usage: {:.0f} gb - target aggr usage: {:.0f} gb".format(vmdk[2] / 1024**3, flexvol_most_used_current_size / 1024**3, aggr_least_used_current_size / 1024**3))
                 # print out info for the manual volume move
-                log.info("- INFO - netapp flexvol balancing - ./svmotion_cinder_v2.py {} vVOL_{} # from flexvol {} on {} - size {:.0f} gb{}".format(vmvmdks_flexvol.get(vmdk[1])[0], bb_name_from_aggregate_name(aggr_least_used[1]), flexvol_most_used[1], flexvol_most_used[2], vmdk[2] / 1024**3, optional_string))
+                log.info("- INFO - netapp flexvol balancing - ./svmotion_cinder_v2.py {} {} # from flexvol {} on {} - size {:.0f} gb{}".format(vmvmdks_flexvol.get(vmdk[1])[0], bb_name_from_aggregate_name(aggr_least_used[0], aggr_least_used[1]), flexvol_most_used[1], flexvol_most_used[2], vmdk[2] / 1024**3, optional_string))
                 # trying to keep track of the actual usage of the participating flexvols and aggregates
                 flexvol_most_used_current_size -= int(vmdk[2])
                 aggr_least_used_current_size += int(vmdk[2])
@@ -721,31 +733,36 @@ def move_suggestions_aggr(args, nanny_metrics_data):
         #     break
         if vmvmdks.get(vmdk[1]):
             if vmvmdks.get(vmdk[1])[1] == 'detached':
-                if oh.api.block_store.get_volume(vmvmdks.get(vmdk[1])[0]).attachments:
-                    log.info("- PLEASE IGNORE - the volume {} seems to be attached to instance {} meanwhile - doing nothing # size {:.0f} gb".format(vmvmdks.get(vmdk[1])[0], oh.api.block_store.get_volume(vmvmdks.get(vmdk[1])[0]).attachments[0]['server_id'], vmdk[2] / 1024**3))
-                else:
-                    log.info("- PLEASE IGNORE - plan: move volume {} from {} to {} # size {:.0f} gb".format(vmvmdks.get(vmdk[1])[0], bb_name_from_aggregate_name(aggr_most_used[1]), bb_name_from_aggregate_name(aggr_least_used[1]), vmdk[2] / 1024**3))
-                    # debug
-                    log.info("- PLEASE IGNORE -  {} locking volume {} before moving it".format(action_string, vmvmdks.get(vmdk[1])[0]))
-                    if not args.dry_run:
-                        oh.lock_volume(vmvmdks.get(vmdk[1])[0])
-                    log.info("- PLEASE IGNORE -   {} moving shadow vm of volume {} to {}".format(action_string, vmvmdks.get(vmdk[1])[0], bb_name_from_aggregate_name(aggr_least_used[1])))
-                    if not args.dry_run:
-                        move_shadow_vm(vc, vmvmdks.get(vmdk[1])[0], "vVOL_" + str(bb_name_from_aggregate_name(aggr_least_used[1])))
-                    log.info("- PLEASE IGNORE -  {} unlocking volume {} after moving it".format(action_string, vmvmdks.get(vmdk[1])[0]))
-                    if not args.dry_run:
-                        oh.unlock_volume(vmvmdks.get(vmdk[1])[0])
+                try:
+                    if oh.api.block_store.get_volume(vmvmdks.get(vmdk[1])[0]).attachments:
+                        log.info("- PLEASE IGNORE - the volume {} seems to be attached to instance {} meanwhile - doing nothing # size {:.0f} gb".format(vmvmdks.get(vmdk[1])[0], oh.api.block_store.get_volume(vmvmdks.get(vmdk[1])[0]).attachments[0]['server_id'], vmdk[2] / 1024**3))
+                    else:
+                        log.info("- PLEASE IGNORE - plan: move volume {} from {} to {} # size {:.0f} gb".format(vmvmdks.get(vmdk[1])[0], bb_name_from_aggregate_name(aggr_most_used[0], aggr_most_used[1]), bb_name_from_aggregate_name(aggr_least_used[0], aggr_least_used[1]), vmdk[2] / 1024**3))
+                        # debug
+                        log.info("- PLEASE IGNORE -  {} locking volume {} before moving it".format(action_string, vmvmdks.get(vmdk[1])[0]))
+                        if not args.dry_run:
+                            oh.lock_volume(vmvmdks.get(vmdk[1])[0])
+                        log.info("- PLEASE IGNORE -   {} moving shadow vm of volume {} to {}".format(action_string, vmvmdks.get(vmdk[1])[0], bb_name_from_aggregate_name(aggr_least_used[0], aggr_least_used[1])))
+                        if not args.dry_run:
+                            move_shadow_vm(vc, vmvmdks.get(vmdk[1])[0], str(bb_name_from_aggregate_name(aggr_least_used[0], aggr_least_used[1])))
+                        log.info("- PLEASE IGNORE -  {} unlocking volume {} after moving it".format(action_string, vmvmdks.get(vmdk[1])[0]))
+                        if not args.dry_run:
+                            oh.unlock_volume(vmvmdks.get(vmdk[1])[0])
 
-                    # trying to keep track of the actual usage of the participating aggregates
-                    aggr_most_used_current_size -= vmdk[2]
-                    aggr_least_used_current_size += vmdk[2]
-                    gauge_value_move_suggestions_detached += 1
-                    if gauge_value_move_suggestions_detached == args.max_move_vms:
-                        log.info("- PLEASE IGNORE - max-move-vms of {} reached - stopping here".format(args.max_move_vms))
+                        # trying to keep track of the actual usage of the participating aggregates
+                        aggr_most_used_current_size -= vmdk[2]
+                        aggr_least_used_current_size += vmdk[2]
+                        gauge_value_move_suggestions_detached += 1
+                        if gauge_value_move_suggestions_detached == args.max_move_vms:
+                            log.info("- PLEASE IGNORE - max-move-vms of {} reached - stopping here".format(args.max_move_vms))
+                            break
+                        if aggr_least_used_current_size >= aggr_least_used_target_size:
+                            log.info("- PLEASE IGNORE - further movements would fill up {} too much - stopping here".format(bb_name_from_aggregate_name(aggr_least_used[0], aggr_least_used[1])))
                         break
-                    if aggr_least_used_current_size >= aggr_least_used_target_size:
-                        log.info("- PLEASE IGNORE - further movements would fill up {} too much - stopping here".format(bb_name_from_aggregate_name(aggr_least_used[1])))
-                    break
+                except Exception as e:
+                    logging.error("- ERROR - exception while trying to get_volume %s from openstack - this should be investigated - error: %s",
+                        str(vmvmdks.get(vmdk[1])[0]), str(e))
+
     if aggr_most_used_current_size > aggr_most_used_target_size:
         log.info("- PLEASE IGNORE - there are not enough (or no) detached volumes within the current min/max limits to bring the aggregate {} below the limit of {:.0f} gb - stopping here".format(aggr_most_used[1], aggr_most_used_target_size))
         nanny_metrics_data.set_data('netapp_balancing_nanny_error_count', 1,['aggregate_not_enough_auto'])
@@ -775,7 +792,7 @@ def move_suggestions_aggr(args, nanny_metrics_data):
                 aggr_least_used_current_size += vmdk[2]
                 gauge_value_move_suggestions_attached += 1
                 # print out info for the manual volume move
-                log.info("- INFO - netapp aggregate balancing - ./svmotion_cinder_v2.py {} vVOL_{} # from {} - size {:.0f} gb{}".format(vmvmdks.get(vmdk[1])[0], bb_name_from_aggregate_name(aggr_least_used[1]), aggr_most_used[1], vmdk[2] / 1024**3, optional_string))
+                log.info("- INFO - netapp aggregate balancing - ./svmotion_cinder_v2.py {} {} # from {} - size {:.0f} gb{}".format(vmvmdks.get(vmdk[1])[0], bb_name_from_aggregate_name(aggr_least_used[0], aggr_least_used[1]), aggr_most_used[1], vmdk[2] / 1024**3, optional_string))
                 # this should be DEBUG later
                 log.debug("==> after - lun size: {:.0f} gb - source aggr usage: {:.0f} gb - target aggr usage: {:.0f} gb".format(vmdk[2] / 1024**3, aggr_most_used_current_size / 1024**3, aggr_least_used_current_size / 1024**3))
                 if gauge_value_move_suggestions_attached >= args.max_move_vms:
