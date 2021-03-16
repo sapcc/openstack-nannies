@@ -41,6 +41,7 @@ def parse_commandline():
                         help="Vcenter username")
     parser.add_argument("--vcenter-password", required=True,
                         help="Vcenter user password")
+    parser.add_argument("--region", required=True, help="(Openstack) region")
     parser.add_argument("--interval", type=int, default=1,
                         help="Interval in minutes between check runs")
     parser.add_argument("--min-usage", type=int, default=60,
@@ -241,7 +242,7 @@ class DS:
 
 class DataStores:
     """
-    this is for all datastores we get from the vcentera
+    this is for all datastores we get from the vcenter
     """
 
     def __init__(self, vc):
@@ -285,11 +286,9 @@ class DataStores:
         filter for only vmfs ds and sort by size
         return a list of datastore elements
         """
-        # ds_name_regex_pattern='^(?:vmfs_vc.*_hdd_bb)(?P<bb>\d+)(_\d+)'
         ds_name_regex_pattern = '^(?:vmfs_vc.*_ssd_).*'
         self.elements = [ds for ds in self.elements if re.match(
             ds_name_regex_pattern, ds.name) and not (ds_denylist and ds.name in ds_denylist)]
-        # self.elements=[ds for ds in self.elements if re.match(ds_name_regex_pattern, ds.name)]
 
     def sort_by_usage(self):
         self.elements.sort(key=lambda element: element.usage, reverse=True)
@@ -306,6 +305,64 @@ class DataStores:
         overall_average_usage = (1 - self.get_overall_freespace() / self.get_overall_capacity()) * 100
         return overall_average_usage
 
+class NA:
+    """
+    this is for a single netapp
+    """
+
+    def __init__(self, na_element):
+        self.name=na_element['name']
+
+class NAs:
+    """
+    this is for all netapps connected to the vcenter
+    """
+
+    def __init__(self, vc, region):
+        self.elements=[]
+        na_hosts_set=set()
+        for ds_element in self.get_datastores_dict(vc):
+            ds_name = ds_element['name']
+            if ds_name.startswith("vmfs_vc"):
+                # example for the pattern: vmfs_vc_a_0_p_ssd_bb123_004
+                #                      or: vmfs_vc-a_0_p_ssd_bb123_004
+                m = re.match("^(?:vmfs_vc(-|_).*_ssd)_bb(?P<bb>\d+)_\d+$", ds_name)
+                if m:
+                    bbnum = int(m.group('bb'))
+                    # one of our netapps is inconsistent in its naming - handle this here
+                    if bbnum == 56:
+                        stnpa_num = 0
+                    else:
+                        stnpa_num = 1
+                    # e.g. stnpca1-bb123.cc.<region>.cloud.sap - those are the netapp cluster addresses (..np_c_a1..)
+                    netapp_name = "stnpca{}-bb{:03d}.cc.{}.cloud.sap".format(stnpa_num, bbnum, region)
+                    na_hosts_set.add(netapp_name)
+                    continue
+                # example for the pattern: vmfs_vc_a_0_p_ssd_stnpca1-st123_004
+                #                      or: vmfs_vc-a_0_p_ssd_stnpca1-st123_004
+                m = re.match("^(?:vmfs_vc(-|_).*_ssd)_(?P<stname>.*)_\d+$", ds_name)
+                if m:
+                    # e.g. stnpca1-st123.cc.<region>.cloud.sap - those are the netapp cluster addresses (..np_c_a1..)
+                    netapp_name = "{}.cc.{}.cloud.sap".format(str(m.group('stname')).replace('_','-'), region)
+                    na_hosts_set.add(netapp_name)
+
+        for na_host in na_hosts_set:
+            na_element={}
+            na_element['name'] = na_host
+            self.elements.append(NA(na_element))
+
+    def get_datastores_dict(self, vc):
+        """
+        get info about the netapps from the vcenter and the netapps
+        return a dict of netapps with the na connects as handles
+        """
+        log.info("- INFO -  getting netapp information from the vcenter")
+        ds_view=vc.find_all_of_type(vc.vim.Datastore)
+        datastores_dict=vc.collect_properties(ds_view, vc.vim.Datastore,
+                                                ['name', 'summary.freeSpace',
+                                                    'summary.capacity', 'vm'],
+                                                include_mors=True)
+        return datastores_dict
 
 def sanity_checks(least_used_ds, most_used_ds, min_usage, max_usage, min_freespace, min_max_difference):
     if most_used_ds.is_below_usage(max_usage):
@@ -435,6 +492,7 @@ def check_loop(args):
         # get the vm and ds info from the vcenter
         vm_info=VMs(vc)
         ds_info=DataStores(vc)
+        na_info=NAs(vc, args.region)
 
         # do the actual balancing
         vmfs_balancing(ds_info, vm_info, args)
