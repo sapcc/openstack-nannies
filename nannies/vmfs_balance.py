@@ -22,6 +22,7 @@ import argparse
 import logging
 import time
 
+from helper.netapp import NetAppHelper
 from helper.vcenter import *
 from helper.prometheus_exporter import *
 # prometheus export functionality
@@ -41,6 +42,8 @@ def parse_commandline():
                         help="Vcenter username")
     parser.add_argument("--vcenter-password", required=True,
                         help="Vcenter user password")
+    parser.add_argument("--netapp-user", required=True, help="Netapp username")
+    parser.add_argument("--netapp-password", required=True, help="Netapp user password")
     parser.add_argument("--region", required=True, help="(Openstack) region")
     parser.add_argument("--interval", type=int, default=1,
                         help="Interval in minutes between check runs")
@@ -254,7 +257,8 @@ class DataStores:
                 continue
             self.elements.append(DS(ds_element))
 
-    def get_datastores_dict(self, vc):
+    @staticmethod
+    def get_datastores_dict(vc):
         """
         get info about the datastores from the vcenter
         return a dict of datastores with the ds handles as keys
@@ -305,23 +309,204 @@ class DataStores:
         overall_average_usage = (1 - self.get_overall_freespace() / self.get_overall_capacity()) * 100
         return overall_average_usage
 
+class NAAggr:
+    """
+    this is for a single netapp aggregate
+    """
+
+    def __init__(self, naaggr_element, parent, fvol_list, lun_list):
+        self.name=naaggr_element['name']
+        self.host=naaggr_element['host']
+        self.usage=naaggr_element['usage']
+        self.capacity=naaggr_element['capacity']
+#        self.luns=naaggr_element['luns']
+        self.parent=parent
+        self.fvols=[fvol for fvol in fvol_list if fvol['aggr'] == self.name]
+        self.luns=[]
+        for fvol in self.fvols:
+            luns=[lun for lun in lun_list if lun['fvol'] == fvol['name']]
+            self.luns.append(luns)
+
+class NAFvol:
+    """
+    this is for a single netapp flexvol
+    """
+
+    def __init__(self, nafvol_element, parent, lun_list):
+        self.name=nafvol_element['name']
+        self.host=nafvol_element['host']
+        self.aggr=nafvol_element['aggr']
+        self.usage=nafvol_element['usage']
+        self.capacity=nafvol_element['capacity']
+#        self.luns=nafvol_element['luns']
+        self.parent=parent
+        self.luns=[lun for lun in lun_list if lun['fvol'] == self.name]
+
+class NALun:
+    """
+    this is for a single netapp lun
+    """
+
+    def __init__(self, nalun_element, parent):
+        self.name=nalun_element['fvol']
+        self.host=nalun_element['host']
+        self.used=nalun_element['used']
+        self.path=nalun_element['path']
+        self.comment=nalun_element['comment']
+        self.naaid=nalun_element['naaid']
+        self.parent=parent
+
 class NA:
     """
     this is for a single netapp
     """
 
-    def __init__(self, na_element):
-        self.name=na_element['name']
+    def __init__(self, na_element, na_user, na_password):
+        # not sure yet if those will come here
+        #self.na_aggr_elements=[]
+        #self.na_fvol_elements=[]
+        #self.na_lun_elements=[]
+        self.host=na_element['host']
+        self.vc=na_element['vc']
+
+        log.info("- INFO - connecting to netapp %s", self.host)
+        self.nh = NetAppHelper(host=self.host, user=na_user, password=na_password)
+        na_version = self.nh.get_single("system-get-version")
+        log.info("- INFO -  {} is on version {}".format(self.host, na_version['version']))
+
+        lun_list = self.get_lun_info(self.nh, [])
+        for lun in lun_list:
+            nalun_element={}
+            nalun_element['fvol'] = lun['fvol']
+            nalun_element['host'] = lun['host']
+            nalun_element['used'] = lun['used']
+            nalun_element['path'] = lun['path']
+            nalun_element['comment'] = lun['comment']
+            nalun_element['naaid'] = lun['naaid']
+            nalun_element['parent'] = self
+            lun_instance = NALun(nalun_element, self)
+
+        fvol_list = self.get_fvol_info(self.nh, [])
+        for fvol in fvol_list:
+            nafvol_element={}
+            nafvol_element['name'] = fvol['name']
+            nafvol_element['host'] = fvol['host']
+            nafvol_element['aggr'] = fvol['aggr']
+            nafvol_element['capacity'] = fvol['capacity']
+            nafvol_element['used'] = fvol['used']
+            nafvol_element['usage'] = fvol['usage']
+            nafvol_element['parent'] = self
+            fvol_instance = NAFvol(nafvol_element, self, lun_list)
+
+        aggr_list = self.get_aggr_info(self.nh, [])
+        for aggr in aggr_list:
+            naaggr_element={}
+            naaggr_element['name'] = aggr['name']
+            naaggr_element['host'] = aggr['host']
+            naaggr_element['usage'] = aggr['usage']
+            naaggr_element['capacity'] = aggr['capacity']
+            naaggr_element['parent'] = self
+            aggr_instance = NAAggr(naaggr_element, self, fvol_list, lun_list)
+
+    def get_aggr_info(self, nh, aggr_denylist):
+        aggr_info = []
+        # get aggregates
+        for aggr in nh.get_aggregate_usage():
+            naaggr_element = {}
+            # print info for aggr_denylisted aggregates
+            if aggr['aggregate-name'] in aggr_denylist:
+                log.info("- INFO -   aggregate {} is aggr_denylist'ed via cmdline"
+                    .format(aggr['aggregate-name']))
+
+            if aggr['aggr-raid-attributes']['is-root-aggregate'] == 'false' \
+                    and aggr['aggregate-name'] not in aggr_denylist:
+                log.info("- INFO -   aggregate {} of size {:.0f} gb is at {}% utilization"
+                    .format(aggr['aggregate-name'],
+                        int(aggr['aggr-space-attributes']['size-total']) / 1024**3,
+                        aggr['aggr-space-attributes']['percent-used-capacity']))
+                naaggr_element['name'] = aggr['aggregate-name']
+                naaggr_element['host'] = self.host
+                naaggr_element['usage'] = int(aggr['aggr-space-attributes']['percent-used-capacity'])
+                naaggr_element['capacity'] = int(aggr['aggr-space-attributes']['size-total'])
+                aggr_info.append(naaggr_element)
+
+        return aggr_info
+
+    def get_fvol_info(self, nh, fvol_denylist):
+        fvol_info = []
+        # get flexvols
+        for fvol in nh.get_volume_usage():
+            nafvol_element = {}
+            # print info for fvol_denylisted flexvols
+            if fvol['volume-id-attributes']['name'] in fvol_denylist:
+                log.info("- INFO -   flexvol {} is fvol_denylist'ed via cmdline"
+                    .format(fvol['volume-id-attributes']['name']))
+
+            if fvol['volume-id-attributes']['name'].lower().startswith('vv') \
+                    and fvol['volume-id-attributes']['name'] not in fvol_denylist:
+                log.info("- INFO -   flexvol {} on {} of size {:.0f} gb of a total size {:.0f} gb"
+                    .format(fvol['volume-id-attributes']['name'],
+                        fvol['volume-id-attributes']['containing-aggregate-name'],
+                        int(fvol['volume-space-attributes']['size-used']) / 1024**3,
+                        int(fvol['volume-space-attributes']['size-total']) / 1024**3))
+                nafvol_element['name'] = fvol['volume-id-attributes']['name']
+                nafvol_element['host'] = self.host
+                nafvol_element['aggr'] = fvol['volume-id-attributes']['containing-aggregate-name']
+                nafvol_element['capacity'] = int(fvol['volume-space-attributes']['size-total'])
+                nafvol_element['used'] = int(fvol['volume-space-attributes']['size-used'])
+                nafvol_element['usage'] = nafvol_element['used'] / nafvol_element['capacity'] * 100
+                fvol_info.append(nafvol_element)
+
+        return fvol_info
+
+    def get_lun_info(self, nh, lun_denylist):
+        lun_info = []
+        naa_path_re = re.compile(r"^/vol/.*/(?P<naa>naa\..*)\.vmdk$")
+        # get luns
+        for lun in nh.get_luns():
+            path_match = naa_path_re.match(lun['path'])
+            if not path_match:
+                continue
+            nalun_element = {}
+            # print info for lun_denylisted luns
+            if lun['volume'] in lun_denylist:
+                log.info("- INFO -   lun {} is lun_denylist'ed via cmdline"
+                    .format(path_match.group('naa')))
+
+            if lun['volume'] not in lun_denylist:
+                log.info("- INFO -   lun {} on flexvol {} of size {:.0f} gb"
+                    .format(path_match.group('naa'),
+                        lun['volume'],
+                        int(lun['size-used']) / 1024**3))
+                nalun_element['fvol'] = lun['volume']
+                nalun_element['host'] = self.host
+                nalun_element['used'] = int(lun['size-used'])
+                nalun_element['path'] = lun['path']
+                nalun_element['comment'] = lun['comment']
+                nalun_element['naaid'] = path_match.group('naa')
+                lun_info.append(nalun_element)
+
+        return lun_info
 
 class NAs:
     """
     this is for all netapps connected to the vcenter
     """
 
-    def __init__(self, vc, region):
+    def __init__(self, vc, na_user, na_password, region):
         self.elements=[]
+
+        na_hosts = self.get_na_hosts(vc, region)
+
+        for na_host in na_hosts:
+            na_element={}
+            na_element['host'] = na_host
+            na_element['vc'] = vc
+            self.elements.append(NA(na_element, na_user, na_password))
+
+    def get_na_hosts(self, vc, region):
         na_hosts_set=set()
-        for ds_element in self.get_datastores_dict(vc):
+        for ds_element in DataStores.get_datastores_dict(vc):
             ds_name = ds_element['name']
             if ds_name.startswith("vmfs_vc"):
                 # example for the pattern: vmfs_vc_a_0_p_ssd_bb123_004
@@ -346,23 +531,7 @@ class NAs:
                     netapp_name = "{}.cc.{}.cloud.sap".format(str(m.group('stname')).replace('_','-'), region)
                     na_hosts_set.add(netapp_name)
 
-        for na_host in na_hosts_set:
-            na_element={}
-            na_element['name'] = na_host
-            self.elements.append(NA(na_element))
-
-    def get_datastores_dict(self, vc):
-        """
-        get info about the netapps from the vcenter and the netapps
-        return a dict of netapps with the na connects as handles
-        """
-        log.info("- INFO -  getting netapp information from the vcenter")
-        ds_view=vc.find_all_of_type(vc.vim.Datastore)
-        datastores_dict=vc.collect_properties(ds_view, vc.vim.Datastore,
-                                                ['name', 'summary.freeSpace',
-                                                    'summary.capacity', 'vm'],
-                                                include_mors=True)
-        return datastores_dict
+        return sorted(na_hosts_set)
 
 def sanity_checks(least_used_ds, most_used_ds, min_usage, max_usage, min_freespace, min_max_difference):
     if most_used_ds.is_below_usage(max_usage):
@@ -492,7 +661,7 @@ def check_loop(args):
         # get the vm and ds info from the vcenter
         vm_info=VMs(vc)
         ds_info=DataStores(vc)
-        na_info=NAs(vc, args.region)
+        na_info=NAs(vc, args.netapp_user, args.netapp_password, args.region)
 
         # do the actual balancing
         vmfs_balancing(ds_info, vm_info, args)
