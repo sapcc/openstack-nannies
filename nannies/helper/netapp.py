@@ -125,13 +125,19 @@ class NetAppHelper:
 
         return self.get_list('volume-get-iter', des_result=desired_attrs)
 
+    def get_luns(self):
+        # get all luns
+        query = {''}
+        desired_attrs = {'lun-info': ['volume', 'size-used', 'path', 'comment']}
+        luns = self.get_list("lun-get-iter", des_result=desired_attrs)
+
+        return luns
+
     def get_luns_for_flexvol(self, flexvol_name):
         # get all luns
         # filtering for volume took ~1s per query, all luns took 6s in qa
         #   --> we went for getting all luns and filtering on the client
-        query = {''}
-        desired_attrs = {'lun-info': ['volume', 'size-used', 'path', 'comment']}
-        luns = self.get_list("lun-get-iter", des_result=desired_attrs)
+        luns = self.get_luns()
 
         # find luns on flexvols
         lun_result = []
@@ -157,9 +163,7 @@ class NetAppHelper:
         # get all luns
         # filtering for flexvol took ~1s per query, all luns took 6s in qa
         #   --> we went for getting all luns and filtering on the client
-        query = {''}
-        desired_attrs = {'lun-info': ['volume', 'size-used', 'path', 'comment']}
-        luns = self.get_list("lun-get-iter", des_result=desired_attrs)
+        luns = self.get_luns()
 
         # find luns on flexvols
         lun_result = []
