@@ -371,33 +371,34 @@ class NAAggr:
     this is for a single netapp aggregate
     """
 
-    def __init__(self, naaggr_element, parent, fvol_list, lun_list):
+    def __init__(self, naaggr_element, parent):
         self.name=naaggr_element['name']
         self.host=naaggr_element['host']
         self.usage=naaggr_element['usage']
         self.capacity=naaggr_element['capacity']
 #        self.luns=naaggr_element['luns']
         self.parent=parent
-        self.fvols=[fvol for fvol in fvol_list if fvol['aggr'] == self.name]
+        self.fvols=[fvol for fvol in parent.na_fvol_elements if fvol.aggr == self.name]
         self.luns=[]
         for fvol in self.fvols:
-            luns=[lun for lun in lun_list if lun['fvol'] == fvol['name']]
-            self.luns.append(luns)
+            luns=[lun for lun in parent.na_lun_elements if lun.fvol == fvol.name]
+            self.luns.extend(luns)
 
 class NAFvol:
     """
     this is for a single netapp flexvol
     """
 
-    def __init__(self, nafvol_element, parent, lun_list):
+    def __init__(self, nafvol_element, parent):
         self.name=nafvol_element['name']
         self.host=nafvol_element['host']
         self.aggr=nafvol_element['aggr']
-        self.usage=nafvol_element['usage']
         self.capacity=nafvol_element['capacity']
-#        self.luns=nafvol_element['luns']
+        self.used=nafvol_element['used']
+        self.usage=nafvol_element['usage']
+        self.type=nafvol_element['type']
         self.parent=parent
-        self.luns=[lun for lun in lun_list if lun['fvol'] == self.name]
+        self.luns=[lun for lun in parent.na_lun_elements if lun.fvol == self.name]
 
 class NALun:
     """
