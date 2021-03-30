@@ -349,8 +349,10 @@ class DataStores:
         self.elements = [ds for ds in self.elements if re.match(
             ds_name_regex_pattern, ds.name) and not (ds_denylist and ds.name in ds_denylist)]
 
-    def sort_by_usage(self):
-        self.elements.sort(key=lambda element: element.usage, reverse=True)
+    def sort_by_usage(self, ds_weight=None):
+        if not ds_weight:
+            ds_weight = {}
+        self.elements.sort(key=lambda element: element.usage * ds_weight.get(element.name,1), reverse=True)
 
     def get_overall_capacity(self):
         overall_capacity = sum(ds.capacity for ds in self.elements)
