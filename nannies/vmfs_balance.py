@@ -65,10 +65,16 @@ def parse_commandline():
                         help="Maximum number largest volumes to print per ds")
     parser.add_argument("--ds-denylist", nargs='*',
                         required=False, help="ignore those ds")
-    parser.add_argument("--volume-min-size", type=int, required=False, default=0,
-                        help="Minimum size (>=) in gb for a volume to move for balancing")
-    parser.add_argument("--volume-max-size", type=int, required=False, default=2500,
-                        help="Maximum size (<=) in gb for a volume to move for balancing")
+    parser.add_argument("--aggr-volume-min-size", type=int, required=False, default=0,
+                        help="Minimum size (>=) in gb for a volume to move for aggr balancing")
+    parser.add_argument("--aggr-volume-max-size", type=int, required=False, default=2500,
+                        help="Maximum size (<=) in gb for a volume to move for aggr balancing")
+    parser.add_argument("--flexvol-volume-min-size", type=int, required=False, default=0,
+                        help="Minimum size (>=) in gb for a volume to move for flexvol balancing")
+    parser.add_argument("--flexvol-volume-max-size", type=int, required=False, default=2500,
+                        help="Maximum size (<=) in gb for a volume to move for flexvol balancing")
+    parser.add_argument("--hdd", action="store_true",
+                        help="balance hdd storage instead of ssd storage")
     args=parser.parse_args()
     return args
 
