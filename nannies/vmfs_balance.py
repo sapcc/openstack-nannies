@@ -97,6 +97,7 @@ class VM:
     def __init__(self, vm_element):
         self.name=vm_element['name']
         self.hardware=vm_element['config.hardware']
+        self.annotation=vm_element.get('config.annotation')
         self.runtime=vm_element['runtime']
         self.handle=vm_element['obj']
 
@@ -139,12 +140,17 @@ class VMs:
 
     def __init__(self, vc):
         self.elements=[]
+        self.vvol_shadow_vms_for_naaids={}
+        self.vmfs_shadow_vms_for_datastores={}
         for vm_element in self.get_vms_dict(vc):
             # ignore instances without a config-hardware node
             if not vm_element.get('config.hardware'):
                 log.debug("- WARN - instance {} has no config.hardware!".format(vm_element.get('name', "no name")))
                 continue
             self.elements.append(VM(vm_element))
+        all_shadow_vm_handles=self.get_shadow_vms([vm.handle for vm in self.elements])
+        self.vvol_shadow_vms_for_naaids=self.get_vvol_shadow_vms_for_naaids(vc, all_shadow_vm_handles)
+        self.vmfs_shadow_vms_for_datastores=self.get_vmfs_shadow_vms_for_datastores(vc, all_shadow_vm_handles)
 
     def get_vms_dict(self, vc):
         """
@@ -154,8 +160,50 @@ class VMs:
         log.info("- INFO -  getting vm information from the vcenter")
         vm_view=vc.find_all_of_type(vc.vim.VirtualMachine)
         vms_dict=vc.collect_properties(vm_view, vc.vim.VirtualMachine,
-                                         ['name', 'config.hardware', 'runtime'], include_mors=True)
+                                         ['name', 'config.annotation', 'config.hardware', 'runtime'], include_mors=True)
         return vms_dict
+
+    # TODO: maybe the vm_handles can go and we do the get_shadow_vms inside
+    def get_vvol_shadow_vms_for_naaids(self, vc, vm_handles):
+        vvol_shadow_vms_for_naaids = {}
+        for vm_handle in vm_handles:
+            # iterate over all devices
+            for device in vm_handle.hardware.device:
+                    # and filter out the virtual disks
+                    if not isinstance(device, vc.vim.vm.device.VirtualDisk):
+                        continue
+                    # we are only interested in vvols here
+                    if device.backing.fileName.lower().startswith('[vvol_') and device.backing.backingObjectId:
+                        # add backingObjectId to our dict
+                        vvol_shadow_vms_for_naaids[device.backing.backingObjectId]=(vm_handle.name, device.capacityInBytes)
+
+        return vvol_shadow_vms_for_naaids
+
+    # TODO: this should maybe go into the DS object
+    # TODO: maybe the vm_handles can go and we do the get_shadow_vms inside
+    def get_vmfs_shadow_vms_for_datastores(self, vc, vm_handles):
+        vmfs_shadow_vms_for_datastores = {}
+        ds_path_re = re.compile(r"^[(?P<ds>vmfs_.*)].*$")
+        for vm_handle in vm_handles:
+            # iterate over all devices
+            for device in vm_handle.hardware.device:
+                    # and filter out the virtual disks
+                    if not isinstance(device, vc.vim.vm.device.VirtualDisk):
+                        continue
+                    # we are only interested in vvols here
+                    if device.backing.fileName.lower().startswith('[vmfs_'):
+                        # extract the ds name from the filename
+                        # example filename name: "[vmfs_vc_a_0_p_ssd_bb001_001] 1234-some-volume-uuid-7890/1234-some-volume-uuid-7890.vmdk"
+                        ds_path_re=re.compile(r"^\[(?P<ds>.*)\].*$")
+                        ds=ds_path_re.match(device.backing.fileName)
+                        if ds:
+                            # add  ds name to out dict of lists
+                            if not vmfs_shadow_vms_for_datastores.get(ds.group('ds')):
+                                vmfs_shadow_vms_for_datastores[ds.group('ds')]=[(vm_handle.name, device.capacityInBytes)]
+                            else:
+                                vmfs_shadow_vms_for_datastores[ds.group('ds')].append((vm_handle.name, device.capacityInBytes))
+
+        return vmfs_shadow_vms_for_datastores
 
     def get_by_handle(self, vm_handle):
         for vm in self.elements:
@@ -189,6 +237,7 @@ class DS:
         self.name=ds_element['name']
         self.freespace=ds_element['summary.freeSpace']
         self.capacity=ds_element['summary.capacity']
+        self.used=ds_element['summary.capacity'] - ds_element['summary.freeSpace']
         self.usage=(1 - ds_element['summary.freeSpace'] / \
             ds_element['summary.capacity']) * 100
         self.vm_handles=ds_element['vm']
