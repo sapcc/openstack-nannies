@@ -22,7 +22,7 @@ osc-lib==1.11.1
 osc-placement==1.7.0
 os-service-types==1.7.0
 pytz==2018.5
-PyYAML==5.1
+PyYAML==5.4
 requests==2.20.0
 requestsexceptions==1.4.0
 six==1.11.0
