@@ -406,12 +406,13 @@ class NALun:
     """
 
     def __init__(self, nalun_element, parent):
-        self.name=nalun_element['fvol']
+        self.fvol=nalun_element['fvol']
         self.host=nalun_element['host']
         self.used=nalun_element['used']
         self.path=nalun_element['path']
         self.comment=nalun_element['comment']
-        self.naaid=nalun_element['naaid']
+        self.name=nalun_element['name']
+        self.type=nalun_element['type']
         self.parent=parent
 
 class NA:
@@ -420,10 +421,9 @@ class NA:
     """
 
     def __init__(self, na_element, na_user, na_password):
-        # not sure yet if those will come here
-        #self.na_aggr_elements=[]
-        #self.na_fvol_elements=[]
-        #self.na_lun_elements=[]
+        self.na_aggr_elements=[]
+        self.na_fvol_elements=[]
+        self.na_lun_elements=[]
         self.host=na_element['host']
         self.vc=na_element['vc']
 
@@ -440,9 +440,11 @@ class NA:
             nalun_element['used'] = lun['used']
             nalun_element['path'] = lun['path']
             nalun_element['comment'] = lun['comment']
-            nalun_element['naaid'] = lun['naaid']
+            nalun_element['name'] = lun['name']
+            nalun_element['type'] = lun['type']
             nalun_element['parent'] = self
             lun_instance = NALun(nalun_element, self)
+            self.na_lun_elements.append(lun_instance)
 
         fvol_list = self.get_fvol_info(self.nh, [])
         for fvol in fvol_list:
@@ -453,8 +455,10 @@ class NA:
             nafvol_element['capacity'] = fvol['capacity']
             nafvol_element['used'] = fvol['used']
             nafvol_element['usage'] = fvol['usage']
+            nafvol_element['type'] = fvol['type']
             nafvol_element['parent'] = self
-            fvol_instance = NAFvol(nafvol_element, self, lun_list)
+            fvol_instance = NAFvol(nafvol_element, self)
+            self.na_fvol_elements.append(fvol_instance)
 
         aggr_list = self.get_aggr_info(self.nh, [])
         for aggr in aggr_list:
@@ -464,7 +468,8 @@ class NA:
             naaggr_element['usage'] = aggr['usage']
             naaggr_element['capacity'] = aggr['capacity']
             naaggr_element['parent'] = self
-            aggr_instance = NAAggr(naaggr_element, self, fvol_list, lun_list)
+            aggr_instance = NAAggr(naaggr_element, self)
+            self.na_aggr_elements.append(aggr_instance)
 
     def get_aggr_info(self, nh, aggr_denylist):
         aggr_info = []
@@ -478,7 +483,7 @@ class NA:
 
             if aggr['aggr-raid-attributes']['is-root-aggregate'] == 'false' \
                     and aggr['aggregate-name'] not in aggr_denylist:
-                log.info("- INFO -   aggregate {} of size {:.0f} gb is at {}% utilization"
+                log.debug("- INFO -   aggregate {} of size {:.0f} gb is at {}% utilization"
                     .format(aggr['aggregate-name'],
                         int(aggr['aggr-space-attributes']['size-total']) / 1024**3,
                         aggr['aggr-space-attributes']['percent-used-capacity']))
@@ -500,9 +505,13 @@ class NA:
                 log.info("- INFO -   flexvol {} is fvol_denylist'ed via cmdline"
                     .format(fvol['volume-id-attributes']['name']))
 
-            if fvol['volume-id-attributes']['name'].lower().startswith('vv') \
+            if fvol['volume-id-attributes']['name'].lower().startswith('vv'):
+                nafvol_element['type'] = 'vvol'
+            if fvol['volume-id-attributes']['name'].lower().startswith('vmfs'):
+                nafvol_element['type'] = 'vmfs'
+            if nafvol_element.get('type') \
                     and fvol['volume-id-attributes']['name'] not in fvol_denylist:
-                log.info("- INFO -   flexvol {} on {} of size {:.0f} gb of a total size {:.0f} gb"
+                log.debug("- INFO -   flexvol {} on {} of size {:.0f} gb of a total size {:.0f} gb"
                     .format(fvol['volume-id-attributes']['name'],
                         fvol['volume-id-attributes']['containing-aggregate-name'],
                         int(fvol['volume-space-attributes']['size-used']) / 1024**3,
@@ -519,21 +528,31 @@ class NA:
 
     def get_lun_info(self, nh, lun_denylist):
         lun_info = []
-        naa_path_re = re.compile(r"^/vol/.*/(?P<naa>naa\..*)\.vmdk$")
+        # for vvols
+        naa_path_re = re.compile(r"^/vol/.*/(?P<name>naa\..*)\.vmdk$")
+        # for vmfs
+        ds_path_re = re.compile(r"^/vol/vmfs.*/(?P<name>vmfs_.*)$")
         # get luns
         for lun in nh.get_luns():
-            path_match = naa_path_re.match(lun['path'])
-            if not path_match:
-                continue
             nalun_element = {}
-            # print info for lun_denylisted luns
-            if lun['volume'] in lun_denylist:
-                log.info("- INFO -   lun {} is lun_denylist'ed via cmdline"
-                    .format(path_match.group('naa')))
+            path_match_vvol = naa_path_re.match(lun['path'])
+            path_match_vmfs = ds_path_re.match(lun['path'])
+            if not path_match_vvol and not path_match_vmfs:
+                continue
+            if path_match_vvol:
+                nalun_element['type'] = 'vvol'
+                path_match=path_match_vvol
+            if path_match_vmfs:
+                nalun_element['type'] = 'vmfs'
+                path_match=path_match_vmfs
 
-            if lun['volume'] not in lun_denylist:
-                log.info("- INFO -   lun {} on flexvol {} of size {:.0f} gb"
-                    .format(path_match.group('naa'),
+            # print info for lun_denylisted luns
+            if path_match.group('name') in lun_denylist:
+                log.info("- INFO -   lun {} is lun_denylist'ed via cmdline"
+                    .format(path_match.group('name')))
+            else:
+                log.debug("- INFO -   lun {} on flexvol {} of size {:.0f} gb"
+                    .format(path_match.group('name'),
                         lun['volume'],
                         int(lun['size-used']) / 1024**3))
                 nalun_element['fvol'] = lun['volume']
@@ -541,7 +560,7 @@ class NA:
                 nalun_element['used'] = int(lun['size-used'])
                 nalun_element['path'] = lun['path']
                 nalun_element['comment'] = lun['comment']
-                nalun_element['naaid'] = path_match.group('naa')
+                nalun_element['name'] = path_match.group('name')
                 lun_info.append(nalun_element)
 
         return lun_info
