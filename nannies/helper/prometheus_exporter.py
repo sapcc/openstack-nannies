@@ -22,7 +22,6 @@ import logging
 import time
 
 log = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
 class CustomCollector():
     def __init__(self, metricsobject, dataobject):
