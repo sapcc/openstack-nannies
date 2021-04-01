@@ -29,8 +29,6 @@ from helper.prometheus_exporter import *
 from prometheus_client import start_http_server, Gauge
 
 log = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
-
 
 def parse_commandline():
     parser = argparse.ArgumentParser()
@@ -76,6 +74,8 @@ def parse_commandline():
                         help="Maximum size (<=) in gb for a volume to move for flexvol balancing")
     parser.add_argument("--hdd", action="store_true",
                         help="balance hdd storage instead of ssd storage")
+    parser.add_argument("--debug", action="store_true",
+                        help="add additional debug output")
     args = parser.parse_args()
     return args
 
@@ -159,7 +159,7 @@ class VMs:
             # ignore instances without a config-hardware node
             if not vm_element.get('config.hardware'):
                 log.debug(
-                    "- WARN - instance {} has no config.hardware!".format(vm_element.get('name', "no name")))
+                    "- DEBG - instance {} has no config.hardware!".format(vm_element.get('name', "no name")))
                 continue
             self.elements.append(VM(vm_element))
         all_shadow_vm_handles = self.get_shadow_vms(
@@ -551,7 +551,7 @@ class NA:
 
             if aggr['aggr-raid-attributes']['is-root-aggregate'] == 'false' \
                     and aggr['aggregate-name'] not in aggr_denylist:
-                log.debug("- INFO -   aggregate {} of size {:.0f} gb is at {}% utilization"
+                log.debug("- DEBG -   aggregate {} of size {:.0f} gb is at {}% utilization"
                           .format(aggr['aggregate-name'],
                             int(aggr['aggr-space-attributes']['size-total']) / 1024**3,
                             aggr['aggr-space-attributes']['percent-used-capacity']))
@@ -584,7 +584,7 @@ class NA:
                 nafvol_element['type'] = 'vmfs'
             if nafvol_element.get('type') \
                     and fvol['volume-id-attributes']['name'] not in fvol_denylist:
-                log.debug("- INFO -   flexvol {} on {} of size {:.0f} gb of a total size {:.0f} gb"
+                log.debug("- DEBG -   flexvol {} on {} of size {:.0f} gb of a total size {:.0f} gb"
                           .format(fvol['volume-id-attributes']['name'],
                             fvol['volume-id-attributes']['containing-aggregate-name'],
                             int(fvol['volume-space-attributes']['size-used']) / 1024**3,
@@ -630,7 +630,7 @@ class NA:
                 log.info("- INFO -   lun {} is lun_denylist'ed via cmdline"
                          .format(path_match.group('name')))
             else:
-                log.debug("- INFO -   lun {} on flexvol {} of size {:.0f} gb"
+                log.debug("- DEBG -   lun {} on flexvol {} of size {:.0f} gb"
                           .format(path_match.group('name'),
                             lun['volume'],
                             int(lun['size-used']) / 1024**3))
@@ -1089,6 +1089,14 @@ def check_loop(args):
 def main():
 
     args = parse_commandline()
+
+    log_level = logging.INFO
+    if args.debug:
+        log_level = logging.DEBUG
+
+    print(log)
+    logging.basicConfig(level=log_level, format='%(asctime)-15s %(message)s')
+    print(log)
 
     check_loop(args)
 
