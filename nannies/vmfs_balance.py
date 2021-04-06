@@ -68,10 +68,10 @@ def parse_commandline():
                         help="Minimum size (>=) in gb for a volume to move for aggr balancing")
     parser.add_argument("--aggr-volume-max-size", type=int, required=False, default=2500,
                         help="Maximum size (<=) in gb for a volume to move for aggr balancing")
-    parser.add_argument("--flexvol-volume-min-size", type=int, required=False, default=0,
-                        help="Minimum size (>=) in gb for a volume to move for flexvol balancing")
-    parser.add_argument("--flexvol-volume-max-size", type=int, required=False, default=2500,
-                        help="Maximum size (<=) in gb for a volume to move for flexvol balancing")
+    parser.add_argument("--ds-volume-min-size", type=int, required=False, default=0,
+                        help="Minimum size (>=) in gb for a volume to move for ds balancing")
+    parser.add_argument("--ds-volume-max-size", type=int, required=False, default=2500,
+                        help="Maximum size (<=) in gb for a volume to move for ds balancing")
     parser.add_argument("--hdd", action="store_true",
                         help="balance hdd storage instead of ssd storage")
     parser.add_argument("--debug", action="store_true",
@@ -1028,8 +1028,8 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args):
             vm_disksize = vm.get_total_disksize() / 1024**3
             # move smaller volumes once the most and least used get closer to avoid oscillation
             vm_maxdisksize = min((least_used_ds.freespace - most_used_ds.freespace) / \
-                                 (2 * 1024**3), args.flexvol_volume_max_size)
-            if args.flexvol_volume_min_size <= vm_disksize <= vm_maxdisksize:
+                                 (2 * 1024**3), args.ds_volume_max_size)
+            if args.ds_volume_min_size <= vm_disksize <= vm_maxdisksize:
                 shadow_vms_on_most_used_ds.append(vm)
         if not shadow_vms_on_most_used_ds:
             log.warning(
