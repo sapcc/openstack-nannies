@@ -718,6 +718,19 @@ def sanity_checks(least_used_ds, most_used_ds, min_usage, max_usage, min_freespa
         return False
     return True
 
+def sanity_checks_lite(least_used_ds, most_used_ds, min_freespace, min_max_difference):
+    """
+    make sure least and most used ds are still within sane limits
+    """
+    if least_used_ds.is_below_freespace(min_freespace):
+        log.info("- INFO - least used ds {} with free space {:.0f}G is below the min free space limit of {:.0f}G - nothing can be done".format(
+            least_used_ds.name, least_used_ds.freespace / 1024**3, min_freespace))
+        return False
+    if (most_used_ds.usage - least_used_ds.usage) < min_max_difference:
+        log.info("- INFO - usages of most used ds {} and least used ds {} are less than {}% apart - nothing can be done".format(
+            most_used_ds.name, least_used_ds.name, min_max_difference))
+        return False
+    return True
 
 def sort_vms_by_total_disksize(vms):
     """
@@ -916,6 +929,9 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
         least_used_ds = ds_info.elements[-1]
         least_used_ds_free_space = least_used_ds.freespace - args.min_freespace * 1024**3
 
+        if not sanity_checks_lite(least_used_ds, most_used_ds_on_most_used_aggr, args.min_freespace, args.min_max_difference):
+            break
+
         shadow_vms_on_most_used_ds_on_most_used_aggr = []
         for vm in vm_info.get_shadow_vms(most_used_ds_on_most_used_aggr.vm_handles):
             vm_disksize = vm.get_total_disksize() / 1024**3
@@ -1019,9 +1035,10 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args):
 
         least_used_ds = ds_info.elements[-1]
 
-        # TODO: this has to be redefined as it does not longer work with the weighted values
-        # if not sanity_checks(least_used_ds, most_used_ds, min_usage, max_usage, args.min_freespace, args.min_max_difference):
-        #     break
+        # TODO: this has to be redefined as it does not longer work with the weighted values - lets try a lite version of the check
+        #if not sanity_checks(least_used_ds, most_used_ds, min_usage, max_usage, args.min_freespace, args.min_max_difference):
+        if not sanity_checks_lite(least_used_ds, most_used_ds, args.min_freespace, args.min_max_difference):
+            break
 
         shadow_vms_on_most_used_ds = []
         for vm in vm_info.get_shadow_vms(most_used_ds.vm_handles):
