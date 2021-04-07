@@ -31,6 +31,7 @@ from prometheus_client import start_http_server, Gauge
 
 log = logging.getLogger(__name__)
 
+
 def parse_commandline():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true",
@@ -63,6 +64,7 @@ def parse_commandline():
                         help="Maximum number of VMs to (propose to) move")
     parser.add_argument("--print-max", type=int, default=10,
                         help="Maximum number largest volumes to print per ds")
+    # TODO: maybe add aggr-denylist as well
     parser.add_argument("--ds-denylist", nargs='*',
                         required=False, help="ignore those ds")
     parser.add_argument("--aggr-volume-min-size", type=int, required=False, default=0,
@@ -99,10 +101,11 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
     ds_weight = get_aggr_and_ds_stats(na_info, ds_info)
 
     # get the most used aggr
-    max_usage_aggr,avg_aggr_usage = get_max_usage_aggr(na_info)
+    max_usage_aggr, avg_aggr_usage = get_max_usage_aggr(na_info)
 
     # this is the difference from the current max used size to the avg used size - this much we might balance stuff away
-    size_to_free_on_max_used_aggr = (max_usage_aggr.usage - avg_aggr_usage) * max_usage_aggr.capacity / 100
+    size_to_free_on_max_used_aggr = (
+        max_usage_aggr.usage - avg_aggr_usage) * max_usage_aggr.capacity / 100
 
     # only do aggr balancing if max aggr usage is more than --autopilot-range % above the avg
     if max_usage_aggr.usage < avg_aggr_usage + args.autopilot_range:
@@ -145,9 +148,9 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
     # useful for debugging
     ds_overall_average_usage = ds_info.get_overall_average_usage()
     log.info("- INFO -  average usage across all vmfs ds is {:.1f}% ({:.0f}G free - {:.0f}G total)"
-             .format(ds_overall_average_usage,\
-                    ds_info.get_overall_freespace() / 1024**3,
-                    ds_info.get_overall_capacity() / 1024**3))
+             .format(ds_overall_average_usage,
+                     ds_info.get_overall_freespace() / 1024**3,
+                     ds_info.get_overall_capacity() / 1024**3))
 
     # useful debugging info for ds and largest shadow vms
     for i in ds_info.elements:
@@ -219,7 +222,7 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
                 "- WARN -  no more shadow vms to move on most used ds {} on most used aggr".format(most_used_ds_on_most_used_aggr.name))
             break
         # TODO: decide whether to balance from largest first or smallest first
-        largest_shadow_vm_on_most_used_ds_on_most_used_aggr =sort_vms_by_total_disksize(
+        largest_shadow_vm_on_most_used_ds_on_most_used_aggr = sort_vms_by_total_disksize(
             shadow_vms_on_most_used_ds_on_most_used_aggr)[0]
         move_shadow_vm_from_ds_to_ds(most_used_ds_on_most_used_aggr, least_used_ds,
                                      largest_shadow_vm_on_most_used_ds_on_most_used_aggr)
@@ -244,7 +247,7 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args):
     ds_weight = get_aggr_and_ds_stats(na_info, ds_info)
 
     # get the aggr with the highest usage from the netapp to avoid its luns=vc ds as balancing target
-    max_usage_aggr,avg_aggr_usage = get_max_usage_aggr(na_info)
+    max_usage_aggr, avg_aggr_usage = get_max_usage_aggr(na_info)
 
     # limit the ds info from the vc to vmfs ds only
     ds_info.vmfs_ds()
@@ -256,9 +259,9 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args):
 
     ds_overall_average_usage = ds_info.get_overall_average_usage()
     log.info("- INFO -  average usage across all vmfs ds is {:.1f}% ({:.0f}G free - {:.0f}G total)"
-             .format(ds_overall_average_usage,\
-                    ds_info.get_overall_freespace() / 1024**3,
-                    ds_info.get_overall_capacity() / 1024**3))
+             .format(ds_overall_average_usage,
+                     ds_info.get_overall_freespace() / 1024**3,
+                     ds_info.get_overall_capacity() / 1024**3))
 
     # useful debugging info for ds and largest shadow vms
     for i in ds_info.elements:
@@ -313,7 +316,7 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args):
         least_used_ds = ds_info.elements[-1]
 
         # TODO: this has to be redefined as it does not longer work with the weighted values - lets try a lite version of the check
-        #if not sanity_checks(least_used_ds, most_used_ds, min_usage, max_usage, args.min_freespace, args.min_max_difference):
+        # if not sanity_checks(least_used_ds, most_used_ds, min_usage, max_usage, args.min_freespace, args.min_max_difference):
         if not sanity_checks_lite(least_used_ds, most_used_ds, args.min_freespace, args.min_max_difference):
             break
 
@@ -321,7 +324,7 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args):
         for vm in vm_info.get_shadow_vms(most_used_ds.vm_handles):
             vm_disksize = vm.get_total_disksize() / 1024**3
             # move smaller volumes once the most and least used get closer to avoid oscillation
-            vm_maxdisksize = min((least_used_ds.freespace - most_used_ds.freespace) / \
+            vm_maxdisksize = min((least_used_ds.freespace - most_used_ds.freespace) /
                                  (2 * 1024**3), args.ds_volume_max_size)
             if args.ds_volume_min_size <= vm_disksize <= vm_maxdisksize:
                 shadow_vms_on_most_used_ds.append(vm)
@@ -329,7 +332,7 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args):
             log.warning(
                 "- WARN -  no more shadow vms to move on most used ds {}".format(most_used_ds.name))
             break
-        largest_shadow_vm_on_most_used_ds =sort_vms_by_total_disksize(
+        largest_shadow_vm_on_most_used_ds = sort_vms_by_total_disksize(
             shadow_vms_on_most_used_ds)[0]
         move_shadow_vm_from_ds_to_ds(most_used_ds, least_used_ds,
                                      largest_shadow_vm_on_most_used_ds)
@@ -352,8 +355,8 @@ def check_loop(args):
         log.info("- INFO - new aggregate balancing run starting")
 
         # open a connection to the vcenter
-        vc =VCenterHelper(host=args.vcenter_host,
-                         user=args.vcenter_user, password=args.vcenter_password)
+        vc = VCenterHelper(host=args.vcenter_host,
+                           user=args.vcenter_user, password=args.vcenter_password)
 
         # get the vm and ds info from the vcenter
         vm_info = VMs(vc)
@@ -361,7 +364,7 @@ def check_loop(args):
         # get the info from the netapp
         na_info = NAs(vc, args.netapp_user, args.netapp_password, args.region)
 
-        # do the aggregate balancing first and ds balancing only if no aggr balancing was done
+        # do the aggregate balancing first
         vmfs_aggr_balancing(na_info, ds_info, vm_info, args)
 
         log.info("- INFO - new ds balancing run starting")
@@ -388,9 +391,7 @@ def main():
     if args.debug:
         log_level = logging.DEBUG
 
-    print(log)
     logging.basicConfig(level=log_level, format='%(asctime)-15s %(message)s')
-    print(log)
 
     check_loop(args)
 
