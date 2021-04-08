@@ -77,6 +77,22 @@ class ManilaQuotaSyncNanny(ManilaNanny):
                           ).select_from(q)
         return shares_q.execute()
 
+    def get_project_replica_usages(self, project_id):
+        """ Return the replica usage of a project """
+        shares_t = Table('shares', self.db_metadata, autoload=True)
+        share_instances_t = Table('share_instances', self.db_metadata, autoload=True)
+        q = shares_t.join(share_instances_t, shares_t.c.id == share_instances_t.c.share_id)
+        shares_q = select(columns=[shares_t.c.id,
+                                   shares_t.c.user_id,
+                                   shares_t.c.size,
+                                   share_instances_t.c.share_type_id],
+                          whereclause=and_(shares_t.c.deleted == "False",
+                                           shares_t.c.project_id == project_id,
+                                           share_instances_t.c.deleted == "False",
+                                           share_instances_t.c.replica_state != None)
+                          ).select_from(q)
+        return shares_q.execute()
+
     def get_quota_usages_project(self, project_id):
         """Return the quota usages of a project"""
         quota_usages_t = Table('quota_usages', self.db_metadata, autoload=True)
@@ -154,6 +170,9 @@ class ManilaQuotaSyncNanny(ManilaNanny):
                 real_usages[("snapshot_gigabytes", user, share_type_id)] = real_usages.get(("snapshot_gigabytes", user, share_type_id), 0) + size
             for (_, user) in self.get_share_networks_usages_project(project_id):
                 real_usages[("share_networks", user, None)] = real_usages.get(("share_networks", user, None), 0) + 1
+            for (_, user, size, share_type_id) in self.get_project_replica_usages(project_id):
+                real_usages[("share_replicas", user, share_type_id)] = real_usages.get(("share_replicas", user, share_type_id), 0) + 1
+                real_usages[("replica_gigabytes", user, share_type_id)] = real_usages.get(("replica_gigabytes", user, share_type_id), 0) + size
 
             # find discrepancies between quota usage and real usage
             quota_usages_by_user_to_sync = {}
