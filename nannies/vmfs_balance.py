@@ -101,7 +101,7 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
     ds_weight = get_aggr_and_ds_stats(na_info, ds_info)
 
     # get the most used aggr
-    max_usage_aggr, avg_aggr_usage = get_max_usage_aggr(na_info)
+    min_usage_aggr, max_usage_aggr, avg_aggr_usage = get_min_max_usage_aggr(na_info)
 
     # this is the difference from the current max used size to the avg used size - this much we might balance stuff away
     size_to_free_on_max_used_aggr = (
@@ -118,11 +118,14 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
     # balance sdd or hdd storage based on cmdline switch
     if args.hdd:
         lun_name_re = re.compile(r"^.*_hdd_.*$")
+        ds_type = 'hdd'
     else:
         lun_name_re = re.compile(r"^.*_ssd_.*$")
+        ds_type = 'ssd'
 
     # find potential source ds for balancing: from max used aggr, vmfs and ssd or hdd
     balancing_source_ds = []
+    log.info("- INFO -  ds on the max usage aggr:")
     for lun in max_usage_aggr.luns:
         # we only care for vmfs here
         if lun.type != 'vmfs':
@@ -134,15 +137,19 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
         balancing_source_ds.append(ds_info.get_by_name(lun.name))
     balancing_source_ds.sort(key=lambda ds: ds.usage)
 
+    if balancing_source_ds == []:
+        log.warning("- WARN - no vmfs {} ds in this vcenter - giving up".format(ds_type))
+        return
+
     # balancing the most used ds on the most used aggr makes most sense
     most_used_ds_on_most_used_aggr = balancing_source_ds[-1]
 
     # limit the ds info from the vc to vmfs ds only
-    ds_info.vmfs_ds()
+    ds_info.vmfs_ds(ds_type = ds_type)
     ds_info.sort_by_usage()
 
     if len(ds_info.elements) == 0:
-        log.warning("- WARN -  no vmfs ds in this vcenter")
+        log.warning("- WARN - no vmfs {} ds in this vcenter - giving up".format(ds_type))
         return
 
     # useful for debugging
@@ -177,7 +184,7 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
     extended_ds_denylist.extend([lun.name for lun in max_usage_aggr.luns])
 
     # exclude the ds from the above gernerated extended deny list
-    ds_info.vmfs_ds(extended_ds_denylist)
+    ds_info.vmfs_ds(extended_ds_denylist, ds_type = ds_type)
 
     # balancing loop
     moves_done = 0
@@ -224,13 +231,13 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
         # TODO: decide whether to balance from largest first or smallest first
         largest_shadow_vm_on_most_used_ds_on_most_used_aggr = sort_vms_by_total_disksize(
             shadow_vms_on_most_used_ds_on_most_used_aggr)[0]
-        move_shadow_vm_from_ds_to_ds(most_used_ds_on_most_used_aggr, least_used_ds,
+        move_vmfs_shadow_vm_from_ds_to_ds(most_used_ds_on_most_used_aggr, least_used_ds,
                                      largest_shadow_vm_on_most_used_ds_on_most_used_aggr)
         moves_done += 1
         moved_size += largest_shadow_vm_on_most_used_ds_on_most_used_aggr.get_total_disksize()
         # smallest_shadow_vm_on_most_used_ds_on_most_used_aggr=sort_vms_by_total_disksize(
         #     shadow_vms_on_most_used_ds_on_most_used_aggr)[-1]
-        # move_shadow_vm_from_ds_to_ds(most_used_ds_on_most_used_aggr, least_used_ds,
+        # move_vmfs_shadow_vm_from_ds_to_ds(most_used_ds_on_most_used_aggr, least_used_ds,
         #                       smallest_shadow_vm_on_most_used_ds_on_most_used_aggr)
         # moves_done += 1
         # moved_size += smallest_shadow_vm_on_most_used_ds_on_most_used_aggr.get_total_disksize()
@@ -247,14 +254,20 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args):
     ds_weight = get_aggr_and_ds_stats(na_info, ds_info)
 
     # get the aggr with the highest usage from the netapp to avoid its luns=vc ds as balancing target
-    max_usage_aggr, avg_aggr_usage = get_max_usage_aggr(na_info)
+    min_usage_aggr, max_usage_aggr, avg_aggr_usage = get_min_max_usage_aggr(na_info)
+
+    # balance sdd or hdd storage based on cmdline switch
+    if args.hdd:
+        ds_type = 'hdd'
+    else:
+        ds_type = 'ssd'
 
     # limit the ds info from the vc to vmfs ds only
-    ds_info.vmfs_ds()
+    ds_info.vmfs_ds(ds_type = ds_type)
     ds_info.sort_by_usage()
 
     if len(ds_info.elements) == 0:
-        log.warning("- WARN -  no vmfs ds in this vcenter")
+        log.warning("- WARN - no vmfs {} ds in this vcenter - giving up".format(ds_type))
         return
 
     ds_overall_average_usage = ds_info.get_overall_average_usage()
@@ -288,7 +301,7 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args):
     extended_ds_denylist.extend([lun.name for lun in max_usage_aggr.luns])
 
     # exclude the ds from the above gernerated extended deny list
-    ds_info.vmfs_ds(extended_ds_denylist)
+    ds_info.vmfs_ds(extended_ds_denylist, ds_type = ds_type)
 
     # if in auto pilot mode define the min/max values as a range around the avg
     if args.autopilot:
@@ -334,7 +347,7 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args):
             break
         largest_shadow_vm_on_most_used_ds = sort_vms_by_total_disksize(
             shadow_vms_on_most_used_ds)[0]
-        move_shadow_vm_from_ds_to_ds(most_used_ds, least_used_ds,
+        move_vmfs_shadow_vm_from_ds_to_ds(most_used_ds, least_used_ds,
                                      largest_shadow_vm_on_most_used_ds)
         moves_done += 1
 
