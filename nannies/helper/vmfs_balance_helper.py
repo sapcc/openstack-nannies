@@ -131,9 +131,8 @@ class VMs:
                     continue
                 # we are only interested in vvols here
                 if device.backing.fileName.lower().startswith('[vvol_') and device.backing.backingObjectId:
-                    # add backingObjectId to our dict
-                    vvol_shadow_vms_for_naaids[device.backing.backingObjectId] = (
-                        vm_handle.name, device.capacityInBytes)
+                    # add the vm per backingObjectId to our dict
+                    vvol_shadow_vms_for_naaids[device.backing.backingObjectId] = vm_handle
 
         return vvol_shadow_vms_for_naaids
 
@@ -159,13 +158,11 @@ class VMs:
                     ds_path_re = re.compile(r"^\[(?P<ds>.*)\].*$")
                     ds = ds_path_re.match(device.backing.fileName)
                     if ds:
-                        # add  ds name to out dict of lists
+                        # add vm to our list of vms per ds
                         if not vmfs_shadow_vms_for_datastores.get(ds.group('ds')):
-                            vmfs_shadow_vms_for_datastores[ds.group('ds')] = [(
-                                vm_handle.name, device.capacityInBytes)]
+                            vmfs_shadow_vms_for_datastores[ds.group('ds')] = [vm_handle]
                         else:
-                            vmfs_shadow_vms_for_datastores[ds.group('ds')].append(
-                                (vm_handle.name, device.capacityInBytes))
+                            vmfs_shadow_vms_for_datastores[ds.group('ds')].append(vm_handle)
 
         return vmfs_shadow_vms_for_datastores
 
@@ -262,7 +259,7 @@ class DS:
 
     def remove_shadow_vm(self, vm):
         """
-        this remove a vm element from the ds and adjusts the space and usage values\n
+        this removes a vm element from the ds and adjusts the space and usage values\n
         returns nothing
         """
         # remove vm from vm list
@@ -322,12 +319,24 @@ class DataStores:
         else:
             return None
 
-    def vmfs_ds(self, ds_denylist=[]):
+    def vmfs_ds(self, ds_denylist=[], ds_type='ssd'):
         """
         filter for only vmfs ds and sort by size\n
         return a list of datastore elements
         """
-        ds_name_regex_pattern = '^(?:vmfs_vc.*_ssd_).*'
+        if ds_type == 'hdd':
+            ds_name_regex_pattern = '^(?:vmfs_vc.*_hdd_).*'
+        else:
+            ds_name_regex_pattern = '^(?:vmfs_vc.*_ssd_).*'
+        self.elements = [ds for ds in self.elements if re.match(
+            ds_name_regex_pattern, ds.name) and not (ds_denylist and ds.name in ds_denylist)]
+
+    def vvol_ds(self, ds_denylist=[]):
+        """
+        filter for only vvol ds and sort by size\n
+        return a list of datastore elements
+        """
+        ds_name_regex_pattern = '^(?:vVOL_.*)'
         self.elements = [ds for ds in self.elements if re.match(
             ds_name_regex_pattern, ds.name) and not (ds_denylist and ds.name in ds_denylist)]
 
@@ -386,6 +395,41 @@ class NAAggr:
             luns = [lun for lun in parent.na_lun_elements if lun.fvol == fvol.name]
             self.luns.extend(luns)
 
+    def get_by_name(self, aggr_name):
+        """
+        get a aggr object by its name
+        """
+        for aggr in self.elements:
+            if aggr.name == aggr_name:
+                return aggr
+        else:
+            return None
+
+    def add_shadow_vm_lun(self, lun):
+        """
+        this adds a lun to the aggr and adjusts the space and usage values\n
+        returns nothing
+        """
+        # add lun size to used size
+        used = self.usage * self.capacity / 100
+        used += lun.used
+        # add lun to lun list
+        self.luns.append(lun)
+        # recalc usage
+        self.usage = (used / self.capacity) * 100
+
+    def remove_shadow_vm_lun(self, lun):
+        """
+        this removes a lun from the aggr and adjusts the space and usage values\n
+        returns nothing
+        """
+        # remove lun size from used size
+        used = self.usage * self.capacity / 100
+        used -= lun.used
+        # remove lun from lun list
+        self.luns.remove(lun)
+        # recalc usage
+        self.usage = (used / self.capacity) * 100
 
 class NAFvol:
     """
@@ -404,6 +448,16 @@ class NAFvol:
         self.luns = [
             lun for lun in parent.na_lun_elements if lun.fvol == self.name]
 
+    def get_by_name(self, fvol_name):
+        """
+        get a fvol object by its name
+        """
+        for fvol in self.elements:
+            if fvol.name == fvol_name:
+                return fvol
+        else:
+            return None
+
 
 class NALun:
     """
@@ -419,6 +473,16 @@ class NALun:
         self.name = nalun_element['name']
         self.type = nalun_element['type']
         self.parent = parent
+
+    def get_by_name(self, lun_name):
+        """
+        get a lun object by its name
+        """
+        for lun in self.elements:
+            if lun.name == lun_name:
+                return lun
+        else:
+            return None
 
 
 class NA:
@@ -612,7 +676,8 @@ class NAs:
         """
         na_hosts_set = set()
         for ds_element in DataStores.get_datastores_dict(vc):
-            ds_name = ds_element['name']
+            ds_name = ds_element['name'].lower()
+            # vmfs case
             if ds_name.startswith("vmfs_vc"):
                 # example for the pattern: vmfs_vc_a_0_p_ssd_bb123_004
                 #                      or: vmfs_vc-a_0_p_ssd_bb123_004
@@ -638,6 +703,29 @@ class NAs:
                     # e.g. stnpca1-st123.cc.<region>.cloud.sap - those are the netapp cluster addresses (..np_c_a1..)
                     netapp_name = "{}.cc.{}.cloud.sap".format(
                         str(m.group('stname')).replace('_', '-'), region)
+                    na_hosts_set.add(netapp_name)
+            # vvol cases
+            if ds_name.startswith("vvol_bb"):
+                # example for the pattern: vvol_bb123
+                m = re.match("^(?:vvol)_bb(?P<bb>\d+)$", ds_name)
+                if m:
+                    bbnum = int(m.group('bb'))
+                    # one of our netapps is inconsistent in its naming - handle this here
+                    if bbnum == 56:
+                        stnpa_num = 0
+                    else:
+                        stnpa_num = 1
+                    # e.g. stnpca1-bb123.cc.<region>.cloud.sap - those are the netapp cluster addresses (..np_c_a1..)
+                    netapp_name = "stnpca{}-bb{:03d}.cc.{}.cloud.sap".format(stnpa_num, bbnum, region)
+                    # build a list of netapps
+                    na_hosts_set.add(netapp_name)
+            if ds_name.startswith("vvol_stnpc"):
+                # example for the pattern: vVOL_stnpca3_st030
+                m = re.match("^(?:vvol)_(?P<stname>.*)$", ds_name)
+                if m:
+                    # e.g. stnpca3-st030.cc.<region>.cloud.sap - those are the netapp cluster addresses (..np_c_a3..)
+                    netapp_name = "{}.cc.{}.cloud.sap".format(str(m.group('stname')).replace('_','-'), region)
+                    # build a list of netapps
                     na_hosts_set.add(netapp_name)
 
         return sorted(na_hosts_set)
@@ -688,9 +776,9 @@ def sort_vms_by_total_disksize(vms):
     return sorted(vms, key=lambda vm: vm.get_total_disksize(), reverse=True)
 
 
-def move_shadow_vm_from_ds_to_ds(ds1, ds2, vm):
+def move_vmfs_shadow_vm_from_ds_to_ds(ds1, ds2, vm):
     """
-    suggest a move of a vm from one ds to another and adjust usage values accordingly
+    suggest a move of a vm from one vmfs ds to another and adjust ds usage values accordingly
     """
     # remove vm from source ds
     source_usage_before = ds1.usage
@@ -708,9 +796,53 @@ def move_shadow_vm_from_ds_to_ds(ds1, ds2, vm):
     log.info("- CMND -  svmotion_cinder_v2.py {} {}".format(vm.name, ds2.name))
 
 
+def move_vvol_shadow_vm_from_aggr_to_aggr(ds_info, aggr1, aggr2, lun, vm):
+    """
+    suggest a move of a vm from one na aggr to another and adjust aggr and ds usage values accordingly
+    """
+    # IMPORTANT: we can only keep track about the state for the aggr and the ds
+    #            and not for the fvol as we do not know onto which fvol the na
+    #            will move the lun
+    # remove vm from source aggr
+    source_aggr_usage_before = aggr1.usage
+    aggr1.remove_shadow_vm_lun(lun)
+    source_aggr_usage_after = aggr1.usage
+    # add the vm to the target aggr
+    target_aggr_usage_before = aggr2.usage
+    aggr2.add_shadow_vm_lun(lun)
+    target_aggr_usage_after = aggr2.usage
+    # get the vc ds names based on the na aggr names
+    ds1 = ds_info.get_by_name(aggr_name_to_ds_name(aggr1.host, aggr1.name))
+    ds2 = ds_info.get_by_name(aggr_name_to_ds_name(aggr2.host, aggr2.name))
+    # check that both really exist in the vcenter
+    if not ds1:
+        log.warning("- WARN - the aggr {} seems to be not connected in the vc (no ds)".format(aggr1.name))
+        return
+    if not ds2:
+        log.warning("- WARN - the aggr {} seems to be not connected in the vc (no ds)".format(aggr2.name))
+        return
+    # remove vm from source ds
+    source_ds_usage_before = ds1.usage
+    ds1.remove_shadow_vm(vm)
+    source_ds_usage_after = ds1.usage
+    # add the vm to the target ds
+    target_ds_usage_before = ds2.usage
+    ds2.add_shadow_vm(vm)
+    target_ds_usage_after = ds2.usage
+    # for now just print out the move . later: do the actual move
+    log.info(
+        "- INFO - move vm {} ({:.0f}G) from aggr {} to aggr {}".format(vm.name, lun.used / 1024**3, aggr1.name, aggr2.name))
+    log.info(
+        "- INFO - move vm {} ({:.0f}G) from ds {} to ds {}".format(vm.name, vm.get_total_disksize() / 1024**3, ds1.name, ds2.name))
+    log.info(
+        "- INFO -  source aggr: {:.1f}% -> {:.1f}% target aggr: {:.1f}% -> {:.1f}%".format(source_aggr_usage_before, source_aggr_usage_after, target_aggr_usage_before, target_aggr_usage_after))
+    log.info(
+        "- INFO -  source ds: {:.1f}% -> {:.1f}% target ds: {:.1f}% -> {:.1f}%".format(source_ds_usage_before, source_ds_usage_after, target_ds_usage_before, target_ds_usage_after))
+    log.info("- CMND -  svmotion_cinder_v2.py {} {}".format(vm.name, ds2.name))
+
 def get_aggr_and_ds_stats(na_info, ds_info):
     """
-    get usage stats for aggregates (netapp view) and ds on them (vc view)
+    get usage stats for aggregates (netapp view) and vmfs ds on them (vc view)
     along the way create a weight per ds depending on how full the underlaying aggr is
     """
     ds_weight = {}
@@ -723,18 +855,19 @@ def get_aggr_and_ds_stats(na_info, ds_info):
             ds_total_capacity = 0
             ds_total_used = 0
             for lun in aggr.luns:
-                if ds_info.get_by_name(lun.name):
+                if re.match("^vmfs_vc.*$", lun.name) and ds_info.get_by_name(lun.name):
                     ds_total_capacity += ds_info.get_by_name(lun.name).capacity
                     ds_total_used += ds_info.get_by_name(lun.name).used
                     ds_weight[lun.name] = aggr.usage / (ds_info.get_by_name(
                         lun.name).used / ds_info.get_by_name(lun.name).capacity * 100)
-            log.info(
-                "- INFO -    ds usage:        {:.2f}%".format(ds_total_used/ds_total_capacity*100))
+            if ds_total_capacity > 0:
+                log.info(
+                    "- INFO -    ds usage:        {:.2f}%".format(ds_total_used/ds_total_capacity*100))
 
     return ds_weight
 
 
-def get_max_usage_aggr(na_info):
+def get_min_max_usage_aggr(na_info):
     """
     find the most used aggregate
     """
@@ -760,4 +893,22 @@ def get_max_usage_aggr(na_info):
     log.info("- INFO -  avg aggr usage is {:.1f}% weighted across all aggr"
              .format(avg_aggr_usage))
 
-    return max_usage_aggr, avg_aggr_usage
+    return min_usage_aggr, max_usage_aggr, avg_aggr_usage
+
+
+def aggr_name_to_ds_name(netapp_host, aggr_name):
+    """
+    convert a netapp aggregate name into the corresponding vcenter ds name
+    """
+    # example for the pattern for aggregate names: aggr_ssd_bb001_1
+    m = re.match("^(?:aggr_ssd_bb)(?P<bb>\d+)_\d$", aggr_name)
+    if m:
+        # example ds_name: vVOL_BB123
+        ds_name = 'vVOL_BB' + m.group('bb')
+        return ds_name
+    # example for the pattern for not bb connected netapps: aggr_ssd_st001_01
+    m = re.match("^(?:aggr_ssd_)(?P<stname>st.*)_\d+$", aggr_name)
+    if m:
+        # example ds_name: vVOL_stnpca3_st030
+        ds_name = 'vVOL_' + str(netapp_host).split('.')[0].replace('-','_')
+        return ds_name
