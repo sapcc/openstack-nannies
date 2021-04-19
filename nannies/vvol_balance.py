@@ -75,6 +75,8 @@ def parse_commandline():
                         help="Minimum size (>=) in gb for a volume to move for ds balancing")
     parser.add_argument("--ds-volume-max-size", type=int, required=False, default=2500,
                         help="Maximum size (<=) in gb for a volume to move for ds balancing")
+    parser.add_argument("--flexvol-max-size", type=int, required=False, default=4600,
+                        help="Maximum size (<=) in gb a flexvol should have")
     # parser.add_argument("--hdd", action="store_true",
     #                     help="balance hdd storage instead of ssd storage")
     parser.add_argument("--debug", action="store_true",
@@ -105,12 +107,13 @@ def vvol_aggr_balancing(na_info, ds_info, vm_info, args):
 
         if moves_done > args.max_move_vms:
             log.info(
-                "- INFO -  max number of vms to move reached - stopping aggr balancing now")
+                "- INFO - max number of vms to move reached - stopping aggr balancing now")
             break
 
         # get the most used aggr
         min_usage_aggr, max_usage_aggr, avg_aggr_usage = get_min_max_usage_aggr(na_info)
 
+        # TODO: does this one really make sense?
         if len(min_usage_aggr.luns) == 0:
             log.warning("- WARN - min usage aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
             break
@@ -153,7 +156,7 @@ def vvol_aggr_balancing(na_info, ds_info, vm_info, args):
             log.debug("- wDEBG -   {} - {:.0f}G".format(fvol.name, fvol.used/1024**3))
 
         if len(balancing_source_luns) == 0:
-            log.warning("- WARN -  no volumes on the largest aggregate - this should not happen ...")
+            log.warning("- WARN - no volumes on the most used aggregate - this should not happen ...")
             return
 
         shadow_luns_and_vms_on_most_used_ds_on_most_used_aggr = []
@@ -164,13 +167,14 @@ def vvol_aggr_balancing(na_info, ds_info, vm_info, args):
         shadow_luns_and_vms_on_most_used_ds_on_most_used_aggr_ok= []
         for lun_and_vm in shadow_luns_and_vms_on_most_used_ds_on_most_used_aggr:
             vm = lun_and_vm[1]
+            # TODO: maybe it would be better to use the lun used size here instead?
             vm_disksize = vm.get_total_disksize() / 1024**3
             # if args.aggr_volume_min_size <= vm_disksize <= min(least_used_ds_free_space / 1024**3, args.aggr_volume_max_size):
             if args.aggr_volume_min_size <= vm_disksize <= args.aggr_volume_max_size:
                 shadow_luns_and_vms_on_most_used_ds_on_most_used_aggr_ok.append(lun_and_vm)
         if not shadow_luns_and_vms_on_most_used_ds_on_most_used_aggr_ok:
             log.warning(
-                "- WARN -  no more shadow vms to move on most used ds {} on most used aggr".format(aggr_name_to_ds_name(max_usage_aggr.host, max_usage_aggr.name)))
+                "- WARN - no more shadow vms to move on most used ds {} on most used aggr".format(aggr_name_to_ds_name(max_usage_aggr.host, max_usage_aggr.name)))
             break
 
         # sort them by lun used size
@@ -182,107 +186,88 @@ def vvol_aggr_balancing(na_info, ds_info, vm_info, args):
                                                 largest_shadow_lun_and_vm_on_most_used_ds_on_most_used_aggr[1])
         moves_done += 1
 
-def vvol_ds_balancing(na_info, ds_info, vm_info, args):
+def vvol_flexvol_balancing(na_info, ds_info, vm_info, args):
     """
-    balance the usage of the vmfs datastores
+    balance the usage of the flexvols on the netapp
     """
-    # get a weight factor per datastore about underlaying aggr usage - see function above
-    ds_weight = get_aggr_and_ds_stats_vvol(na_info, ds_info)
 
-    # get the aggr with the highest usage from the netapp to avoid its luns=vc ds as balancing target
-    max_usage_aggr, avg_aggr_usage = get_max_usage_aggr(na_info)
+    # get all flexvols on all na
+    all_fvols = []
+    for na in na_info.elements:
+        all_fvols.extend(na.na_fvol_elements)
 
-    # limit the ds info from the vc to vmfs ds only
-    ds_info.vmfs_ds()
-    ds_info.sort_by_usage()
+    # we only care for fvols above the limit
+    too_large_fvols = [ fvol for fvol in all_fvols if fvol.used / 1024**3 > args.flexvol_max_size ]
 
-    if len(ds_info.elements) == 0:
-        log.warning("- WARN -  no vmfs ds in this vcenter")
+    # sort them by used size
+    too_large_fvols = sorted(too_large_fvols, key=lambda fvol: fvol.used, reverse=True)
+
+    # get the most used aggr
+    min_usage_aggr, max_usage_aggr, avg_aggr_usage = get_min_max_usage_aggr(na_info)
+
+    # TODO: does this one really make sense?
+    if len(min_usage_aggr.luns) == 0:
+        log.warning("- WARN - min usage aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
         return
 
-    ds_overall_average_usage = ds_info.get_overall_average_usage()
-    log.info("- INFO -  average usage across all vmfs ds is {:.1f}% ({:.0f}G free - {:.0f}G total)"
-             .format(ds_overall_average_usage,
-                     ds_info.get_overall_freespace() / 1024**3,
-                     ds_info.get_overall_capacity() / 1024**3))
-
-    # useful debugging info for ds and largest shadow vms
-    for i in ds_info.elements:
-        if args.ds_denylist and i.name in args.ds_denylist:
-            log.info("- INFO -   ds: {} - {:.1f}% - {:.0f}G free - ignored as it is on the deny list".format(i.name,
-                                                                                                             i.usage, i.freespace/1024**3))
-            break
-        log.info("- INFO -   ds: {} - {:.1f}% - {:.0f}G free".format(i.name,
-                                                                     i.usage, i.freespace/1024**3))
-        shadow_vms = vm_info.get_shadow_vms(i.vm_handles)
-        shadow_vms_sorted_by_disksize = sort_vms_by_total_disksize(shadow_vms)
-        printed = 0
-        for j in shadow_vms_sorted_by_disksize:
-            if printed < args.print_max:
-                log.info(
-                    "- INFO -    {} - {:.0f}G".format(j.name, j.get_total_disksize() / 1024**3))
-                printed += 1
-
-    # we do not want to balance to ds on the most used aggr: put those ds onto the deny list
-    if args.ds_denylist:
-        extended_ds_denylist = args.ds_denylist
-    else:
-        extended_ds_denylist = []
-    extended_ds_denylist.extend([lun.name for lun in max_usage_aggr.luns])
-
-    # exclude the ds from the above gernerated extended deny list
-    ds_info.vmfs_ds(extended_ds_denylist)
-
-    # if in auto pilot mode define the min/max values as a range around the avg
-    if args.autopilot:
-        min_usage = ds_overall_average_usage - args.autopilot_range
-        max_usage = ds_overall_average_usage + args.autopilot_range
-    else:
-        min_usage = args.min_usage
-        max_usage = args.max_usage
+    if len(max_usage_aggr.luns) == 0:
+        log.warning("- WARN - max usage aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
+        return
 
     # balancing loop
     moves_done = 0
+    moved_size = 0
     while True:
 
         if moves_done > args.max_move_vms:
             log.info(
-                "- INFO -  max number of vms to move reached - stopping ds balancing now")
+                "- INFO - max number of vms to move reached - stopping flexvol balancing now")
             break
 
-        most_used_ds = ds_info.elements[0]
-
-        # resort based on aggr usage weights - for the target ds we want to
-        # count this in to avoid balancing to ds on already full aggr
-        ds_info.sort_by_usage(ds_weight)
-
-        least_used_ds = ds_info.elements[-1]
-
-        # TODO: this has to be redefined as it does not longer work with the weighted values - lets try a lite version of the check
-        # if not sanity_checks(least_used_ds, most_used_ds, min_usage, max_usage, args.min_freespace, args.min_max_difference):
-        if not sanity_checks_lite(least_used_ds, most_used_ds, args.min_freespace, args.min_max_difference):
+        if len(too_large_fvols) == 0:
+            log.info(
+                "- INFO - there are no too large flexvols to balance - stopping flexvol balancing now")
             break
 
-        shadow_vms_on_most_used_ds = []
-        for vm in vm_info.get_shadow_vms(most_used_ds.vm_handles):
+        # pick and take away the largest too large flexvol
+        most_used_too_large_fvol = too_large_fvols.pop(0)
+
+        # make sure we are not on the least used aggr where we want to move to
+        if most_used_too_large_fvol.aggr == min_usage_aggr.name:
+            log.warning("- WARN - most used too large flexvol {} is on least used aggr {}".format(most_used_too_large_fvol.name, min_usage_aggr.name))
+            break
+
+        if len(most_used_too_large_fvol.luns) == 0:
+            log.warning("- WARN - no volumes on the most used aggregate - this should not happen ...")
+            return
+
+        shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr = []
+        for lun in most_used_too_large_fvol.luns:
+            if lun.name in vm_info.vvol_shadow_vms_for_naaids.keys():
+                shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr.append((lun, vm_info.vvol_shadow_vms_for_naaids[lun.name]))
+
+        shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr_ok= []
+        for lun_and_vm in shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr:
+            vm = lun_and_vm[1]
+            # TODO: maybe it would be better to use the lun used size here instead?
             vm_disksize = vm.get_total_disksize() / 1024**3
-            # move smaller volumes once the most and least used get closer to avoid oscillation
-            vm_maxdisksize = min((least_used_ds.freespace - most_used_ds.freespace) /
-                                 (2 * 1024**3), args.ds_volume_max_size)
-            if args.ds_volume_min_size <= vm_disksize <= vm_maxdisksize:
-                shadow_vms_on_most_used_ds.append(vm)
-        if not shadow_vms_on_most_used_ds:
+            # if args.aggr_volume_min_size <= vm_disksize <= min(least_used_ds_free_space / 1024**3, args.aggr_volume_max_size):
+            # TODO: to be renamed from _ds_ to _fvol_
+            if args.ds_volume_min_size <= vm_disksize <= args.ds_volume_max_size:
+                shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr_ok.append(lun_and_vm)
+        if not shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr_ok:
             log.warning(
-                "- WARN -  no more shadow vms to move on most used ds {}".format(most_used_ds.name))
+                "- WARN -  no more shadow vms to move on most used fvol {} on most used aggr".format(most_used_too_large_fvol.name))
             break
-        largest_shadow_vm_on_most_used_ds = sort_vms_by_total_disksize(
-            shadow_vms_on_most_used_ds)[0]
-        move_shadow_vm_from_ds_to_ds(most_used_ds, least_used_ds,
-                                     largest_shadow_vm_on_most_used_ds)
-        moves_done += 1
 
-        # resort the ds by usage in preparation for the next loop iteration
-        ds_info.sort_by_usage()
+        # sort them by lun used size
+        shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr_ok = sorted(shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr_ok, key=lambda lun_and_vm: lun_and_vm[0].used, reverse=True)
+
+        largest_shadow_lun_and_vm_on_most_used_fvol_on_most_used_aggr = shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr_ok[0]
+        move_vvol_shadow_vm_from_aggr_to_aggr(ds_info, na_info.get_aggr_by_name(most_used_too_large_fvol.host, most_used_too_large_fvol.aggr), min_usage_aggr,
+                                                largest_shadow_lun_and_vm_on_most_used_fvol_on_most_used_aggr[0],
+                                                largest_shadow_lun_and_vm_on_most_used_fvol_on_most_used_aggr[1])
+        moves_done += 1
 
 
 def check_loop(args):
@@ -295,11 +280,21 @@ def check_loop(args):
         if args.dry_run:
             log.info("- INFO - dry-run mode: not doing anything harmful")
 
-        log.info("- INFO - new aggregate balancing run starting")
-
         # open a connection to the vcenter
         vc = VCenterHelper(host=args.vcenter_host,
                            user=args.vcenter_user, password=args.vcenter_password)
+
+        log.info("- INFO - new flexvol balancing run starting")
+
+        # get the vm and ds info from the vcenter again before doing the ds balancing
+        vm_info = VMs(vc)
+        ds_info = DataStores(vc)
+        # get the info from the netapp again
+        na_info = NAs(vc, args.netapp_user, args.netapp_password, args.region)
+
+        vvol_flexvol_balancing(na_info, ds_info, vm_info, args)
+
+        log.info("- INFO - new aggregate balancing run starting")
 
         # get the vm and ds info from the vcenter
         vm_info = VMs(vc)
@@ -309,16 +304,6 @@ def check_loop(args):
 
         # do the aggregate balancing first
         vvol_aggr_balancing(na_info, ds_info, vm_info, args)
-
-        # log.info("- INFO - new ds balancing run starting")
-
-        # # get the vm and ds info from the vcenter again before doing the ds balancing
-        # vm_info = VMs(vc)
-        # ds_info = DataStores(vc)
-        # # get the info from the netapp again
-        # na_info = NAs(vc, args.netapp_user, args.netapp_password, args.region)
-
-        # vvol_ds_balancing(na_info, ds_info, vm_info, args)
 
         # wait the interval time
         log.info("INFO: waiting %s minutes before starting the next loop run", str(
