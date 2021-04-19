@@ -395,16 +395,6 @@ class NAAggr:
             luns = [lun for lun in parent.na_lun_elements if lun.fvol == fvol.name]
             self.luns.extend(luns)
 
-    def get_by_name(self, aggr_name):
-        """
-        get a aggr object by its name
-        """
-        for aggr in self.elements:
-            if aggr.name == aggr_name:
-                return aggr
-        else:
-            return None
-
     def add_shadow_vm_lun(self, lun):
         """
         this adds a lun to the aggr and adjusts the space and usage values\n
@@ -448,16 +438,6 @@ class NAFvol:
         self.luns = [
             lun for lun in parent.na_lun_elements if lun.fvol == self.name]
 
-    def get_by_name(self, fvol_name):
-        """
-        get a fvol object by its name
-        """
-        for fvol in self.elements:
-            if fvol.name == fvol_name:
-                return fvol
-        else:
-            return None
-
 
 class NALun:
     """
@@ -473,16 +453,6 @@ class NALun:
         self.name = nalun_element['name']
         self.type = nalun_element['type']
         self.parent = parent
-
-    def get_by_name(self, lun_name):
-        """
-        get a lun object by its name
-        """
-        for lun in self.elements:
-            if lun.name == lun_name:
-                return lun
-        else:
-            return None
 
 
 class NA:
@@ -729,6 +699,54 @@ class NAs:
                     na_hosts_set.add(netapp_name)
 
         return sorted(na_hosts_set)
+
+    def get_aggr_by_name(self, na_host, aggr_name):
+        """
+        get a aggr object by its name
+        """
+        for na in self.elements:
+            if na.host == na_host:
+                for aggr in na.na_aggr_elements:
+                    if aggr.name == aggr_name:
+                        return aggr
+                else:
+                    return None
+            else:
+                continue
+        else:
+            return None
+
+    def get_fvol_by_name(self, na_host, fvol_name):
+        """
+        get a fvol object by its name
+        """
+        for na in self.elements:
+            if na.host == na_host:
+                for fvol in na.na_fvol_elements:
+                    if fvol.name == fvol_name:
+                        return fvol
+                else:
+                    return None
+            else:
+                continue
+        else:
+            return None
+
+    def get_lun_by_name(self, na_host, lun_name):
+        """
+        get a lun object by its name
+        """
+        for na in self.elements:
+            if na.host == na_host:
+                for lun in na.na_lun_elements:
+                    if lun.name == lun_name:
+                        return lun
+                else:
+                    return None
+            else:
+                continue
+        else:
+            return None
 
 
 def sanity_checks(least_used_ds, most_used_ds, min_usage, max_usage, min_freespace, min_max_difference):
