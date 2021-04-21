@@ -17,6 +17,7 @@
 
 import http
 import re
+import requests
 
 from pyVim.connect import SmartConnect, Disconnect
 from pyVmomi import vim, vmodl
@@ -433,3 +434,158 @@ class VCenterHelper:
         log.info("INFO: instance uuid %s unlock status %s done", big_vm_name_uuid, unloc_check['is_locked'])
 
         return state
+
+
+class VCenterRESTHelper:
+    def __init__(self, host, user, password, verify_ssl=False):
+        self.api = None
+        self.host = host
+        self.user = user
+        self.password = password
+        self.verify_ssl = verify_ssl
+
+        self._URL = 'https://{}/rest{{}}'.format(self.host)
+
+        self.login()
+
+    @staticmethod
+    def validate_obj_id(obj_id):
+        """Validates the format of an obj_i required by the REST API
+        e.g. {"id": "datastore-6561", "type": "Datastore"}
+        Raises ValueError on failure.
+        """
+        if not isinstance(obj_id, dict):
+            raise ValueError('obj_id needs to be a dict')
+
+        for k in ('id', 'type'):
+            if k not in obj_id:
+                raise ValueError('obj_id needs a {}'.format(k))
+            if not isinstance(obj_id[k], str):
+                raise ValueError('obj_id[{}] needs to of type str'.format(k))
+
+    def login(self):
+        s = requests.Session()
+        if not self.verify_ssl:
+            s.verify = False
+
+        r = s.post(self._URL.format('/com/vmware/cis/session'), auth=(self.user, self.password))
+        if r.status_code != 200:
+            raise RuntimeError('{}: {}'.format(r, r.content))
+
+        self.api = s
+
+    def disconnect(self):
+        if self.api:
+            self.api.delete(self._URL.format('/com/vmware/cis/session'))
+
+    def raw_request(self, method, url, unpack=True, **kwargs):
+        if not url.startswith('/'):
+            url = '/' + url
+
+        r = getattr(self.api, method)(self._URL.format(url), **kwargs)
+        if r.status_code != 200:
+            raise RuntimeError('{}: {}'.format(r, r.content))
+
+        if r.content:
+            data = r.json()
+            if unpack and 'value' in data:
+                return data['value']
+            return data
+
+    def get(self, url, **kwargs):
+        return self.raw_request('get', url, **kwargs)
+
+    def post(self, url, **kwargs):
+        return self.raw_request('post', url, **kwargs)
+
+    def get_vm_by_name(self, name):
+        """Retrieve a VM object by exact name match"""
+        data = self.get('/vcenter/vm', params={'filter.names': name})
+        if len(data) > 1:
+            raise PyCCloudNotFound('More than one VM found with that name.')
+        elif not len(data):
+            raise PyCCloudNotFound('No VM found with that name.')
+
+        return data[0]
+
+    def get_tagging_categories(self, details=False):
+        """Retrieve all categories
+        Optionally retrieves the details like the name instead of only the IDs.
+        """
+        category_ids = self.get('/com/vmware/cis/tagging/category')
+        if not details:
+            return {i: {} for i in category_ids}
+
+        return {i: self.get_tagging_category(i) for i in category_ids}
+
+    def get_tagging_category(self, category_id):
+        """Get a category by id"""
+        return self.get('/com/vmware/cis/tagging/category/id:{}'.format(category_id))
+
+    def get_tagging_tags(self, details=False):
+        """Retrieve all tags
+        Optionally retrieves not only the tag IDS, but also the details of a
+        tag like the name.
+        """
+        tag_ids = self.get('/com/vmware/cis/tagging/tag')
+        if not details:
+            return {i: {} for i in tag_ids}
+
+        return {i: self.get_tagging_tag(i) for i in tag_ids}
+
+    def get_tagging_tag(self, tag_id):
+        """Retrieve a tag by ID"""
+        return self.get('/com/vmware/cis/tagging/tag/id:{}'.format(tag_id))
+
+    def find_tag(self, name, category, ignore_case=False):
+        """Find a tag by name in a certain category (also identified by name)
+        We enrich the returned tag dictionary with the category in the key
+        "_category".
+        Raises PyCCloudNotFound if something cannot be found.
+        """
+        categories = self.get_tagging_categories(details=True)
+        for c in categories.values():
+            if c['name'] == category or \
+                    ignore_case and c['name'].lower() == category.lower():
+                category = c
+                break
+        else:
+            raise PyCCloudNotFound('Could not find category named "{}".'
+                                   .format(category))
+
+        params = {'~action': 'list-tags-for-category'}
+        url = '/com/vmware/cis/tagging/tag/id:{}'.format(category['id'])
+        for tag_id in self.post(url, params=params):
+            tag = self.get_tagging_tag(tag_id)
+            if tag['name'] == name or \
+                    ignore_case and tag['name'].lower() == name.lower():
+                tag['_category'] = category
+                break
+        else:
+            raise PyCCloudNotFound('Could not find tag named "{}" in category "{}".'
+                                   .format(name, category))
+
+        return tag
+
+    def list_attached_tags(self, obj_id):
+        """List tags attached to an object"""
+        self.validate_obj_id(obj_id)
+        params = {'~action': 'list-attached-tags'}
+        data = {'object_id': obj_id}
+        return self.post('/com/vmware/cis/tagging/tag-association', params=params, json=data)
+
+    def detach_tag_from_obj(self, tag_id, obj_id):
+        """Detach a tag from an object"""
+        self.validate_obj_id(obj_id)
+        params = {'~action': 'detach'}
+        data = {'tag_id': tag_id,
+                'object_id': obj_id}
+        return self.post('/com/vmware/cis/tagging/tag-association/id:{}'.format(tag_id), params=params, json=data)
+
+    def attach_tag_to_obj(self, tag_id, obj_id):
+        """Attached a tag to an object"""
+        self.validate_obj_id(obj_id)
+        params = {'~action': 'attach'}
+        data = {'tag_id': tag_id,
+                'object_id': obj_id}
+        return self.post('/com/vmware/cis/tagging/tag-association/id:{}'.format(tag_id), params=params, json=data)
