@@ -687,8 +687,8 @@ class NAs:
                 m = re.match(ds_name_regex_pattern, ds_name)
                 if m:
                     # hack to exclude certain storages for now
-                    nopure = re.match(".*pure.*", m.group('stname'))
-                    if nopure:
+                    pure = re.match(".*pure.*", m.group('stname'))
+                    if pure:
                         continue
                     # e.g. stnpca1-st123.cc.<region>.cloud.sap - those are the netapp cluster addresses (..np_c_a1..)
                     netapp_name = "{}.cc.{}.cloud.sap".format(
@@ -701,8 +701,8 @@ class NAs:
                 m = re.match(ds_name_regex_pattern, ds_name)
                 if m:
                     # hack to exclude certain storages for now
-                    nopure = re.match(".*pure.*", m.group('stname'))
-                    if nopure:
+                    pure = re.match(".*pure.*", m.group('stname'))
+                    if pure:
                         continue
                     # e.g. stnpca1-st123.cc.<region>.cloud.sap - those are the netapp cluster addresses (..np_c_a1..)
                     netapp_name = "{}.cc.{}.cloud.sap".format(
