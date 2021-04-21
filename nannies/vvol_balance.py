@@ -75,10 +75,9 @@ def parse_commandline():
                         help="Minimum size (>=) in gb for a volume to move for ds balancing")
     parser.add_argument("--ds-volume-max-size", type=int, required=False, default=2500,
                         help="Maximum size (<=) in gb for a volume to move for ds balancing")
+    # 4600 is about 90% of 5tb
     parser.add_argument("--flexvol-max-size", type=int, required=False, default=4600,
                         help="Maximum size (<=) in gb a flexvol should have")
-    # parser.add_argument("--hdd", action="store_true",
-    #                     help="balance hdd storage instead of ssd storage")
     parser.add_argument("--debug", action="store_true",
                         help="add additional debug output")
     args = parser.parse_args()

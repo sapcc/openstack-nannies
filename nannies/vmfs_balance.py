@@ -365,6 +365,11 @@ def check_loop(args):
         if args.dry_run:
             log.info("- INFO - dry-run mode: not doing anything harmful")
 
+        if args.hdd:
+            log.info("- INFO - doing balancing for hdd storage")
+        else:
+            log.info("- INFO - doing balancing for ssd storage")
+
         log.info("- INFO - new aggregate balancing run starting")
 
         # open a connection to the vcenter

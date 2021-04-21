@@ -651,8 +651,24 @@ class NAs:
             if ds_name.startswith("vmfs_vc"):
                 # example for the pattern: vmfs_vc_a_0_p_ssd_bb123_004
                 #                      or: vmfs_vc-a_0_p_ssd_bb123_004
-                m = re.match(
-                    "^(?:vmfs_vc(-|_).*_ssd)_bb(?P<bb>\d+)_\d+$", ds_name)
+                ds_name_regex_pattern = '^(?:vmfs_vc(-|_).*_ssd)_bb(?P<bb>\d+)_\d+$'
+                m = re.match(ds_name_regex_pattern, ds_name)
+                if m:
+                    bbnum = int(m.group('bb'))
+                    # one of our netapps is inconsistent in its naming - handle this here
+                    if bbnum == 56:
+                        stnpa_num = 0
+                    else:
+                        stnpa_num = 1
+                    # e.g. stnpca1-bb123.cc.<region>.cloud.sap - those are the netapp cluster addresses (..np_c_a1..)
+                    netapp_name = "stnpca{}-bb{:03d}.cc.{}.cloud.sap".format(
+                        stnpa_num, bbnum, region)
+                    na_hosts_set.add(netapp_name)
+                    continue
+                # example for the pattern: vmfs_vc_a_0_p_hdd_bb123_004
+                #                      or: vmfs_vc-a_0_p_hdd_bb123_004
+                ds_name_regex_pattern = '^(?:vmfs_vc(-|_).*_hdd)_bb(?P<bb>\d+)_\d+$'
+                m = re.match(ds_name_regex_pattern, ds_name)
                 if m:
                     bbnum = int(m.group('bb'))
                     # one of our netapps is inconsistent in its naming - handle this here
@@ -667,13 +683,24 @@ class NAs:
                     continue
                 # example for the pattern: vmfs_vc_a_0_p_ssd_stnpca1-st123_004
                 #                      or: vmfs_vc-a_0_p_ssd_stnpca1-st123_004
-                m = re.match(
-                    "^(?:vmfs_vc(-|_).*_ssd)_(?P<stname>.*)_\d+$", ds_name)
+                ds_name_regex_pattern = '^(?:vmfs_vc(-|_).*_ssd)_(?P<stname>.*)_\d+$'
+                m = re.match(ds_name_regex_pattern, ds_name)
                 if m:
                     # e.g. stnpca1-st123.cc.<region>.cloud.sap - those are the netapp cluster addresses (..np_c_a1..)
                     netapp_name = "{}.cc.{}.cloud.sap".format(
                         str(m.group('stname')).replace('_', '-'), region)
                     na_hosts_set.add(netapp_name)
+                    continue
+                # example for the pattern: vmfs_vc_a_0_p_hdd_stnpca1-st123_004
+                #                      or: vmfs_vc-a_0_p_hdd_stnpca1-st123_004
+                ds_name_regex_pattern = '^(?:vmfs_vc(-|_).*_hdd)_(?P<stname>.*)_\d+$'
+                m = re.match(ds_name_regex_pattern, ds_name)
+                if m:
+                    # e.g. stnpca1-st123.cc.<region>.cloud.sap - those are the netapp cluster addresses (..np_c_a1..)
+                    netapp_name = "{}.cc.{}.cloud.sap".format(
+                        str(m.group('stname')).replace('_', '-'), region)
+                    na_hosts_set.add(netapp_name)
+                    continue
             # vvol cases
             if ds_name.startswith("vvol_bb"):
                 # example for the pattern: vvol_bb123
@@ -689,6 +716,7 @@ class NAs:
                     netapp_name = "stnpca{}-bb{:03d}.cc.{}.cloud.sap".format(stnpa_num, bbnum, region)
                     # build a list of netapps
                     na_hosts_set.add(netapp_name)
+                    continue
             if ds_name.startswith("vvol_stnpc"):
                 # example for the pattern: vVOL_stnpca3_st030
                 m = re.match("^(?:vvol)_(?P<stname>.*)$", ds_name)
