@@ -935,6 +935,8 @@ def get_min_max_usage_aggr(na_info):
             total_used += aggr.usage / 100 * aggr.capacity
             all_aggr_list.append(aggr)
             aggr_count += 1
+    if all_aggr_list == []:
+        return None, None, 0
     all_aggr_list = sorted(all_aggr_list, key=lambda aggr: aggr.usage)
     min_usage_aggr = all_aggr_list[0]
     max_usage_aggr = all_aggr_list[-1]

@@ -112,6 +112,10 @@ def vvol_aggr_balancing(na_info, ds_info, vm_info, args):
         # get the most used aggr
         min_usage_aggr, max_usage_aggr, avg_aggr_usage = get_min_max_usage_aggr(na_info)
 
+        if not min_usage_aggr or not max_usage_aggr:
+            log.warning("- WARN - no aggegates found - this should not happen ...")
+            break
+
         # TODO: does this one really make sense?
         if len(min_usage_aggr.luns) == 0:
             log.warning("- WARN - min usage aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
@@ -204,14 +208,18 @@ def vvol_flexvol_balancing(na_info, ds_info, vm_info, args):
     # get the most used aggr
     min_usage_aggr, max_usage_aggr, avg_aggr_usage = get_min_max_usage_aggr(na_info)
 
+    if not min_usage_aggr or not max_usage_aggr:
+        log.warning("- WARN - no aggegates found - this should not happen ...")
+        return False
+
     # TODO: does this one really make sense?
     if len(min_usage_aggr.luns) == 0:
         log.warning("- WARN - min usage aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
-        return
+        return False
 
     if len(max_usage_aggr.luns) == 0:
         log.warning("- WARN - max usage aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
-        return
+        return False
 
     # balancing loop
     moves_done = 0
