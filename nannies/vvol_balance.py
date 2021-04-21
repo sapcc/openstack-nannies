@@ -291,7 +291,7 @@ def check_loop(args):
         vc = VCenterHelper(host=args.vcenter_host,
                            user=args.vcenter_user, password=args.vcenter_password)
 
-        log.info("- INFO - new flexvol balancing run starting")
+        log.info("- CMND -  # flexvol balancing")
 
         # get the vm and ds info from the vcenter again before doing the ds balancing
         vm_info = VMs(vc)
@@ -301,7 +301,7 @@ def check_loop(args):
 
         vvol_flexvol_balancing(na_info, ds_info, vm_info, args)
 
-        log.info("- INFO - new aggregate balancing run starting")
+        log.info("- CMND -  # aggregate balancing")
 
         # get the vm and ds info from the vcenter
         vm_info = VMs(vc)

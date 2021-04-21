@@ -378,7 +378,7 @@ def check_loop(args):
         else:
             log.info("- INFO - doing balancing for ssd storage")
 
-        log.info("- INFO - new aggregate balancing run starting")
+        log.info("- CMND -  # aggregate balancing")
 
         # open a connection to the vcenter
         vc = VCenterHelper(host=args.vcenter_host,
@@ -393,7 +393,7 @@ def check_loop(args):
         # do the aggregate balancing first
         vmfs_aggr_balancing(na_info, ds_info, vm_info, args)
 
-        log.info("- INFO - new ds balancing run starting")
+        log.info("- CMND -  # ds balancing")
 
         # get the vm and ds info from the vcenter again before doing the ds balancing
         vm_info = VMs(vc)
