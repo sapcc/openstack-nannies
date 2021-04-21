@@ -686,6 +686,10 @@ class NAs:
                 ds_name_regex_pattern = '^(?:vmfs_vc(-|_).*_ssd)_(?P<stname>.*)_\d+$'
                 m = re.match(ds_name_regex_pattern, ds_name)
                 if m:
+                    # hack to exclude certain storages for now
+                    nopure = re.match(".*pure.*", m.group('stname'))
+                    if nopure:
+                        continue
                     # e.g. stnpca1-st123.cc.<region>.cloud.sap - those are the netapp cluster addresses (..np_c_a1..)
                     netapp_name = "{}.cc.{}.cloud.sap".format(
                         str(m.group('stname')).replace('_', '-'), region)
@@ -696,6 +700,10 @@ class NAs:
                 ds_name_regex_pattern = '^(?:vmfs_vc(-|_).*_hdd)_(?P<stname>.*)_\d+$'
                 m = re.match(ds_name_regex_pattern, ds_name)
                 if m:
+                    # hack to exclude certain storages for now
+                    nopure = re.match(".*pure.*", m.group('stname'))
+                    if nopure:
+                        continue
                     # e.g. stnpca1-st123.cc.<region>.cloud.sap - those are the netapp cluster addresses (..np_c_a1..)
                     netapp_name = "{}.cc.{}.cloud.sap".format(
                         str(m.group('stname')).replace('_', '-'), region)
