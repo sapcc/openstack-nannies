@@ -137,8 +137,12 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
         # we only care for ssd or hdd depending on -hdd cmdline switch
         if not lun_name_re.match(lun.name):
             continue
+        ds_for_lun = ds_info.get_by_name(lun.name)
+        if not ds_for_lun:
+            log.warning("- WARN - lun {} seems to not be connected as ds to the vc or its ds name is maybe wrong".format(lun.name))
+            continue
         log.info("- INFO -   {}".format(lun.name))
-        balancing_source_ds.append(ds_info.get_by_name(lun.name))
+        balancing_source_ds.append(ds_for_lun)
 
     if balancing_source_ds == []:
         log.warning("- WARN - no vmfs {} ds in this vcenter - giving up".format(ds_type))
