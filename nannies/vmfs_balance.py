@@ -139,11 +139,12 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
             continue
         log.info("- INFO -   {}".format(lun.name))
         balancing_source_ds.append(ds_info.get_by_name(lun.name))
-    balancing_source_ds.sort(key=lambda ds: ds.usage)
 
     if balancing_source_ds == []:
         log.warning("- WARN - no vmfs {} ds in this vcenter - giving up".format(ds_type))
-        return
+        return False
+
+    balancing_source_ds.sort(key=lambda ds: ds.usage)
 
     # balancing the most used ds on the most used aggr makes most sense
     most_used_ds_on_most_used_aggr = balancing_source_ds[-1]
