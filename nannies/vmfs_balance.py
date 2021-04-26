@@ -104,7 +104,7 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
     min_usage_aggr, max_usage_aggr, avg_aggr_usage = get_min_max_usage_aggr(na_info, 'vmfs')
 
     if not min_usage_aggr or not max_usage_aggr:
-        log.warning("- WARN - no aggegates found - this should not happen ...")
+        log.info("- INFO - no aggegates found ...")
         return False
 
     # this is the difference from the current max used size to the avg used size - this much we might balance stuff away
@@ -278,7 +278,7 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args):
     min_usage_aggr, max_usage_aggr, avg_aggr_usage = get_min_max_usage_aggr(na_info, 'vmfs')
 
     if not min_usage_aggr or not max_usage_aggr:
-        log.warning("- WARN - no aggegates found - this should not happen ...")
+        log.info("- INFO - no aggegates found ...")
         return False
 
     # balance sdd or hdd storage based on cmdline switch

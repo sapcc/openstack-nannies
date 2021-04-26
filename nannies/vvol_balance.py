@@ -113,7 +113,7 @@ def vvol_aggr_balancing(na_info, ds_info, vm_info, args):
         min_usage_aggr, max_usage_aggr, avg_aggr_usage = get_min_max_usage_aggr(na_info, 'vvol')
 
         if not min_usage_aggr or not max_usage_aggr:
-            log.warning("- WARN - no aggegates found - this should not happen ...")
+            log.info("- INFO - no aggegates found ...")
             break
 
         # TODO: does this one really make sense?
@@ -230,7 +230,7 @@ def vvol_flexvol_balancing(na_info, ds_info, vm_info, args):
         min_usage_aggr, max_usage_aggr, avg_aggr_usage = get_min_max_usage_aggr(na_info, 'vvol')
 
         if not min_usage_aggr or not max_usage_aggr:
-            log.warning("- WARN - no aggegates found - this should not happen ...")
+            log.info("- INFO - no aggegates found ...")
             return False
 
         # TODO: does this one really make sense?
@@ -248,7 +248,7 @@ def vvol_flexvol_balancing(na_info, ds_info, vm_info, args):
             break
 
         if len(most_used_too_large_fvol.luns) == 0:
-            log.warning("- WARN - no volumes on the most used aggregate - this should not happen ...")
+            log.warning("- WARN - no volumes on the most used flexvol - this should not happen ...")
             return
 
         shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr = []
