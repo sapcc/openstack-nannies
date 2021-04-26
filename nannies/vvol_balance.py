@@ -110,7 +110,7 @@ def vvol_aggr_balancing(na_info, ds_info, vm_info, args):
             break
 
         # get the most used aggr
-        min_usage_aggr, max_usage_aggr, avg_aggr_usage = get_min_max_usage_aggr(na_info)
+        min_usage_aggr, max_usage_aggr, avg_aggr_usage = get_min_max_usage_aggr(na_info, 'vvol')
 
         if not min_usage_aggr or not max_usage_aggr:
             log.warning("- WARN - no aggegates found - this should not happen ...")
@@ -197,7 +197,10 @@ def vvol_flexvol_balancing(na_info, ds_info, vm_info, args):
     # get all flexvols on all na
     all_fvols = []
     for na in na_info.elements:
-        all_fvols.extend(na.na_fvol_elements)
+        if na.na_fvol_elements != []:
+            for fvol in na.na_fvol_elements:
+                if fvol.type == 'vvol':
+                    all_fvols.append(fvol)
 
     # we only care for fvols above the limit
     too_large_fvols = [ fvol for fvol in all_fvols if fvol.used / 1024**3 > args.flexvol_max_size ]
@@ -206,7 +209,7 @@ def vvol_flexvol_balancing(na_info, ds_info, vm_info, args):
     too_large_fvols = sorted(too_large_fvols, key=lambda fvol: fvol.used, reverse=True)
 
     # get the most used aggr
-    min_usage_aggr, max_usage_aggr, avg_aggr_usage = get_min_max_usage_aggr(na_info)
+    min_usage_aggr, max_usage_aggr, avg_aggr_usage = get_min_max_usage_aggr(na_info, 'vvol')
 
     if not min_usage_aggr or not max_usage_aggr:
         log.warning("- WARN - no aggegates found - this should not happen ...")
@@ -271,6 +274,7 @@ def vvol_flexvol_balancing(na_info, ds_info, vm_info, args):
         shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr_ok = sorted(shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr_ok, key=lambda lun_and_vm: lun_and_vm[0].used, reverse=True)
 
         largest_shadow_lun_and_vm_on_most_used_fvol_on_most_used_aggr = shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr_ok[0]
+        log.info("- INFO - current usage of too large fvol {} is {:.0f} gb".format(most_used_too_large_fvol.name, most_used_too_large_fvol.used / 1024**3))
         move_vvol_shadow_vm_from_aggr_to_aggr(ds_info, na_info.get_aggr_by_name(most_used_too_large_fvol.host, most_used_too_large_fvol.aggr), min_usage_aggr,
                                                 largest_shadow_lun_and_vm_on_most_used_fvol_on_most_used_aggr[0],
                                                 largest_shadow_lun_and_vm_on_most_used_fvol_on_most_used_aggr[1])

@@ -921,9 +921,9 @@ def get_aggr_and_ds_stats(na_info, ds_info):
     return ds_weight
 
 
-def get_min_max_usage_aggr(na_info):
+def get_min_max_usage_aggr(na_info, type):
     """
-    find the most used aggregate
+    find the least and most used aggregate and calculate the avg aggr usage for vvol or vmfs
     """
     total_capacity = 0
     total_used = 0
@@ -931,6 +931,20 @@ def get_min_max_usage_aggr(na_info):
     all_aggr_list = []
     for na in na_info.elements:
         for aggr in na.na_aggr_elements:
+            if type == 'vmfs':
+                vmfs_luns_found = False
+                for lun in aggr.luns:
+                    if lun.type == 'vmfs':
+                        vmfs_luns_found = True
+                if not vmfs_luns_found:
+                    continue
+            if type == 'vvol':
+                vvol_fvols_found = False
+                for fvol in aggr.fvols:
+                    if fvol.type == 'vvol':
+                        vvol_fvols_found = True
+                if not vvol_fvols_found:
+                    continue
             total_capacity += aggr.capacity
             total_used += aggr.usage / 100 * aggr.capacity
             all_aggr_list.append(aggr)
