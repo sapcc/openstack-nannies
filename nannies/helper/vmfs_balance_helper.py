@@ -823,6 +823,17 @@ def sanity_checks_lite(least_used_ds, most_used_ds, min_freespace, min_max_diffe
     return True
 
 
+def sanity_checks_liter(least_used_ds, most_used_ds, min_freespace, min_max_difference):
+    """
+    make sure least and most used ds are still within sane limits
+    """
+    if least_used_ds.is_below_freespace(min_freespace):
+        log.info("- INFO - least used ds {} with free space {:.0f}G is below the min free space limit of {:.0f}G - nothing can be done".format(
+            least_used_ds.name, least_used_ds.freespace / 1024**3, min_freespace))
+        return False
+    return True
+
+
 def sort_vms_by_total_disksize(vms):
     """
     sort vms by disk size from adding up the sizes of their attached disks

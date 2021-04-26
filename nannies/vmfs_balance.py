@@ -115,7 +115,7 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
     # this is the difference from the current min used size to the avg used size - this much we might balance stuff to an aggr
     # allow to go autopilot_range above the avrg as the physical size will usually be lower than what we move
     max_size_to_add_on_min_used_aggr = (
-        avg_aggr_usage - min_usage_aggr.usage + args.autopilot_range) * max_usage_aggr.capacity / 100
+        avg_aggr_usage - min_usage_aggr.usage + args.autopilot_range) * min_usage_aggr.capacity / 100
 
     # only do aggr balancing if max aggr usage is more than --autopilot-range % above the avg
     if max_usage_aggr.usage < avg_aggr_usage + args.autopilot_range:
@@ -237,7 +237,7 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
         least_used_ds = ds_info.elements[-1]
         least_used_ds_free_space = least_used_ds.freespace - args.min_freespace * 1024**3
 
-        if not sanity_checks_lite(least_used_ds, most_used_ds_on_most_used_aggr, args.min_freespace, args.min_max_difference):
+        if not sanity_checks_liter(least_used_ds, most_used_ds_on_most_used_aggr, args.min_freespace, args.min_max_difference):
             break
 
         shadow_vms_on_most_used_ds_on_most_used_aggr = []
