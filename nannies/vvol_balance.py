@@ -208,22 +208,6 @@ def vvol_flexvol_balancing(na_info, ds_info, vm_info, args):
     # sort them by used size
     too_large_fvols = sorted(too_large_fvols, key=lambda fvol: fvol.used, reverse=True)
 
-    # get the most used aggr
-    min_usage_aggr, max_usage_aggr, avg_aggr_usage = get_min_max_usage_aggr(na_info, 'vvol')
-
-    if not min_usage_aggr or not max_usage_aggr:
-        log.warning("- WARN - no aggegates found - this should not happen ...")
-        return False
-
-    # TODO: does this one really make sense?
-    if len(min_usage_aggr.luns) == 0:
-        log.warning("- WARN - min usage aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
-        return False
-
-    if len(max_usage_aggr.luns) == 0:
-        log.warning("- WARN - max usage aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
-        return False
-
     # balancing loop
     moves_done = 0
     moved_size = 0
@@ -241,6 +225,22 @@ def vvol_flexvol_balancing(na_info, ds_info, vm_info, args):
 
         # pick and take away the largest too large flexvol
         most_used_too_large_fvol = too_large_fvols.pop(0)
+
+        # get the most used aggr
+        min_usage_aggr, max_usage_aggr, avg_aggr_usage = get_min_max_usage_aggr(na_info, 'vvol')
+
+        if not min_usage_aggr or not max_usage_aggr:
+            log.warning("- WARN - no aggegates found - this should not happen ...")
+            return False
+
+        # TODO: does this one really make sense?
+        if len(min_usage_aggr.luns) == 0:
+            log.warning("- WARN - min usage aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
+            return False
+
+        if len(max_usage_aggr.luns) == 0:
+            log.warning("- WARN - max usage aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
+            return False
 
         # make sure we are not on the least used aggr where we want to move to
         if most_used_too_large_fvol.aggr == min_usage_aggr.name:
