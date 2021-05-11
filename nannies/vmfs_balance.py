@@ -100,10 +100,12 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
     # get a weight factor per datastore about underlaying aggr usage - see function above
     ds_weight = get_aggr_and_ds_stats(na_info, ds_info)
 
-    # get the most used aggr
-    min_usage_aggr, max_usage_aggr, avg_aggr_usage = get_min_max_usage_aggr(na_info, 'vmfs')
+    # get the aggr usage info
+    all_aggr_list_sorted, avg_aggr_usage = get_aggr_usage(na_info, 'vvol')
+    min_usage_aggr = all_aggr_list_sorted.pop(0)
+    max_usage_aggr = all_aggr_list_sorted[-1]
 
-    if not min_usage_aggr or not max_usage_aggr:
+    if len(all_aggr_list_sorted) == 0:
         log.info("- INFO - no aggegates found ...")
         return False
 
@@ -275,9 +277,12 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args):
     ds_weight = get_aggr_and_ds_stats(na_info, ds_info)
 
     # get the aggr with the highest usage from the netapp to avoid its luns=vc ds as balancing target
-    min_usage_aggr, max_usage_aggr, avg_aggr_usage = get_min_max_usage_aggr(na_info, 'vmfs')
+    # get the aggr usage info
+    all_aggr_list_sorted, avg_aggr_usage = get_aggr_usage(na_info, 'vvol')
+    min_usage_aggr = all_aggr_list_sorted.pop(0)
+    max_usage_aggr = all_aggr_list_sorted[-1]
 
-    if not min_usage_aggr or not max_usage_aggr:
+    if len(all_aggr_list_sorted) == 0:
         log.info("- INFO - no aggegates found ...")
         return False
 

@@ -932,9 +932,9 @@ def get_aggr_and_ds_stats(na_info, ds_info):
     return ds_weight
 
 
-def get_min_max_usage_aggr(na_info, type):
+def get_aggr_usage(na_info, type):
     """
-    find the least and most used aggregate and calculate the avg aggr usage for vvol or vmfs
+    create a list of all aggregates sorted by usage and calculate the avg aggr usage for vvol or vmfs
     """
     total_capacity = 0
     total_used = 0
@@ -962,9 +962,9 @@ def get_min_max_usage_aggr(na_info, type):
             aggr_count += 1
     if all_aggr_list == []:
         return None, None, 0
-    all_aggr_list = sorted(all_aggr_list, key=lambda aggr: aggr.usage)
-    min_usage_aggr = all_aggr_list[0]
-    max_usage_aggr = all_aggr_list[-1]
+    all_aggr_list_sorted = sorted(all_aggr_list, key=lambda aggr: aggr.usage)
+    min_usage_aggr = all_aggr_list_sorted[0]
+    max_usage_aggr = all_aggr_list_sorted[-1]
     avg_aggr_usage = total_used / total_capacity * 100
     # only vmfs and sort by size top down
     log.info("- INFO -  min aggr usage is {:.1f}% on {}"
@@ -974,7 +974,7 @@ def get_min_max_usage_aggr(na_info, type):
     log.info("- INFO -  avg aggr usage is {:.1f}% weighted across all aggr"
              .format(avg_aggr_usage))
 
-    return min_usage_aggr, max_usage_aggr, avg_aggr_usage
+    return all_aggr_list_sorted, avg_aggr_usage
 
 
 def aggr_name_to_ds_name(netapp_host, aggr_name):

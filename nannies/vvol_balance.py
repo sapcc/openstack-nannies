@@ -109,10 +109,12 @@ def vvol_aggr_balancing(na_info, ds_info, vm_info, args):
                 "- INFO - max number of vms to move reached - stopping aggr balancing now")
             break
 
-        # get the most used aggr
-        min_usage_aggr, max_usage_aggr, avg_aggr_usage = get_min_max_usage_aggr(na_info, 'vvol')
+        # get the aggr usage info
+        all_aggr_list_sorted, avg_aggr_usage = get_aggr_usage(na_info, 'vvol')
+        min_usage_aggr = all_aggr_list_sorted.pop(0)
+        max_usage_aggr = all_aggr_list_sorted[-1]
 
-        if not min_usage_aggr or not max_usage_aggr:
+        if len(all_aggr_list_sorted) == 0:
             log.info("- INFO - no aggegates found ...")
             break
 
@@ -226,10 +228,12 @@ def vvol_flexvol_balancing(na_info, ds_info, vm_info, args):
         # pick and take away the largest too large flexvol
         most_used_too_large_fvol = too_large_fvols.pop(0)
 
-        # get the most used aggr
-        min_usage_aggr, max_usage_aggr, avg_aggr_usage = get_min_max_usage_aggr(na_info, 'vvol')
+        # get the aggr usage info
+        all_aggr_list_sorted, avg_aggr_usage = get_aggr_usage(na_info, 'vvol')
+        min_usage_aggr = all_aggr_list_sorted.pop(0)
+        max_usage_aggr = all_aggr_list_sorted[-1]
 
-        if not min_usage_aggr or not max_usage_aggr:
+        if len(all_aggr_list_sorted) == 0:
             log.info("- INFO - no aggegates found ...")
             return False
 
@@ -243,9 +247,15 @@ def vvol_flexvol_balancing(na_info, ds_info, vm_info, args):
             return False
 
         # make sure we are not on the least used aggr where we want to move to
-        if most_used_too_large_fvol.aggr == min_usage_aggr.name:
-            log.warning("- WARN - most used too large flexvol {} is on least used aggr {}".format(most_used_too_large_fvol.name, min_usage_aggr.name))
-            break
+        # in this case move to the next least used aggr and so on ...
+        while aggr_name_to_ds_name(most_used_too_large_fvol.host, most_used_too_large_fvol.aggr) == aggr_name_to_ds_name(min_usage_aggr.host, min_usage_aggr.name):
+            log.info("- INFO - most used too large flexvol {} is on ds {} of least used aggr {} - trying next one".format(most_used_too_large_fvol.name, aggr_name_to_ds_name(min_usage_aggr.host, min_usage_aggr.name), min_usage_aggr.name))
+            # take the next more used one as new min used aggr
+            min_usage_aggr = all_aggr_list_sorted.pop(0)
+            # if nothing is left , then min used aggr = max used aggr and we do not want to move things there
+            if len(all_aggr_list_sorted) <= 1:
+                log.warning("- WARN - only the max used aggr is left as move target and we do not want to move anything there - giving up")
+                break
 
         if len(most_used_too_large_fvol.luns) == 0:
             log.warning("- WARN - no volumes on the most used flexvol - this should not happen ...")
