@@ -71,6 +71,8 @@ def parse_commandline():
                         help="Minimum size (>=) in gb for a volume to move for aggr balancing")
     parser.add_argument("--aggr-volume-max-size", type=int, required=False, default=2500,
                         help="Maximum size (<=) in gb for a volume to move for aggr balancing")
+    parser.add_argument("--aggr-max-usage", type=int, required=False, default=75,
+                        help="Maximum usage of ithe max used aggr to still balance to it")
     parser.add_argument("--ds-volume-min-size", type=int, required=False, default=0,
                         help="Minimum size (>=) in gb for a volume to move for ds balancing")
     parser.add_argument("--ds-volume-max-size", type=int, required=False, default=2500,
@@ -330,8 +332,7 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args):
         extended_ds_denylist = []
 
     # if the most used aggr is realatively full, remove its luns=ds from the target ds list
-    # TODO: using args.max_usage is just a hack for testing here
-    if max_usage_aggr.usage > args.max_usage:
+    if max_usage_aggr.usage > args.aggr_max_usage:
         extended_ds_denylist.extend([lun.name for lun in max_usage_aggr.luns])
 
     # exclude the ds from the above gernerated extended deny list
