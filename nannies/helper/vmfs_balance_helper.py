@@ -961,7 +961,7 @@ def get_aggr_usage(na_info, type):
             all_aggr_list.append(aggr)
             aggr_count += 1
     if all_aggr_list == []:
-        return None, None, 0
+        return all_aggr_list, 0
     all_aggr_list_sorted = sorted(all_aggr_list, key=lambda aggr: aggr.usage)
     min_usage_aggr = all_aggr_list_sorted[0]
     max_usage_aggr = all_aggr_list_sorted[-1]

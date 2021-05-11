@@ -103,13 +103,14 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
     ds_weight = get_aggr_and_ds_stats(na_info, ds_info)
 
     # get the aggr usage info
-    all_aggr_list_sorted, avg_aggr_usage = get_aggr_usage(na_info, 'vvol')
-    min_usage_aggr = all_aggr_list_sorted.pop(0)
-    max_usage_aggr = all_aggr_list_sorted[-1]
+    all_aggr_list_sorted, avg_aggr_usage = get_aggr_usage(na_info, 'vmfs')
 
     if len(all_aggr_list_sorted) == 0:
         log.info("- INFO - no aggegates found ...")
         return False
+
+    min_usage_aggr = all_aggr_list_sorted.pop(0)
+    max_usage_aggr = all_aggr_list_sorted[-1]
 
     # this is the difference from the current max used size to the avg used size - this much we might balance stuff away
     # allow to go autopilot_range below the avrg as the physical size will usually be lower than what we move
@@ -280,13 +281,14 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args):
 
     # get the aggr with the highest usage from the netapp to avoid its luns=vc ds as balancing target
     # get the aggr usage info
-    all_aggr_list_sorted, avg_aggr_usage = get_aggr_usage(na_info, 'vvol')
-    min_usage_aggr = all_aggr_list_sorted.pop(0)
-    max_usage_aggr = all_aggr_list_sorted[-1]
+    all_aggr_list_sorted, avg_aggr_usage = get_aggr_usage(na_info, 'vmfs')
 
     if len(all_aggr_list_sorted) == 0:
         log.info("- INFO - no aggegates found ...")
         return False
+
+    min_usage_aggr = all_aggr_list_sorted.pop(0)
+    max_usage_aggr = all_aggr_list_sorted[-1]
 
     # balance sdd or hdd storage based on cmdline switch
     if args.hdd:

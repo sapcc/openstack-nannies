@@ -111,12 +111,13 @@ def vvol_aggr_balancing(na_info, ds_info, vm_info, args):
 
         # get the aggr usage info
         all_aggr_list_sorted, avg_aggr_usage = get_aggr_usage(na_info, 'vvol')
-        min_usage_aggr = all_aggr_list_sorted.pop(0)
-        max_usage_aggr = all_aggr_list_sorted[-1]
 
         if len(all_aggr_list_sorted) == 0:
             log.info("- INFO - no aggegates found ...")
             break
+
+        min_usage_aggr = all_aggr_list_sorted.pop(0)
+        max_usage_aggr = all_aggr_list_sorted[-1]
 
         # TODO: does this one really make sense?
         if len(min_usage_aggr.luns) == 0:
@@ -230,12 +231,13 @@ def vvol_flexvol_balancing(na_info, ds_info, vm_info, args):
 
         # get the aggr usage info
         all_aggr_list_sorted, avg_aggr_usage = get_aggr_usage(na_info, 'vvol')
-        min_usage_aggr = all_aggr_list_sorted.pop(0)
-        max_usage_aggr = all_aggr_list_sorted[-1]
 
         if len(all_aggr_list_sorted) == 0:
             log.info("- INFO - no aggegates found ...")
             return False
+
+        min_usage_aggr = all_aggr_list_sorted.pop(0)
+        max_usage_aggr = all_aggr_list_sorted[-1]
 
         # TODO: does this one really make sense?
         if len(min_usage_aggr.luns) == 0:
