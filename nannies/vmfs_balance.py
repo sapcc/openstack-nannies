@@ -328,7 +328,11 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args):
         extended_ds_denylist = args.ds_denylist
     else:
         extended_ds_denylist = []
-    extended_ds_denylist.extend([lun.name for lun in max_usage_aggr.luns])
+
+    # if the most used aggr is realatively full, remove its luns=ds from the target ds list
+    # TODO: using args.max_usage is just a hack for testing here
+    if max_usage_aggr.usage > args.max_usage:
+        extended_ds_denylist.extend([lun.name for lun in max_usage_aggr.luns])
 
     # exclude the ds from the above gernerated extended deny list
     ds_info.vmfs_ds(extended_ds_denylist, ds_type = ds_type)
