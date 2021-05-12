@@ -112,29 +112,37 @@ def vvol_aggr_balancing(na_info, ds_info, vm_info, args):
         # get the aggr usage info
         all_aggr_list_sorted, avg_aggr_usage = get_aggr_usage(na_info, 'vvol')
 
-        if len(all_aggr_list_sorted) == 0:
-            log.info("- INFO - no aggegates found ...")
-            break
+        # try to map the aggr to a vvol ds in the vc to rule out aggr we do not have connected as vvol
+        all_vvol_aggr_list_sorted = []
+        for aggr in all_aggr_list_sorted:
+            if ds_info.get_by_name(aggr_name_to_ds_name(aggr.host, aggr.name)):
+                all_vvol_aggr_list_sorted.append(aggr)
+            else:
+                log.info("- INFO - the aggregate {} on the netapp does not seem to have a vvol ds in the vc".format(aggr.name))
 
-        min_usage_aggr = all_aggr_list_sorted.pop(0)
-        max_usage_aggr = all_aggr_list_sorted[-1]
+        if len(all_vvol_aggr_list_sorted) == 0:
+            log.info("- INFO - no vvol aggegates found ...")
+            return False
+
+        min_usage_aggr = all_vvol_aggr_list_sorted.pop(0)
+        max_usage_aggr = all_vvol_aggr_list_sorted[-1]
 
         # TODO: does this one really make sense?
         if len(min_usage_aggr.luns) == 0:
-            log.warning("- WARN - min usage aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
+            log.warning("- WARN - min usage vvol aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
             break
 
         if len(max_usage_aggr.luns) == 0:
-            log.warning("- WARN - max usage aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
+            log.warning("- WARN - max usage vvol aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
             break
 
         # only do aggr balancing if max aggr usage is more than --autopilot-range % above the avg
         if max_usage_aggr.usage < avg_aggr_usage + args.autopilot_range:
-            log.info("- INFO -  max usage aggr is still within the autopilot range above avg aggr usage - no aggr balancing required")
+            log.info("- INFO -  max usage vvol aggr is still within the autopilot range above avg aggr usage - no aggr balancing required")
             return False
         else:
             log.info(
-                "- INFO -  max usage aggr is more than the autopilot range above avg aggr usage - aggr balancing required")
+                "- INFO -  max usage vvol aggr is more than the autopilot range above avg aggr usage - aggr balancing required")
 
         # find potential source vols for balancing: from max used aggr and vvol
         balancing_source_luns = []
@@ -150,7 +158,7 @@ def vvol_aggr_balancing(na_info, ds_info, vm_info, args):
         balancing_target_ds = ds_info.get_by_name(aggr_name_to_ds_name(min_usage_aggr.host, min_usage_aggr.name))
         if not balancing_target_ds:
             log.warning("- WARN - the min usage aggregate on the netapp does not seem to have a ds in the vc - this should not happen ...")
-            return
+            return False
 
         log.info("- INFO -  vc ds corresponding to the min usage aggr: {}".format(balancing_target_ds.name))
         log.debug("- DEBG -  flexvols on the min usage aggr:")
@@ -163,7 +171,7 @@ def vvol_aggr_balancing(na_info, ds_info, vm_info, args):
 
         if len(balancing_source_luns) == 0:
             log.warning("- WARN - no volumes on the most used aggregate - this should not happen ...")
-            return
+            return False
 
         shadow_luns_and_vms_on_most_used_ds_on_most_used_aggr = []
         for lun in balancing_source_luns:
@@ -232,36 +240,44 @@ def vvol_flexvol_balancing(na_info, ds_info, vm_info, args):
         # get the aggr usage info
         all_aggr_list_sorted, avg_aggr_usage = get_aggr_usage(na_info, 'vvol')
 
-        if len(all_aggr_list_sorted) == 0:
-            log.info("- INFO - no aggegates found ...")
+        # try to map the aggr to a vvol ds in the vc to rule out aggr we do not have connected as vvol
+        all_vvol_aggr_list_sorted = []
+        for aggr in all_aggr_list_sorted:
+            if ds_info.get_by_name(aggr_name_to_ds_name(aggr.host, aggr.name)):
+                all_vvol_aggr_list_sorted.append(aggr)
+            else:
+                log.info("- INFO - the aggregate {} on the netapp does not seem to have a vvol ds in the vc".format(aggr.name))
+
+        if len(all_vvol_aggr_list_sorted) == 0:
+            log.info("- INFO - no vvol aggegates found ...")
             return False
 
-        min_usage_aggr = all_aggr_list_sorted.pop(0)
-        max_usage_aggr = all_aggr_list_sorted[-1]
+        min_usage_aggr = all_vvol_aggr_list_sorted.pop(0)
+        max_usage_aggr = all_vvol_aggr_list_sorted[-1]
 
         # TODO: does this one really make sense?
         if len(min_usage_aggr.luns) == 0:
-            log.warning("- WARN - min usage aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
+            log.warning("- WARN - min usage vvol aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
             return False
 
         if len(max_usage_aggr.luns) == 0:
-            log.warning("- WARN - max usage aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
+            log.warning("- WARN - max usage vvol aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
             return False
 
         # make sure we are not on the least used aggr where we want to move to
         # in this case move to the next least used aggr and so on ...
         while aggr_name_to_ds_name(most_used_too_large_fvol.host, most_used_too_large_fvol.aggr) == aggr_name_to_ds_name(min_usage_aggr.host, min_usage_aggr.name):
-            log.info("- INFO - most used too large flexvol {} is on ds {} of least used aggr {} - trying next one".format(most_used_too_large_fvol.name, aggr_name_to_ds_name(min_usage_aggr.host, min_usage_aggr.name), min_usage_aggr.name))
+            log.info("- INFO - most used too large flexvol {} is on ds {} of least used vvol aggr {} - trying the next aggr".format(most_used_too_large_fvol.name, aggr_name_to_ds_name(min_usage_aggr.host, min_usage_aggr.name), min_usage_aggr.name))
             # take the next more used one as new min used aggr
-            min_usage_aggr = all_aggr_list_sorted.pop(0)
+            min_usage_aggr = all_vvol_aggr_list_sorted.pop(0)
             # if nothing is left , then min used aggr = max used aggr and we do not want to move things there
-            if len(all_aggr_list_sorted) <= 1:
-                log.warning("- WARN - only the max used aggr is left as move target and we do not want to move anything there - giving up")
+            if len(all_vvol_aggr_list_sorted) <= 1:
+                log.warning("- WARN - only the max used vvol aggr is left as move target and we do not want to move anything there - giving up")
                 break
 
         if len(most_used_too_large_fvol.luns) == 0:
             log.warning("- WARN - no volumes on the most used flexvol - this should not happen ...")
-            return
+            return False
 
         shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr = []
         for lun in most_used_too_large_fvol.luns:
@@ -274,12 +290,12 @@ def vvol_flexvol_balancing(na_info, ds_info, vm_info, args):
             # TODO: maybe it would be better to use the lun used size here instead?
             vm_disksize = vm.get_total_disksize() / 1024**3
             # if args.aggr_volume_min_size <= vm_disksize <= min(least_used_ds_free_space / 1024**3, args.aggr_volume_max_size):
-            # TODO: to be renamed from _ds_ to _fvol_
+            # TODO: args param to be renamed from _ds_ to _fvol_
             if args.ds_volume_min_size <= vm_disksize <= args.ds_volume_max_size:
                 shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr_ok.append(lun_and_vm)
         if not shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr_ok:
             log.warning(
-                "- WARN -  no more shadow vms to move on most used fvol {} on most used aggr".format(most_used_too_large_fvol.name))
+                "- WARN -  no more shadow vms to move on most used fvol {} on most used vvol aggr".format(most_used_too_large_fvol.name))
             break
 
         # sort them by lun used size
