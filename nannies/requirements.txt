@@ -27,3 +27,4 @@ requests==2.20.0
 requestsexceptions==1.4.0
 six==1.11.0
 pyOpenSSL==18.0.0
+prometheus-api-client=0.4.2
