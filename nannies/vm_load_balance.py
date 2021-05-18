@@ -26,12 +26,14 @@ import argparse
 import logging
 import time
 from helper.prometheus_exporter import *
+from collections import namedtuple
 
 # prometheus export functionality
 from prometheus_client import start_http_server, Gauge
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
+vm_uuid_re = re.compile('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
 
 
 def run_check(args, vcenter_data):
@@ -46,7 +48,10 @@ def run_check(args, vcenter_data):
 
 def vm_move_suggestions(args, vcenter_data):
 
-    vm_uuid_re = re.compile('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
+    big_vm_template = namedtuple("big_vm_details", ['host', 'big_vm', 'big_vm_size'])
+    target_host_template = namedtuple("target_host_details", ['host', 'free_host_size'])
+
+    #vm_uuid_re = re.compile('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
     #  openstack info
     log.info("- INFO - Nanny Handle Big VM size between %s and %s", args.min_vm_size,args.max_vm_size)
     log.info("- INFO - connecting to openstack to region %s", args.region)
@@ -61,10 +66,16 @@ def vm_move_suggestions(args, vcenter_data):
     openstack_obj.delete_nanny_metadata(nanny_metadata_handle,avail_zone,shard_vcenter_all)
 
     log.info("- INFO - all denial_list_hosts %s ", args.denial_list)
+    log.info("- INFO - all allowed_list_hosts %s ", args.allowed_list)
     if args.denial_list:
         denial_bb_name = [int(re.search(r"[0-9]+", i).group(0)) for i in args.denial_list]
     else:
         denial_bb_name = []
+
+    if args.allowed_list:
+        allowed_bb_name = [int(re.search(r"[0-9]+", i).group(0)) for i in args.allowed_list]
+    else:
+        allowed_bb_name = []
 
     percentage = args.percentage
     bb_consume  = {}
@@ -110,6 +121,8 @@ def vm_move_suggestions(args, vcenter_data):
         if host['config.host'] in big_vm_host or host['config.host'] in fail_over_hosts:
             continue
         if int(re.findall(r"[0-9]+",host['name'])[1]) not in bb_name:
+            continue
+        if allowed_bb_name and int(re.findall(r"[0-9]+",host['name'])[1]) not in allowed_bb_name:
             continue
         if not host['parent'].name.startswith("production"):
             continue
@@ -162,11 +175,17 @@ def vm_move_suggestions(args, vcenter_data):
             log.info("- INFO - host name {} over utilised ".format(host['name']))
         else:
             if (host_size - host_consumed_size) > args.min_vm_size :
-                target_host.append((host['name'],host_size - host_consumed_size))
+                #big_vm_template = namedtuple("big_vm_details", ['host', 'big_vm', 'big_vm_size'])
+                #target_host_template = namedtuple("host_details", ['host', 'free_host_size'])
+                target_host_details = target_host_template(host=host['name'],free_host_size=(host_size - host_consumed_size))
+                target_host.append(target_host_details)
 
         if big_vm_total_size >= host_size*(1+percentage/100):
             log.info("- INFO - Alert host name {} over utilised with BIG_VM Alert Alert".format(host['name']))
-            big_vm_to_move_list.append((host['name'],big_vm_to_move, max_big_vm_size_handle))
+            #big_vm_template = namedtuple("big_vm_details", ['host', 'big_vm', 'big_vm_size'])
+            #target_host_template = namedtuple("target_host_details", ['host', 'free_host_size'])
+            big_vm_details = big_vm_template(host=host['name'],big_vm=big_vm_to_move,big_vm_size=max_big_vm_size_handle)
+            big_vm_to_move_list.append(big_vm_details)
         log.info("- INFO - node end here %s ",host['name'])
 
     for bb in bb_name:
@@ -185,22 +204,25 @@ def vm_move_suggestions(args, vcenter_data):
 
 def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_host,vcenter_data,nanny_metadata_handle,denial_bb_name):
     vcenter_error_count = 0
-    vm_uuid_re = re.compile('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
+    #vm_uuid_re = re.compile('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
+    # big_vm_template = namedtuple("big_vm_details", ['host', 'big_vm', 'big_vm_size'])
+    # target_host_template = namedtuple("target_host_details", ['host', 'free_host_size'])
+
     for big_vm in big_vm_to_move_list:
         # to handle certain bb like bb56
-        node = re.findall(r"[0-9]+", big_vm[0])[1]
+        node = re.findall(r"[0-9]+", big_vm.host)[1]
         for target_h in target_host[:]:
-            if node == re.findall(r"[0-9]+", target_h[0])[1]:
-                if target_h[1] - big_vm[2] > 0:
-                    log.info(f"- INFO - big Vm {big_vm[1]} of size {round(big_vm[2],2)} is move from source {big_vm[0]} to target {target_h[0]}  having {round(target_h[1],2)} memory and left with memory {round((target_h[1] - big_vm[2]),2)} after vmotion")
-                    if int(re.findall(r"[0-9]+", target_h[0])[1]) in denial_bb_name:
-                        vcenter_data.set_data('vm_balance_nanny_manual_suggestion_bytes', int(big_vm[2] * 1024),[big_vm[0], target_h[0], big_vm[1]])
+            if node == re.findall(r"[0-9]+", target_h.host)[1]:
+                if target_h.free_host_size - big_vm.big_vm_size > 0:
+                    log.info(f"- INFO - big Vm {big_vm.big_vm} of size {round(big_vm.big_vm_size,2)} is move from source {big_vm.host} to target {target_h.host}  having {round(target_h.free_host_size,2)} memory and left with memory {round((target_h.free_host_size - big_vm.big_vm_size),2)} after vmotion")
+                    if int(re.findall(r"[0-9]+", target_h.host)[1]) in denial_bb_name:
+                        vcenter_data.set_data('vm_balance_nanny_manual_suggestion_bytes', int(big_vm.big_vm_size * 1024),[big_vm.host, target_h.host, big_vm.big_vm])
                     else:
-                        vcenter_data.set_data('vm_balance_nanny_suggestion_bytes', int(big_vm[2] * 1024),[big_vm[0], target_h[0], big_vm[1]])
-                    if vm_uuid_re.match(re.split("\(|\)", big_vm[1])[-2]):
-                        big_vm_uuid = re.split("\(|\)", big_vm[1])[-2]
+                        vcenter_data.set_data('vm_balance_nanny_suggestion_bytes', int(big_vm.big_vm_size * 1024),[big_vm.host, target_h.host, big_vm.big_vm])
+                    if vm_uuid_re.match(re.split("\(|\)", big_vm.big_vm)[-2]):
+                        big_vm_uuid = re.split("\(|\)", big_vm.big_vm)[-2]
                     else:
-                        log.info("- INFO - VM UUID cant grab VM detail %s",big_vm[1])
+                        log.info("- INFO - VM UUID cant grab VM detail %s",big_vm.big_vm)
                         break
                     try:
                         openstack_obj.api.compute.get_server(big_vm_uuid)
@@ -209,23 +231,23 @@ def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_
                         break
                     # automation script for vmotion called here
                     if args.automated:
-                        if int(re.findall(r"[0-9]+", target_h[0])[1]) in denial_bb_name:
-                            log.info(f"- INFO - Manual movement needed for big Vm  {big_vm[1]} of size {round(big_vm[2],2)} is move from source {big_vm[0]} to target {target_h[0]} as BB in denial_list")
+                        if int(re.findall(r"[0-9]+", target_h.host)[1]) in denial_bb_name:
+                            log.info(f"- INFO - Manual movement needed for big Vm  {big_vm.big_vm} of size {round(big_vm.big_vm_size,2)} is move from source {big_vm.host} to target {target_h.host} as BB in denial_list")
                         else:
-                            status = vc.vmotion_inside_bb(openstack_obj, big_vm_uuid, target_h[0], nanny_metadata_handle)
-                            log.info(f"- INFO - big Vm {big_vm[1]} of size {round(big_vm[2],2)} is move from source {big_vm[0]} to target {target_h[0]} with {status}")
+                            status = vc.vmotion_inside_bb(openstack_obj, big_vm_uuid, target_h.host, nanny_metadata_handle)
+                            log.info(f"- INFO - big Vm {big_vm.big_vm} of size {round(big_vm.big_vm_size,2)} is move from source {big_vm.host} to target {target_h.host} with {status}")
                             if status != "success":
                                 vcenter_error_count += 1
-                    if (target_h[1] - big_vm[2]) >= args.min_vm_size:
-                        target_host.append((target_h[0], target_h[1] - big_vm[2]))
+                    if (target_h.free_host_size - big_vm.big_vm_size) >= args.min_vm_size:
+                        target_host.append((target_h.host, target_h.free_host_size - big_vm.big_vm_size))
                         target_host.remove(target_h)
                         target_host = sorted(target_host, key=lambda x: x[1], reverse=True)
                     else:
                         target_host.remove(target_h)
                     break
         else:
-            log.info("- INFO - big Vm %s is move from source %s to big_vm_node as no node left ", big_vm[1], big_vm[0])
-            vcenter_data.set_data('vm_balance_too_full_building_block', int(big_vm[2] * 1024), [str(big_vm[0])])
+            log.info("- INFO - big Vm %s is move from source %s to big_vm_node as no node left ", big_vm.big_vm, big_vm.host)
+            vcenter_data.set_data('vm_balance_too_full_building_block', int(big_vm.big_vm_size * 1024), [str(big_vm.host)])
             #consolidation needed for building block
 
     vcenter_data.set_data('vm_balance_error_count', vcenter_error_count,["vmotion_error"])
@@ -248,6 +270,7 @@ def main():
     parser.add_argument("--percentage", type=int, default=3, help="percentage of overbooked")
     parser.add_argument("--automated",action="store_true", help='false as automation of big_vm not doing vmotion only suggestion')
     parser.add_argument("--denial_list",nargs='*',required=False,default=None,help='all building block ignored by nanny')
+    parser.add_argument("--allowed_list", nargs='*', required=False, default=None,help='only building block allowed by nanny')
     vcenter_data = PromDataClass()
     mymetrics = PromMetricsClass()
     mymetrics.set_metrics('vm_balance_nanny_host_size_bytes', 'des:vm_balance_nanny_host_size_bytes', ['nodename'])
