@@ -471,6 +471,9 @@ class NA:
         self.nh = NetAppHelper(
             host=self.host, user=na_user, password=na_password)
         na_version = self.nh.get_single("system-get-version")
+        if not na_version:
+            log.warning("- WARN - giving up on this netapp for now")
+            return None
         log.info("- INFO -  {} is on version {}".format(self.host,
                                                         na_version['version']))
 

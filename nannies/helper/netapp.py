@@ -15,7 +15,7 @@
 #    under the License.
 #
 
-from netapp_lib.api.zapi.zapi import NaServer, invoke_api
+from netapp_lib.api.zapi.zapi import NaServer, invoke_api, NaApiError
 import xmltodict
 
 import ssl
@@ -62,17 +62,23 @@ class NetAppHelper:
         return invoke_api(self.server, *args, **kwargs)
 
     def invoke_api_single(self, *args, **kwargs):
-        result = list(self.invoke_api(*args, **kwargs))
-        if len(result) > 1:
-            raise ValueError("Expected exactly one result, got {}".format(len(result)))
-        if result:
-            return result[0]
-        else:
+        try:
+            result = list(self.invoke_api(*args, **kwargs))
+            if len(result) > 1:
+                raise ValueError("Expected exactly one result, got {}".format(len(result)))
+            if result:
+                return result[0]
+            else:
+                return None
+        except NaApiError as e:
+            log.warning("- WARN - invoke_api() failed - most probably this is not a properly configured netapp - error message: {}".format(str(e)))
             return None
 
     def get_single(self, *args, **kwargs):
         # example: na.get_single("system-get-vendor-info")
         result = self.invoke_api_single(*args, **kwargs)
+        if not result:
+            return None
         result = xmltodict.parse(result.to_string())
 
         return result['results']
