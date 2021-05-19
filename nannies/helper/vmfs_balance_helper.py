@@ -328,8 +328,18 @@ class DataStores:
             ds_name_regex_pattern = '^(?:vmfs_vc.*_hdd_).*'
         else:
             ds_name_regex_pattern = '^(?:vmfs_vc.*_ssd_).*'
-        self.elements = [ds for ds in self.elements if re.match(
-            ds_name_regex_pattern, ds.name) and not (ds_denylist and ds.name in ds_denylist)]
+        temp_list = []
+        for ds in self.elements:
+            # detect and handle wrongly names ds names
+            ds_alt_name = re.sub(r'_vc-([a-z]+)-(\d+)_', r'_vc_\1_\2_', ds.name)
+            if ds_alt_name != ds.name:
+                log.warning("- WARN - vc ds name {} should be {} - ignoring this ds for now - this should be fixed".format(ds.name, ds_alt_name))
+                continue
+            if not re.match(ds_name_regex_pattern, ds.name):
+                continue
+            if not (ds_denylist and ds.name in ds_denylist):
+                temp_list.append(ds)
+        self.elements = temp_list
 
     def vvol_ds(self, ds_denylist=[]):
         """
