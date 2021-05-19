@@ -265,7 +265,7 @@ def vvol_flexvol_balancing(na_info, ds_info, vm_info, args):
             return False
 
         # make sure we are not on the least used aggr where we want to move to
-        # in this case move to the next least used aggr and so on ...
+        # in this case move to the next least used aggr as target and so on ...
         while aggr_name_to_ds_name(most_used_too_large_fvol.host, most_used_too_large_fvol.aggr) == aggr_name_to_ds_name(min_usage_aggr.host, min_usage_aggr.name):
             log.info("- INFO - most used too large flexvol {} is on ds {} of least used vvol aggr {} - trying the next aggr".format(most_used_too_large_fvol.name, aggr_name_to_ds_name(min_usage_aggr.host, min_usage_aggr.name), min_usage_aggr.name))
             # take the next more used one as new min used aggr
