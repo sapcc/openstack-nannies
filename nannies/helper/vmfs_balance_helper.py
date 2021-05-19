@@ -932,12 +932,15 @@ def get_aggr_and_ds_stats(na_info, ds_info):
             log.info("- INFO -    aggregate usage: {:.2f}%".format(aggr.usage))
             ds_total_capacity = 0
             ds_total_used = 0
+            # this defines how much we want to count in the weight - values are usually
+            # around 50% +/- - so 500 here means count in the weight at about 10% (50/500)
+            weight_level = 500
             for lun in aggr.luns:
                 if re.match("^vmfs_vc.*$", lun.name) and ds_info.get_by_name(lun.name):
                     ds_total_capacity += ds_info.get_by_name(lun.name).capacity
                     ds_total_used += ds_info.get_by_name(lun.name).used
-                    ds_weight[lun.name] = aggr.usage / (ds_info.get_by_name(
-                        lun.name).used / ds_info.get_by_name(lun.name).capacity * 100)
+                    ds_weight[lun.name] = (aggr.usage + weight_level) / (((ds_info.get_by_name(
+                        lun.name).used / ds_info.get_by_name(lun.name).capacity) * 100) + weight_level)
             if ds_total_capacity > 0:
                 log.info(
                     "- INFO -    ds usage:        {:.2f}%".format(ds_total_used/ds_total_capacity*100))
