@@ -213,26 +213,26 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
 
         if moves_done > args.max_move_vms:
             log.info(
-                "- INFO -  max number of vms to move reached - stopping aggr balancing now")
+                "- INFO -  max number of vms to move ({}) reached - stopping aggr balancing now".format(args.max_move_vms))
             break
 
         # balance at max as much space we would need to bring max aggr usage to avg plus autopilot_range
         if moved_size > max_size_to_free_on_max_used_aggr:
             log.info(
-                "- INFO -  enough space freed from max usage aggr - stopping aggr balancing now")
+                "- INFO -  enough space freed from max usage aggr {} - stopping aggr balancing now".format(max_usage_aggr.name))
             break
 
         # balance at max as much space to bring min aggr usage to avg plus autopilot_range
         if moved_size > max_size_to_add_on_min_used_aggr:
             log.info(
-                "- INFO -  enough space added to min usage aggr - stopping aggr balancing now")
+                "- INFO -  enough space added to min usage aggr {} - stopping aggr balancing now".format(max_usage_aggr.name))
             break
 
         # balance at max slightly below the average as the most used ds on the
         # most used aggr might simply be below the avg due to dedup and compression
         if most_used_ds_on_most_used_aggr.usage < (ds_overall_average_usage - 4 * args.autopilot_range):
             log.info(
-                "- INFO -  enough space freed from largest ds on max usage aggr - stopping aggr balancing now")
+                "- INFO -  enough space freed from largest ds {} on max usage aggr {} - stopping aggr balancing now".format(most_used_ds_on_most_used_aggr.name, max_usage_aggr.name))
             break
 
         # resort based on aggr usage weights - for the target ds we want to
@@ -252,7 +252,7 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
                 shadow_vms_on_most_used_ds_on_most_used_aggr.append(vm)
         if not shadow_vms_on_most_used_ds_on_most_used_aggr:
             log.warning(
-                "- WARN -  no more shadow vms to move on most used ds {} on most used aggr".format(most_used_ds_on_most_used_aggr.name))
+                "- WARN -  no more shadow vms to move on most used ds {} on most used aggr {}".format(most_used_ds_on_most_used_aggr.name, max_usage_aggr.name))
             break
         # TODO: decide whether to balance from largest first or smallest first
         largest_shadow_vm_on_most_used_ds_on_most_used_aggr = sort_vms_by_total_disksize(
@@ -354,7 +354,7 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args):
 
         if moves_done > args.max_move_vms:
             log.info(
-                "- INFO -  max number of vms to move reached - stopping ds balancing now")
+                "- INFO -  max number of vms to move ({}) reached - stopping aggr balancing now".format(args.max_move_vms))
             break
 
         most_used_ds = ds_info.elements[0]
