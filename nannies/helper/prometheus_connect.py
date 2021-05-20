@@ -19,7 +19,7 @@ class PrometheusInfraConnect:
 
     def login(self):
         self.api = PrometheusConnect(url=self.prometheus_infra, disable_ssl=False)
-        self.api._session.cert = ('certs/client.cert', 'certs/client.key')
+        self.api._session.cert = ('/etc/secret-volume/client_cert', '/etc/secret-volume/client_key')
 
     def find_vm_readiness(self,avail_zone,vm):
 
