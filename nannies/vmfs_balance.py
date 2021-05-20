@@ -117,11 +117,6 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
     max_size_to_free_on_max_used_aggr = (
         max_usage_aggr.usage - avg_aggr_usage + args.autopilot_range) * max_usage_aggr.capacity / 100
 
-    # this is the difference from the current min used size to the avg used size - this much we might balance stuff to an aggr
-    # allow to go autopilot_range above the avrg as the physical size will usually be lower than what we move
-    max_size_to_add_on_min_used_aggr = (
-        avg_aggr_usage - min_usage_aggr.usage + args.autopilot_range) * min_usage_aggr.capacity / 100
-
     # only do aggr balancing if max aggr usage is more than --autopilot-range % above the avg
     if max_usage_aggr.usage < avg_aggr_usage + args.autopilot_range:
         log.info("- INFO -  max usage aggr is still within the autopilot range above avg aggr usage - no aggr balancing required")
@@ -220,12 +215,6 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
         if moved_size > max_size_to_free_on_max_used_aggr:
             log.info(
                 "- INFO -  enough space freed from max usage aggr {} - stopping aggr balancing now".format(max_usage_aggr.name))
-            break
-
-        # balance at max as much space to bring min aggr usage to avg plus autopilot_range
-        if moved_size > max_size_to_add_on_min_used_aggr:
-            log.info(
-                "- INFO -  enough space added to min usage aggr {} - stopping aggr balancing now".format(max_usage_aggr.name))
             break
 
         # balance at max slightly below the average as the most used ds on the
