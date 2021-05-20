@@ -332,12 +332,14 @@ class DataStores:
         for ds in self.elements:
             # detect and handle wrongly names ds names
             ds_alt_name = re.sub(r'_vc-([a-z]+)-(\d+)_', r'_vc_\1_\2_', ds.name)
-            if ds_alt_name != ds.name:
-                log.warning("- WARN - vc ds name {} should be {} - ignoring this ds for now - this should be fixed".format(ds.name, ds_alt_name))
-                continue
+            # if ds_alt_name != ds.name:
+            #     log.warning("- WARN - vc ds name {} should be {} - ignoring this ds for now - this should be fixed".format(ds.name, ds_alt_name))
+            #    continue
             if not re.match(ds_name_regex_pattern, ds.name):
                 continue
             if not (ds_denylist and ds.name in ds_denylist):
+                temp_list.append(ds)
+            if not (ds_denylist and ds_alt_name in ds_denylist):
                 temp_list.append(ds)
         self.elements = temp_list
 
