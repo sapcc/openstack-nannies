@@ -51,7 +51,6 @@ def vm_move_suggestions(args, vcenter_data):
     big_vm_template = namedtuple("big_vm_details", ['host', 'big_vm', 'big_vm_size'])
     target_host_template = namedtuple("target_host_details", ['host', 'free_host_size'])
 
-    #vm_uuid_re = re.compile('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
     #  openstack info
     log.info("- INFO - Nanny Handle Big VM size between %s and %s", args.min_vm_size,args.max_vm_size)
     log.info("- INFO - connecting to openstack to region %s", args.region)
@@ -204,9 +203,9 @@ def vm_move_suggestions(args, vcenter_data):
 
 def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_host,vcenter_data,nanny_metadata_handle,denial_bb_name):
     vcenter_error_count = 0
-    #vm_uuid_re = re.compile('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
     # big_vm_template = namedtuple("big_vm_details", ['host', 'big_vm', 'big_vm_size'])
     # target_host_template = namedtuple("target_host_details", ['host', 'free_host_size'])
+    target_host_template = namedtuple("target_host_details", ['host', 'free_host_size'])
 
     for big_vm in big_vm_to_move_list:
         # to handle certain bb like bb56
@@ -239,7 +238,9 @@ def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_
                             if status != "success":
                                 vcenter_error_count += 1
                     if (target_h.free_host_size - big_vm.big_vm_size) >= args.min_vm_size:
-                        target_host.append((target_h.host, target_h.free_host_size - big_vm.big_vm_size))
+                        target_host_details = target_host_template(host=target_h.host,
+                                                                   free_host_size=(target_h.free_host_size - big_vm.big_vm_size))
+                        target_host.append(target_host_details)
                         target_host.remove(target_h)
                         target_host = sorted(target_host, key=lambda x: x[1], reverse=True)
                     else:
