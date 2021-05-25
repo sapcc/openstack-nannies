@@ -172,19 +172,26 @@ def vm_move_suggestions(args, vcenter_data):
 
         if host_consumed_size >= host_size:
             log.info("- INFO - host name {} over utilised ".format(host['name']))
+        """
         else:
-            if (host_size - host_consumed_size) > args.min_vm_size :
+            if (host_size - big_vm_total_size) > args.min_vm_size :
                 #big_vm_template = namedtuple("big_vm_details", ['host', 'big_vm', 'big_vm_size'])
                 #target_host_template = namedtuple("host_details", ['host', 'free_host_size'])
-                target_host_details = target_host_template(host=host['name'],free_host_size=(host_size - host_consumed_size))
+                target_host_details = target_host_template(host=host['name'],free_host_size=(host_size - big_vm_total_size))
                 target_host.append(target_host_details)
-
+        """
         if big_vm_total_size >= host_size*(1+percentage/100):
             log.info("- INFO - Alert host name {} over utilised with BIG_VM Alert Alert".format(host['name']))
             #big_vm_template = namedtuple("big_vm_details", ['host', 'big_vm', 'big_vm_size'])
             #target_host_template = namedtuple("target_host_details", ['host', 'free_host_size'])
             big_vm_details = big_vm_template(host=host['name'],big_vm=big_vm_to_move,big_vm_size=max_big_vm_size_handle)
             big_vm_to_move_list.append(big_vm_details)
+        else:
+            if (host_size - big_vm_total_size) > args.min_vm_size :
+                #big_vm_template = namedtuple("big_vm_details", ['host', 'big_vm', 'big_vm_size'])
+                #target_host_template = namedtuple("host_details", ['host', 'free_host_size'])
+                target_host_details = target_host_template(host=host['name'],free_host_size=(host_size - big_vm_total_size))
+                target_host.append(target_host_details)
         log.info("- INFO - node end here %s ",host['name'])
 
     for bb in bb_name:
