@@ -106,7 +106,7 @@ def vvol_aggr_balancing(na_info, ds_info, vm_info, args):
 
         if moves_done > args.max_move_vms:
             log.info(
-                "- INFO - max number of vms to move reached - stopping aggr balancing now")
+                "- INFO - max number of vms to move ({}) reached - stopping aggr balancing now".format(args.max_move_vms))
             break
 
         # get the aggr usage info
@@ -138,15 +138,15 @@ def vvol_aggr_balancing(na_info, ds_info, vm_info, args):
 
         # only do aggr balancing if max aggr usage is more than --autopilot-range % above the avg
         if max_usage_aggr.usage < avg_aggr_usage + args.autopilot_range:
-            log.info("- INFO -  max usage vvol aggr is still within the autopilot range above avg aggr usage - no aggr balancing required")
+            log.info("- INFO -  max usage vvol aggr {} is still within the autopilot range above avg aggr usage ({}+{}) - no aggr balancing required".format(max_usage_aggr.name, avg_aggr_usage, args.autopilot_range))
             return False
         else:
             log.info(
-                "- INFO -  max usage vvol aggr is more than the autopilot range above avg aggr usage - aggr balancing required")
+                "- INFO -  max usage vvol aggr {} is more than the autopilot range above avg aggr usage ({}+{}) - aggr balancing required".format(max_usage_aggr.name, avg_aggr_usage, args.autopilot_range))
 
         # find potential source vols for balancing: from max used aggr and vvol
         balancing_source_luns = []
-        log.debug("- DEBG -  volumes on the max usage aggr:")
+        log.debug("- DEBG -  volumes on the max usage aggr {}:".format(max_usage_aggr.name))
         for lun in max_usage_aggr.luns:
             # we only care for vvol here
             if lun.type != 'vvol':
@@ -157,11 +157,11 @@ def vvol_aggr_balancing(na_info, ds_info, vm_info, args):
 
         balancing_target_ds = ds_info.get_by_name(aggr_name_to_ds_name(min_usage_aggr.host, min_usage_aggr.name))
         if not balancing_target_ds:
-            log.warning("- WARN - the min usage aggregate on the netapp does not seem to have a ds in the vc - this should not happen ...")
+            log.warning("- WARN - the min usage aggregate {} on the netapp does not seem to have a ds in the vc - this should not happen ...".format(min_usage_aggr.name))
             return False
 
-        log.info("- INFO -  vc ds corresponding to the min usage aggr: {}".format(balancing_target_ds.name))
-        log.debug("- DEBG -  flexvols on the min usage aggr:")
+        log.info("- INFO -  vc ds corresponding to the min usage aggr {}: {}".format(min_usage_aggr.name, balancing_target_ds.name))
+        log.debug("- DEBG -  flexvols on the min usage aggr {}:".format(min_usage_aggr.name))
         # for debugging
         for fvol in min_usage_aggr.fvols:
             # we only care for vvol here
@@ -170,7 +170,7 @@ def vvol_aggr_balancing(na_info, ds_info, vm_info, args):
             log.debug("- wDEBG -   {} - {:.0f}G".format(fvol.name, fvol.used/1024**3))
 
         if len(balancing_source_luns) == 0:
-            log.warning("- WARN - no volumes on the most used aggregate - this should not happen ...")
+            log.warning("- WARN - no volumes on the most used aggregate {} - this should not happen ...".format(max_usage_aggr.name))
             return False
 
         shadow_luns_and_vms_on_most_used_ds_on_most_used_aggr = []
@@ -188,7 +188,7 @@ def vvol_aggr_balancing(na_info, ds_info, vm_info, args):
                 shadow_luns_and_vms_on_most_used_ds_on_most_used_aggr_ok.append(lun_and_vm)
         if not shadow_luns_and_vms_on_most_used_ds_on_most_used_aggr_ok:
             log.warning(
-                "- WARN - no more shadow vms to move on most used ds {} on most used aggr".format(aggr_name_to_ds_name(max_usage_aggr.host, max_usage_aggr.name)))
+                "- WARN - no more shadow vms to move on most used ds {} on most used aggr {}".format(aggr_name_to_ds_name(max_usage_aggr.host, max_usage_aggr.name), max_usage_aggr.name))
             break
 
         # sort them by lun used size
@@ -226,7 +226,7 @@ def vvol_flexvol_balancing(na_info, ds_info, vm_info, args):
 
         if moves_done > args.max_move_vms:
             log.info(
-                "- INFO - max number of vms to move reached - stopping flexvol balancing now")
+                "- INFO - max number of vms to move ({}) reached - stopping flexvol balancing now".format(args.max_move_vms))
             break
 
         if len(too_large_fvols) == 0:
@@ -276,7 +276,7 @@ def vvol_flexvol_balancing(na_info, ds_info, vm_info, args):
                 break
 
         if len(most_used_too_large_fvol.luns) == 0:
-            log.warning("- WARN - no volumes on the most used flexvol - this should not happen ...")
+            log.warning("- WARN - no volumes on the most used flexvol {} - this should not happen ...".format(most_used_too_large_fvol.name))
             return False
 
         shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr = []
@@ -295,7 +295,7 @@ def vvol_flexvol_balancing(na_info, ds_info, vm_info, args):
                 shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr_ok.append(lun_and_vm)
         if not shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr_ok:
             log.warning(
-                "- WARN -  no more shadow vms to move on most used fvol {} on most used vvol aggr".format(most_used_too_large_fvol.name))
+                "- WARN -  no more shadow vms to move on most used fvol {} on most used vvol aggr {}".format(most_used_too_large_fvol.name, max_usage_aggr.name))
             break
 
         # sort them by lun used size
