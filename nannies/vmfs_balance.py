@@ -126,11 +126,11 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args, ds_type):
 
     # only do aggr balancing if max aggr usage is more than --autopilot-range % above the avg
     if max_usage_aggr.usage < avg_aggr_usage + args.autopilot_range:
-        log.info("- INFO -  max usage aggr is still within the autopilot range above avg aggr usage - no aggr balancing required")
+        log.info("- INFO -  max usage aggr {} is still within the autopilot range above avg aggr usage ({}+{}) - no aggr balancing required".format(max_usage_aggr.name, avg_aggr_usage, args.autopilot_range)))
         return False
     else:
         log.info(
-            "- INFO -  max usage aggr is more than the autopilot range above avg aggr usage - aggr balancing required")
+            "- INFO -  max usage aggr {} is more than the autopilot range above avg aggr usage ({}+{}) - aggr balancing required".format(max_usage_aggr.name, avg_aggr_usage, args.autopilot_range)))
 
     # find potential source ds for balancing: from max used aggr, vmfs and ssd or hdd
     balancing_source_ds = []
