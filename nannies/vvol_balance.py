@@ -138,11 +138,11 @@ def vvol_aggr_balancing(na_info, ds_info, vm_info, args):
 
         # only do aggr balancing if max aggr usage is more than --autopilot-range % above the avg
         if max_usage_aggr.usage < avg_aggr_usage + args.autopilot_range:
-            log.info("- INFO -  max usage vvol aggr {} is still within the autopilot range above avg aggr usage ({}+{}) - no aggr balancing required".format(max_usage_aggr.name, avg_aggr_usage, args.autopilot_range))
+            log.info("- INFO -  max usage vvol aggr {} is still within the autopilot range above avg aggr usage ({:.0f}+{:.0f}%) - no aggr balancing required".format(max_usage_aggr.name, avg_aggr_usage, args.autopilot_range))
             return False
         else:
             log.info(
-                "- INFO -  max usage vvol aggr {} is more than the autopilot range above avg aggr usage ({}+{}) - aggr balancing required".format(max_usage_aggr.name, avg_aggr_usage, args.autopilot_range))
+                "- INFO -  max usage vvol aggr {} is more than the autopilot range above avg aggr usage ({:.0f}+{:.0f}%) - aggr balancing required".format(max_usage_aggr.name, avg_aggr_usage, args.autopilot_range))
 
         # find potential source vols for balancing: from max used aggr and vvol
         balancing_source_luns = []
