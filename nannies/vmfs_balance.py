@@ -95,10 +95,17 @@ def prometheus_exporter_setup(args):
     return nanny_metrics_data
 
 
-def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
+def vmfs_aggr_balancing(na_info, ds_info, vm_info, args, ds_type):
     """
     balance the usage of the underlaying aggregates of vmfs ds
     """
+
+    # balance sdd or hdd storage based on cmdline switch
+    if ds_type == 'hdd':
+        lun_name_re = re.compile(r"^.*_hdd_.*$")
+    else:
+        lun_name_re = re.compile(r"^.*_ssd_.*$")
+
     # get a weight factor per datastore about underlaying aggr usage - see function above
     ds_weight = get_aggr_and_ds_stats(na_info, ds_info)
 
@@ -124,14 +131,6 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
     else:
         log.info(
             "- INFO -  max usage aggr is more than the autopilot range above avg aggr usage - aggr balancing required")
-
-    # balance sdd or hdd storage based on cmdline switch
-    if args.hdd:
-        lun_name_re = re.compile(r"^.*_hdd_.*$")
-        ds_type = 'hdd'
-    else:
-        lun_name_re = re.compile(r"^.*_ssd_.*$")
-        ds_type = 'ssd'
 
     # find potential source ds for balancing: from max used aggr, vmfs and ssd or hdd
     balancing_source_ds = []
@@ -261,7 +260,7 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args):
         ds_info.sort_by_usage()
 
 
-def vmfs_ds_balancing(na_info, ds_info, vm_info, args):
+def vmfs_ds_balancing(na_info, ds_info, vm_info, args, ds_type):
     """
     balance the usage of the vmfs datastores
     """
@@ -278,12 +277,6 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args):
 
     min_usage_aggr = all_aggr_list_sorted.pop(0)
     max_usage_aggr = all_aggr_list_sorted[-1]
-
-    # balance sdd or hdd storage based on cmdline switch
-    if args.hdd:
-        ds_type = 'hdd'
-    else:
-        ds_type = 'ssd'
 
     # limit the ds info from the vc to vmfs ds only
     ds_info.vmfs_ds(ds_type = ds_type)
@@ -391,12 +384,13 @@ def check_loop(args):
         if args.dry_run:
             log.info("- INFO - dry-run mode: not doing anything harmful")
 
+        # balance sdd or hdd storage based on cmdline switch
         if args.hdd:
-            log.info("- INFO - doing balancing for hdd storage")
+            log.info("- INFO - doing balancing for ssd and hdd storage")
         else:
             log.info("- INFO - doing balancing for ssd storage")
 
-        log.info("- CMND -  # aggregate balancing")
+        log.info("- CMND -  # aggregate balancing ssd")
 
         # open a connection to the vcenter
         vc = VCenterHelper(host=args.vcenter_host,
@@ -409,9 +403,9 @@ def check_loop(args):
         na_info = NAs(vc, args.netapp_user, args.netapp_password, args.region)
 
         # do the aggregate balancing first
-        vmfs_aggr_balancing(na_info, ds_info, vm_info, args)
+        vmfs_aggr_balancing(na_info, ds_info, vm_info, args, 'ssd')
 
-        log.info("- CMND -  # ds balancing")
+        log.info("- CMND -  # ds balancing ssd")
 
         # get the vm and ds info from the vcenter again before doing the ds balancing
         vm_info = VMs(vc)
@@ -419,7 +413,18 @@ def check_loop(args):
         # get the info from the netapp again
         na_info = NAs(vc, args.netapp_user, args.netapp_password, args.region)
 
-        vmfs_ds_balancing(na_info, ds_info, vm_info, args)
+        vmfs_ds_balancing(na_info, ds_info, vm_info, args, 'ssd')
+
+        if args.hdd:
+            log.info("- CMND -  # ds balancing hdd")
+
+            # get the vm and ds info from the vcenter again before doing the ds balancing
+            vm_info = VMs(vc)
+            ds_info = DataStores(vc)
+            # get the info from the netapp again
+            na_info = NAs(vc, args.netapp_user, args.netapp_password, args.region)
+
+            vmfs_ds_balancing(na_info, ds_info, vm_info, args, 'hdd')
 
         # wait the interval time
         log.info("INFO: waiting %s minutes before starting the next loop run", str(
