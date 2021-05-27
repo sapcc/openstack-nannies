@@ -230,6 +230,12 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args, ds_type):
         least_used_ds = ds_info.elements[-1]
         least_used_ds_free_space = least_used_ds.freespace - args.min_freespace * 1024**3
 
+        # stop if we start moving around vms on the same ds only
+        if most_used_ds_on_most_used_aggr == least_used_ds:
+            log.info(
+                "- INFO -  most used ds {} on most used aggr {} is the same as least used ds - stopping aggr balancing now".format(most_used_ds_on_most_used_aggr.name, max_usage_aggr.name, least_used_ds.name))
+            break
+
         if not sanity_checks_liter(least_used_ds, most_used_ds_on_most_used_aggr, args.min_freespace, args.min_max_difference):
             break
 
