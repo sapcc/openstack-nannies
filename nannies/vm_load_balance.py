@@ -27,6 +27,7 @@ import logging
 import time
 from helper.prometheus_exporter import *
 from collections import namedtuple
+from helper.prometheus_connect import *
 
 # prometheus export functionality
 from prometheus_client import start_http_server, Gauge
@@ -39,8 +40,11 @@ vm_uuid_re = re.compile('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-
 def run_check(args, vcenter_data):
     while True:
         log.info("- INFO - starting new loop run with automation %s ", args.automated)
-        vm_move_suggestions(args, vcenter_data)
-        vcenter_data.sync_data()
+        status = vm_move_suggestions(args, vcenter_data)
+        if status == "success":
+            vcenter_data.sync_data()
+        else:
+            log.info("- INFO vrops connection issue\n")
         # wait the interval time
         log.info("- INFO - waiting %s minutes before starting the next loop run \n \n", str(args.interval))
         time.sleep(60 * int(args.interval))
@@ -56,6 +60,8 @@ def vm_move_suggestions(args, vcenter_data):
     log.info("- INFO - connecting to openstack to region %s", args.region)
     openstack_obj = openstack.OpenstackHelper(args.region, args.user_domain_name,
                                               args.project_domain_name, args.project_name,args.username, args.password)
+
+    prom_connect = PrometheusInfraConnect(region=args.region)
 
     # cleaning-up last nanny job orphaned cleanup
     nanny_metadata_handle = "nanny_big_vm_handle"
@@ -126,6 +132,17 @@ def vm_move_suggestions(args, vcenter_data):
         if not host['parent'].name.startswith("production"):
             continue
         log.info("- INFO - node started here %s and its status %s",host['name'],host['runtime'].connectionState)
+        host_contention = prom_connect.find_host_contention(args.vc_host,host['name'])
+        if host_contention == "no_host_contention":
+            log.info("- INFO - node started %s but its no_host_contention so will not consider as target/source host",
+                     host['name'])
+            continue
+        elif host_contention == "host_contention":
+            log.info("- INFO - node started %s but its host_contention so will be consider as target/source host",
+                     host['name'])
+        else:
+            log.info("prom connection issue")
+            return "no_success"
         host_size = host['hardware.memorySize']/1048576      # get host memory size in MB
         bb_overall[int(re.findall(r"[0-9]+",host['name'])[1])] = bb_overall[int(re.findall(r"[0-9]+",host['name'])[1])] + host_size
         log.info("- INFO - host name %s and size %.2f GB ",host['name'],host_size/1024)
@@ -156,6 +173,17 @@ def vm_move_suggestions(args, vcenter_data):
                     big_vm_total_size = big_vm_total_size + vm.config.hardware.memoryMB
                     bb_bigvm_consume[int(re.findall(r"[0-9]+", host['name'])[1])] = bb_bigvm_consume[int(
                         re.findall(r"[0-9]+", host['name'])[1])] + vm.config.hardware.memoryMB
+                    ##VM readiness
+                    vm_readiness = prom_connect.find_vm_readiness(args.vc_host,vm.name)
+                    if vm_readiness == "no_vm_readiness":
+                        log.info(
+                            "- INFO - vm started %s but its no_vm_readiness so will not consider vm for vmotion",vm.name)
+                        continue
+                    elif vm_readiness == "vm_readiness":
+                        log.info("- INFO - vm started %s but its vm_readiness so will consider as vm for vmotion if its large vm",vm.name)
+                    else:
+                        log.info("prom connection issue")
+                        return "no_success"
                     if vm.config.hardware.memoryMB < max_big_vm_size_handle:
                         big_vm_to_move = str(vm.name)
                         max_big_vm_size_handle = vm.config.hardware.memoryMB
@@ -192,7 +220,7 @@ def vm_move_suggestions(args, vcenter_data):
                 #target_host_template = namedtuple("host_details", ['host', 'free_host_size'])
                 target_host_details = target_host_template(host=host['name'],free_host_size=(host_size - big_vm_total_size))
                 target_host.append(target_host_details)
-        log.info("- INFO - node end here %s ",host['name'])
+        log.info("- INFO - node end here %s \n ",host['name'])
 
     for bb in bb_name:
         vcenter_data.set_data('vm_balance_building_block_consume_all_vm_bytes', int(bb_consume[bb]*1024*1024), [str(bb)])
@@ -207,6 +235,7 @@ def vm_move_suggestions(args, vcenter_data):
         log.info("- Alert - found here %s",len(big_vm_to_move_list))
         log.info("- Printing - suggestion for vmotion below")
         big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_host,vcenter_data,nanny_metadata_handle,denial_bb_name)
+        return "success"
 
 def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_host,vcenter_data,nanny_metadata_handle,denial_bb_name):
     vcenter_error_count = 0
