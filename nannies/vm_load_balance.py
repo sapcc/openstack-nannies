@@ -235,7 +235,7 @@ def vm_move_suggestions(args, vcenter_data):
         log.info("- Alert - found here %s",len(big_vm_to_move_list))
         log.info("- Printing - suggestion for vmotion below")
         big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_host,vcenter_data,nanny_metadata_handle,denial_bb_name)
-        return "success"
+    return "success"
 
 def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_host,vcenter_data,nanny_metadata_handle,denial_bb_name):
     vcenter_error_count = 0
