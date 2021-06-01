@@ -110,7 +110,7 @@ def vm_move_suggestions(args, vcenter_data):
     fail_over_hosts.extend(vc.get_failover_host(cluster_view,failover_host=1))
     log.info("- INFO - all fail over hosts %s ", [ fail_over.name for fail_over in fail_over_hosts])
     cluster_view.Destroy()
-    log.info("- INFO - getting hostview view info from vcenter host %s", args.vc_host)
+    log.info("- INFO - getting hostview view info from vcenter host %s\n", args.vc_host)
     host_view = vc.find_all_of_type(vc.vim.HostSystem)
     hosts = vc.collect_properties(host_view, vim.HostSystem, ['name','config.host','hardware.memorySize',
                                                               'parent','runtime','vm'],include_mors=True)
@@ -134,7 +134,7 @@ def vm_move_suggestions(args, vcenter_data):
         log.info("- INFO - node started here %s and its status %s",host['name'],host['runtime'].connectionState)
         host_contention = prom_connect.find_host_contention(args.vc_host,host['name'])
         if host_contention == "no_host_contention":
-            log.info("- INFO - node started %s but its no_host_contention so will not consider as target/source host",
+            log.info("- INFO - node started %s but its no_host_contention so will not consider as target/source host\n",
                      host['name'])
             continue
         elif host_contention == "host_contention":
@@ -208,7 +208,7 @@ def vm_move_suggestions(args, vcenter_data):
                 target_host_details = target_host_template(host=host['name'],free_host_size=(host_size - big_vm_total_size))
                 target_host.append(target_host_details)
         """
-        if big_vm_total_size >= host_size*(1+percentage/100):
+        if big_vm_total_size >= host_size*(1+percentage/100) and max_big_vm_size_handle != 1050000:
             log.info("- INFO - Alert host name {} over utilised with BIG_VM Alert Alert".format(host['name']))
             #big_vm_template = namedtuple("big_vm_details", ['host', 'big_vm', 'big_vm_size'])
             #target_host_template = namedtuple("target_host_details", ['host', 'free_host_size'])
