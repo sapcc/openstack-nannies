@@ -54,6 +54,7 @@ def vm_move_suggestions(args, vcenter_data):
 
     big_vm_template = namedtuple("big_vm_details", ['host', 'big_vm', 'big_vm_size'])
     target_host_template = namedtuple("target_host_details", ['host', 'free_host_size'])
+    source_host_template = namedtuple("source_host_details", ['host', 'consumed_host_size'])
 
     #  openstack info
     log.info("- INFO - Nanny Handle Big VM size between %s and %s", args.min_vm_size,args.max_vm_size)
@@ -117,6 +118,7 @@ def vm_move_suggestions(args, vcenter_data):
     host_view.Destroy()
     big_vm_to_move_list = []
     target_host = []
+    source_host = []
 
     # looping over each esxi node(which is random order)
     for host in hosts:
@@ -208,12 +210,18 @@ def vm_move_suggestions(args, vcenter_data):
                 target_host_details = target_host_template(host=host['name'],free_host_size=(host_size - big_vm_total_size))
                 target_host.append(target_host_details)
         """
-        if big_vm_total_size >= host_size*(1+percentage/100) and max_big_vm_size_handle != 1050000:
-            log.info("- INFO - Alert host name {} over utilised with BIG_VM Alert Alert".format(host['name']))
-            #big_vm_template = namedtuple("big_vm_details", ['host', 'big_vm', 'big_vm_size'])
-            #target_host_template = namedtuple("target_host_details", ['host', 'free_host_size'])
-            big_vm_details = big_vm_template(host=host['name'],big_vm=big_vm_to_move,big_vm_size=max_big_vm_size_handle)
-            big_vm_to_move_list.append(big_vm_details)
+        if big_vm_total_size >= host_size*(1+percentage/100):
+            if max_big_vm_size_handle != 1050000:
+                log.info("- INFO - Alert host name {} over utilised with BIG_VM Alert".format(host['name']))
+                #big_vm_template = namedtuple("big_vm_details", ['host', 'big_vm', 'big_vm_size'])
+                #target_host_template = namedtuple("target_host_details", ['host', 'free_host_size'])
+                big_vm_details = big_vm_template(host=host['name'],big_vm=big_vm_to_move,big_vm_size=max_big_vm_size_handle)
+                big_vm_to_move_list.append(big_vm_details)
+            else:
+                log.info("- INFO - Alert host name {} over utilised with BIG_VM Alert (No suitable_vm for move)".format(host['name']))
+                #source_host_template = namedtuple("source_host_details", ['host', 'consumed_host_size'])
+                source_host_details = source_host_template(host=host['name'],consumed_host_size=big_vm_total_size)
+                source_host.append(source_host_details)
         else:
             if (host_size - big_vm_total_size) > args.min_vm_size :
                 #big_vm_template = namedtuple("big_vm_details", ['host', 'big_vm', 'big_vm_size'])
@@ -233,8 +241,14 @@ def vm_move_suggestions(args, vcenter_data):
         log.info("- INFO - target host here %s ", target_host)
         log.info("- INFO - big_vm list here %s ", big_vm_to_move_list)
         log.info("- Alert - found here %s",len(big_vm_to_move_list))
-        log.info("- Printing - suggestion for vmotion below")
+        log.info("- Printing - suggestion for vmotion below\n")
         big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_host,vcenter_data,nanny_metadata_handle,denial_bb_name)
+
+    for source_h in source_host:
+        log.info("- Alert - found alert with no suitable for move after checking vm_readiness")
+        log.info("- INFO - overbooked host %s and overbooked by %s", source_h.host,source_h.consumed_host_size)
+        vcenter_data.set_data('vm_balance_no_suitable_vm', int(source_h.consumed_host_size * 1024),[source_h.host])
+
     return "success"
 
 def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_host,vcenter_data,nanny_metadata_handle,denial_bb_name):
@@ -330,6 +344,8 @@ def main():
                           ['Building_block'])
     mymetrics.set_metrics('vm_balance_error_count','des:vm_balance_error_count',['error_type'])
     mymetrics.set_metrics('vm_balance_too_full_building_block','des:vm_balance_too_full_building_block', ['consolidated_needed'])
+    mymetrics.set_metrics('vm_balance_no_suitable_vm', 'des:vm_balance_no_suitable_vm',
+                          ['source_node','node_overbooked_by'])
     args = parser.parse_args()
     REGISTRY.register(CustomCollector(mymetrics, vcenter_data))
     prometheus_http_start(int(args.prometheus_port))
