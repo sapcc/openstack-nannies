@@ -253,6 +253,7 @@ def vm_move_suggestions(args, vcenter_data):
 
 def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_host,vcenter_data,nanny_metadata_handle,denial_bb_name):
     vcenter_error_count = 0
+    vmotion_count = 0
     # big_vm_template = namedtuple("big_vm_details", ['host', 'big_vm', 'big_vm_size'])
     # target_host_template = namedtuple("target_host_details", ['host', 'free_host_size'])
     target_host_template = namedtuple("target_host_details", ['host', 'free_host_size'])
@@ -266,8 +267,6 @@ def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_
                     log.info(f"- INFO - big Vm {big_vm.big_vm} of size {round(big_vm.big_vm_size,2)} is move from source {big_vm.host} to target {target_h.host}  having {round(target_h.free_host_size,2)} memory and left with memory {round((target_h.free_host_size - big_vm.big_vm_size),2)} after vmotion")
                     if int(re.findall(r"[0-9]+", target_h.host)[1]) in denial_bb_name:
                         vcenter_data.set_data('vm_balance_nanny_manual_suggestion_bytes', int(big_vm.big_vm_size * 1024),[big_vm.host, target_h.host, big_vm.big_vm])
-                    else:
-                        vcenter_data.set_data('vm_balance_nanny_suggestion_bytes', int(big_vm.big_vm_size * 1024),[big_vm.host, target_h.host, big_vm.big_vm])
                     if vm_uuid_re.match(re.split("\(|\)", big_vm.big_vm)[-2]):
                         big_vm_uuid = re.split("\(|\)", big_vm.big_vm)[-2]
                     else:
@@ -286,7 +285,19 @@ def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_
                             status = vc.vmotion_inside_bb(openstack_obj, big_vm_uuid, target_h.host, nanny_metadata_handle)
                             log.info(f"- INFO - big Vm {big_vm.big_vm} of size {round(big_vm.big_vm_size,2)} is move from source {big_vm.host} to target {target_h.host} with {status}")
                             if status != "success":
+                                log.info(
+                                    f"- ERROR - Failed Vmotion of big Vm {big_vm.big_vm} of size {round(big_vm.big_vm_size, 2)} is not move from source {big_vm.host} to target {target_h.host} with {status}")
                                 vcenter_error_count += 1
+                            if status == "success":
+                                log.info(
+                                    f"- INFO - big Vm {big_vm.big_vm} of size {round(big_vm.big_vm_size, 2)} is move from source {big_vm.host} to target {target_h.host} with {status}")
+                                vcenter_data.set_data('vm_balance_vmotion_status',
+                                                      int(big_vm.big_vm_size * 1024),
+                                                      [big_vm.host, target_h.host, big_vm.big_vm])
+                                vmotion_count += 1
+
+                    else:
+                        vcenter_data.set_data('vm_balance_nanny_suggestion_bytes', int(big_vm.big_vm_size * 1024),[big_vm.host, target_h.host, big_vm.big_vm])
                     if (target_h.free_host_size - big_vm.big_vm_size) >= args.min_vm_size:
                         target_host_details = target_host_template(host=target_h.host,
                                                                    free_host_size=(target_h.free_host_size - big_vm.big_vm_size))
@@ -302,6 +313,7 @@ def big_vm_movement_suggestion(args,vc,openstack_obj,big_vm_to_move_list,target_
             #consolidation needed for building block
 
     vcenter_data.set_data('vm_balance_error_count', vcenter_error_count,["vmotion_error"])
+    vcenter_data.set_data('vm_balance_vmotion_count', vmotion_count, ["vmotion_success"])
 
 def main():
     parser = argparse.ArgumentParser()
@@ -317,7 +329,7 @@ def main():
     parser.add_argument("--interval",type=int, default=360,help="Interval in minutes between check runs")
     parser.add_argument("--prometheus-port", type=int, default=9456,help="Port to run the prometheus exporter for metrics on")
     parser.add_argument("--min_vm_size", type=int, default=231056, help="Min Big_Vm size to handle 500000 ")
-    parser.add_argument("--max_vm_size", type=int, default=1050000, help="Max Big_Vm size to handle")
+    parser.add_argument("--max_vm_size", type=int, default=550000, help="Max Big_Vm size to handle")
     parser.add_argument("--percentage", type=int, default=3, help="percentage of overbooked")
     parser.add_argument("--automated",action="store_true", help='false as automation of big_vm not doing vmotion only suggestion')
     parser.add_argument("--denial_list",nargs='*',required=False,default=None,help='all building block ignored by nanny')
@@ -346,6 +358,9 @@ def main():
     mymetrics.set_metrics('vm_balance_too_full_building_block','des:vm_balance_too_full_building_block', ['consolidated_needed'])
     mymetrics.set_metrics('vm_balance_no_suitable_vm', 'des:vm_balance_no_suitable_vm',
                           ['source_node','node_overbooked_by'])
+    mymetrics.set_metrics('vm_balance_vmotion_status', 'des:vm_balance_vmotion_status',
+                          ['source_node', 'target_node', 'big_vm_name', 'big_vm_size'])
+    mymetrics.set_metrics('vm_balance_vmotion_count', 'des:vm_balance_vmotion_count', ['success'])
     args = parser.parse_args()
     REGISTRY.register(CustomCollector(mymetrics, vcenter_data))
     prometheus_http_start(int(args.prometheus_port))
