@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 #
 # Copyright (c) 2020 SAP SE
@@ -28,9 +27,6 @@ import time
 from helper.prometheus_exporter import *
 from collections import namedtuple
 from helper.prometheus_connect import *
-
-# prometheus export functionality
-from prometheus_client import start_http_server, Gauge
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
@@ -202,14 +198,7 @@ def vm_move_suggestions(args, vcenter_data):
 
         if host_consumed_size >= host_size:
             log.info("- INFO - host name {} over utilised ".format(host['name']))
-        """
-        else:
-            if (host_size - big_vm_total_size) > args.min_vm_size :
-                #big_vm_template = namedtuple("big_vm_details", ['host', 'big_vm', 'big_vm_size'])
-                #target_host_template = namedtuple("host_details", ['host', 'free_host_size'])
-                target_host_details = target_host_template(host=host['name'],free_host_size=(host_size - big_vm_total_size))
-                target_host.append(target_host_details)
-        """
+
         if big_vm_total_size >= host_size*(1+percentage/100):
             if max_big_vm_size_handle != 1050000:
                 log.info("- INFO - Alert host name {} over utilised with BIG_VM Alert".format(host['name']))
