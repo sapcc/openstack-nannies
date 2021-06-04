@@ -200,7 +200,7 @@ def vm_move_suggestions(args, vcenter_data):
             log.info("- INFO - host name {} over utilised ".format(host['name']))
 
         if big_vm_total_size >= host_size*(1+percentage/100):
-            if max_big_vm_size_handle != 1050000:
+            if max_big_vm_size_handle != args.max_vm_size:
                 log.info("- INFO - Alert host name {} over utilised with BIG_VM Alert".format(host['name']))
                 #big_vm_template = namedtuple("big_vm_details", ['host', 'big_vm', 'big_vm_size'])
                 #target_host_template = namedtuple("target_host_details", ['host', 'free_host_size'])
