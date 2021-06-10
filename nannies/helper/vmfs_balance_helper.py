@@ -224,7 +224,7 @@ class DS:
         self.usage = (1 - ds_element['summary.freeSpace'] /
                       ds_element['summary.capacity']) * 100
         self.vm_handles = ds_element['vm']
-        self.ds_handle = ds_element['obj']
+        self.handle = ds_element['obj']
 
     def is_below_usage(self, usage):
         """
