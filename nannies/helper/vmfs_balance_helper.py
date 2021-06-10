@@ -33,6 +33,7 @@ class VM:
 
     def __init__(self, vm_element):
         self.name = vm_element['name']
+        self.instanceuuid = vm_element['config.instanceUuid']
         self.hardware = vm_element['config.hardware']
         self.annotation = vm_element.get('config.annotation')
         self.runtime = vm_element['runtime']
@@ -113,7 +114,7 @@ class VMs:
         log.info("- INFO -  getting vm information from the vcenter")
         vm_view = vc.find_all_of_type(vc.vim.VirtualMachine)
         vms_dict = vc.collect_properties(vm_view, vc.vim.VirtualMachine,
-                                         ['name', 'config.annotation', 'config.hardware', 'runtime'], include_mors=True)
+                                         ['name', 'config.instanceUuid', 'config.annotation', 'config.hardware', 'runtime'], include_mors=True)
         return vms_dict
 
     # TODO: maybe the vm_handles can go and we do the get_shadow_vms inside
@@ -182,6 +183,16 @@ class VMs:
         """
         for vm in self.elements:
             if vm.name == vm_name:
+                return vm
+        else:
+           return None
+
+    def get_by_instanceuuid(self, vm_instanceuuid):
+        """
+        get a vm object by its instanceuuid
+        """
+        for vm in self.elements:
+            if vm.instanceuuid == vm_instanceuuid:
                 return vm
         else:
             return None
