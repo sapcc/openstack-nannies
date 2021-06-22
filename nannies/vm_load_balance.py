@@ -150,10 +150,6 @@ def vm_move_suggestions(args, vcenter_data):
         max_big_vm_size_handle = args.max_vm_size
         big_vm_to_move = ""
         for vm in host['vm']:
-            if vm.name == "ccd05v000372 (8b86a354-0b52-46da-9cb8-aea1d0e63bc5)":
-                print("i want to debug")
-                k = vm.runtime.powerState
-                j = vm.name
             try:
                 if vm.config.hardware.memoryMB == 128 or vm.config.hardware.numCPU == 1 or \
                                 vm.runtime.powerState == 'poweredOff':
