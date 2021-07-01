@@ -155,11 +155,26 @@ class OpenstackHelper:
     def lock_volume(self, volume_uuid):
         try:
             vol = self.api.block_storage.get_volume(volume_uuid)
-            if self.check_volume_metadata(volume_uuid, 'netapp_balancing', 'in_progress'):
-                logging.warning("- PLEASE IGNORE - WARNING - lock_volume: volume {} already has volume_balancing property".format(volume_uuid))
+            if self.check_volume_metadata(volume_uuid, 'storage_balancing', "in_progress"):
+                logging.warning("- PLEASE IGNORE - WARNING - lock_volume: volume {} already has storage_balancing property".format(volume_uuid))
                 return False
             else:
-                self.set_volume_metadata(volume_uuid, 'netapp_balancing', 'in_progress')
+                self.set_volume_metadata(volume_uuid, 'storage_balancing', 'in_progress')
+                vol._action(self.api.block_storage, {'os-reset_status': {'status': 'maintenance'}})
+                return True
+
+        except Exception as e:
+            logging.error("- ERROR - failed to lock volume {}".format(str(e)))
+            return False
+
+    def lock_volume_vc(self, volume_uuid, vc_host):
+        try:
+            vol = self.api.block_storage.get_volume(volume_uuid)
+            if self.check_volume_metadata_key_exists(volume_uuid, 'storage_balancing'):
+                logging.warning("- PLEASE IGNORE - WARNING - lock_volume: volume {} already has storage_balancing property".format(volume_uuid))
+                return False
+            else:
+                self.set_volume_metadata(volume_uuid, 'storage_balancing', vc_host)
                 vol._action(self.api.block_storage, {'os-reset_status': {'status': 'maintenance'}})
                 return True
 
@@ -170,15 +185,33 @@ class OpenstackHelper:
     def unlock_volume(self, volume_uuid):
         try:
             vol = self.api.block_storage.get_volume(volume_uuid)
-            if not self.check_volume_metadata(volume_uuid, 'netapp_balancing', 'in_progress'):
-                logging.warning("- PLEASE IGNORE - WARNING - unlock_volume: volume {} has no volume_balancing property".format(volume_uuid))
+            if not self.check_volume_metadata(volume_uuid, 'storage_balancing', 'in_progress'):
+                logging.warning("- PLEASE IGNORE - WARNING - unlock_volume: volume {} has no storage_balancing property".format(volume_uuid))
                 return False
             else:
                 status = 'available'
                 if vol['attachments'] != []:
                     status = 'in-use'
                 vol._action(self.api.block_storage, {'os-reset_status': {'status': status}})
-                self.delete_volume_metadata(volume_uuid, 'netapp_balancing')
+                self.delete_volume_metadata(volume_uuid, 'storage_balancing')
+                return True
+
+        except Exception as e:
+            logging.error("- ERROR - failed to unlock volume {}".format(str(e)))
+            return False
+
+    def unlock_volume_vc(self, volume_uuid, vc_host):
+        try:
+            vol = self.api.block_storage.get_volume(volume_uuid)
+            if not self.check_volume_metadata_key_exists(volume_uuid, 'storage_balancing'):
+                logging.warning("- PLEASE IGNORE - WARNING - unlock_volume: volume {} has no storage_balancing property".format(volume_uuid))
+                return False
+            else:
+                status = 'available'
+                if vol['attachments'] != []:
+                    status = 'in-use'
+                vol._action(self.api.block_storage, {'os-reset_status': {'status': status}})
+                self.delete_volume_metadata(volume_uuid, 'storage_balancing')
                 return True
 
         except Exception as e:
@@ -197,6 +230,14 @@ class OpenstackHelper:
         # TODO: excpetion handling
         result = self.api.block_storage.get_volume(volume_uuid).metadata
         if result.get(key) == value:
+            return True
+        else:
+            return False
+
+    def check_volume_metadata_key_exists(self, volume_uuid, key):
+        # TODO: excpetion handling
+        result = self.api.block_storage.get_volume(volume_uuid).metadata
+        if result.get(key, None):
             return True
         else:
             return False
