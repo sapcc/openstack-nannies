@@ -23,6 +23,8 @@ import logging
 from helper.netapp import NetAppHelper
 from helper.vcenter import *
 
+from pyVim.task import WaitForTask
+
 log = logging.getLogger(__name__)
 
 
@@ -1022,3 +1024,98 @@ def aggr_name_to_ds_name(netapp_host, aggr_name):
         # example ds_name: vVOL_stnpca3_st030
         ds_name = 'vVOL_' + str(netapp_host).split('.')[0].replace('-','_')
         return ds_name
+
+def vc_mark_instance(vc, vm_info, volume_uuid, instance_uuid):
+    """
+    mark an instance or shadow vm as being in the process of being balanced
+    by adding some special information to the instance anootations in the vc
+    """
+    instance_name = None
+    # vm_instance_uuid is the shadow vm of the volume or the instance the volume is attached to
+    # start with the instance (if it exists) to get the instance_uuid, which is needed for the shadow vm as well
+    for vm_instance_uuid in instance_uuid, volume_uuid:
+        # in the detached case we only have to care about the shadow vm as there is no instance it is attached to
+        if not vm_instance_uuid:
+            continue
+        vm = vm_info.get_by_instanceuuid(vm_instance_uuid)
+        # as vm_info is cached info, get and check some value to make sure the instance is still alive
+        try:
+            config_instance_uuid = vm.handle.config.instanceUuid
+        except Exception as e:
+            log.warning("- WARN - failed to get the instance uuid for the instance {} in the vc - error: {}".format(vm_instance_uuid, str(e)))
+            return False
+        if config_instance_uuid != vm_instance_uuid:
+            log.warning("- WARN - config.instanceUuid {} does not match for instance {} - giving up".format(config_instance_uuid, vm_instance_uuid))
+            return False
+        if vm_instance_uuid == instance_uuid:
+            instance_name = vm.handle.name
+        # get the annotation fresh and not the vm_info cached version
+        try:
+            annotation = vm.handle.config.annotation
+        except Exception as e:
+            log.warning("- WARN - failed to get the annotation for the instance {} in the vc - error: {}".format(vm_instance_uuid, str(e)))
+            return False
+        # add own info here
+        new_annotation = annotation + "\nstorage_balancing-vuuid:" + volume_uuid
+        # in the attached case add some extra info about the instance the volume is attached to
+        if instance_uuid:
+            new_annotation = new_annotation + "\nstorage_balancing-iuuid:" + instance_uuid
+            # an instance should always have a name, but just in case ...
+            if instance_name:
+                new_annotation = new_annotation + "\nstorage_balancing-iname:" + instance_name
+        # update the annotation in the vc
+        spec = vim.vm.ConfigSpec()
+        spec.annotation = new_annotation
+        try:
+            task = vm.handle.ReconfigVM_Task(spec)
+            WaitForTask(task, si=vc.api)
+        except Exception as e:
+            log.warning("- WARN - failed to update the annotation for the instance {} in the vc - error: {}".format(vm_instance_uuid, str(e)))
+            return False
+        # update the vm_info cache as well
+        vm.annotation = new_annotation
+
+    return True
+
+def vc_unmark_instance(vc, vm_info, instance_uuid):
+    """
+    mark an instance or shadow vm as no longer being in the process of being balanced
+    by removing some special information to the instance anootations in the vc
+    """
+    vm = vm_info.get_by_instanceuuid(instance_uuid)
+    # as vm_info is cached info, get and check some value to make sure the instance is still alive
+    try:
+        config_instance_uuid = vm.handle.config.instanceUuid
+    except Exception as e:
+        log.warning("- WARN - failed to get the instance uuid for the instance {} in the vc - error: {}".format(instance_uuid, str(e)))
+        return False
+    if config_instance_uuid != instance_uuid:
+        log.warning("- WARN - config.instanceUuid {} does not match for instance {} - giving up".format(config_instance_uuid, instance_uuid))
+        return False
+    try:
+        annotation = vm.handle.config.annotation
+    except Exception as e:
+        log.warning("- WARN - failed to get the annotation for the instance {} in the vc - error: {}".format(instance_uuid, str(e)))
+        return False
+    annotation_list = annotation.splitlines()
+    new_annotation_list = []
+    for line in annotation_list:
+        if line.startswith('storage_balancing-'):
+            continue
+        new_annotation_list.append(line)
+    if len(new_annotation_list) > 0:
+        new_annotation = '\n'.join(new_annotation_list)
+    else:
+        new_annotation = ''
+    spec = vim.vm.ConfigSpec()
+    spec.annotation = new_annotation
+    try:
+        task = vm.handle.ReconfigVM_Task(spec)
+        WaitForTask(task, si=vc.api)
+    except Exception as e:
+        log.warning("- WARN - failed to update the annotation for the instance {} in the vc - error: {}".format(vm_instance_uuid, str(e)))
+        return False
+    # update the vm_info cache as well
+    vm.annotation = new_annotation
+
+    return True
