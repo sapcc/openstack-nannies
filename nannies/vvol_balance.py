@@ -78,6 +78,11 @@ def parse_commandline():
     # 4600 is about 90% of 5tb
     parser.add_argument("--flexvol-max-size", type=int, required=False, default=4600,
                         help="Maximum size (<=) in gb a flexvol should have")
+    # 6200 means 75% (see below) of it still gives the about 90% for the old 5tb volumes
+    parser.add_argument("--flexvol-min-size", type=int, required=False, default=6200,
+                        help="Minimum size a flexvol should have to be considered for balancing")
+    parser.add_argument("--flexvol-max-usage", type=int, required=False, default=70,
+                        help="Maximum usage in percent a flexvol should have")
     parser.add_argument("--debug", action="store_true",
                         help="add additional debug output")
     args = parser.parse_args()
@@ -214,7 +219,8 @@ def vvol_flexvol_balancing(na_info, ds_info, vm_info, args):
                     all_fvols.append(fvol)
 
     # we only care for fvols above the limit
-    too_large_fvols = [ fvol for fvol in all_fvols if fvol.used / 1024**3 > args.flexvol_max_size ]
+    # too_large_fvols = [ fvol for fvol in all_fvols if fvol.used / 1024**3 > args.flexvol_max_size ]
+    too_large_fvols = [ fvol for fvol in all_fvols if fvol.used / 1024**3 > args.flexvol_min_size and fvol.usage > args.flexvol_max_usage ]
 
     # sort them by used size
     too_large_fvols = sorted(too_large_fvols, key=lambda fvol: fvol.used, reverse=True)
