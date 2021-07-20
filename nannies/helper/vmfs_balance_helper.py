@@ -34,12 +34,13 @@ class VM:
     """
 
     def __init__(self, vm_element):
-        self.name = vm_element['name']
-        self.instanceuuid = vm_element['config.instanceUuid']
-        self.hardware = vm_element['config.hardware']
-        self.annotation = vm_element.get('config.annotation')
-        self.runtime = vm_element['runtime']
-        self.handle = vm_element['obj']
+        self.overallstatus = vm_element.get('overallStatus', None)
+        self.name = vm_element.get('name', None)
+        self.instanceuuid = vm_element.get('config.instanceUuid', None)
+        self.hardware = vm_element.get('config.hardware', None)
+        self.annotation = vm_element.get('config.annotation', None)
+        self.runtime = vm_element.get('runtime', None)
+        self.handle = vm_element.get('obj', None)
 
     def is_shadow_vm(self):
         """
@@ -97,8 +98,13 @@ class VMs:
         for vm_element in self.get_vms_dict(vc):
             # ignore instances without a config-hardware node
             if not vm_element.get('config.hardware'):
+                log.warning(
+                    "- WARN - instance {} has no config.hardware - skipping it!".format(vm_element.get('name', "no name")))
+                continue
+            # ignore instances which do not have overallStatus green
+            if vm_element.get('overallStatus') == 'gray':
                 log.debug(
-                    "- DEBG - instance {} has no config.hardware!".format(vm_element.get('name', "no name")))
+                    "- DEBG - instance {} has gray overallStatus - skipping it!".format(vm_element.get('name', "no name")))
                 continue
             self.elements.append(VM(vm_element))
         all_shadow_vm_handles = self.get_shadow_vms(
@@ -116,7 +122,7 @@ class VMs:
         log.info("- INFO -  getting vm information from the vcenter")
         vm_view = vc.find_all_of_type(vc.vim.VirtualMachine)
         vms_dict = vc.collect_properties(vm_view, vc.vim.VirtualMachine,
-                                         ['name', 'config.instanceUuid', 'config.annotation', 'config.hardware', 'runtime'], include_mors=True)
+                                         ['name', 'config.instanceUuid', 'config.annotation', 'config.hardware', 'runtime', 'overallStatus'], include_mors=True)
         return vms_dict
 
     # TODO: maybe the vm_handles can go and we do the get_shadow_vms inside
@@ -218,15 +224,18 @@ class DS:
     """
 
     def __init__(self, ds_element):
-        self.name = ds_element['name']
-        self.freespace = ds_element['summary.freeSpace']
-        self.capacity = ds_element['summary.capacity']
-        self.used = ds_element['summary.capacity'] - \
-            ds_element['summary.freeSpace']
-        self.usage = (1 - ds_element['summary.freeSpace'] /
-                      ds_element['summary.capacity']) * 100
-        self.vm_handles = ds_element['vm']
-        self.handle = ds_element['obj']
+        self.name = ds_element.get('name', None)
+        self.overallstatus = ds_element.get('overallStatus', None)
+        self.freespace = ds_element.get('summary.freeSpace', None)
+        self.capacity = ds_element.get('summary.capacity', None)
+        self.used = self.capacity - self.freespace
+        if self.capacity and self.capacity >= 0:
+            self.usage = (1 - self.freespace /
+                            self.capacity) * 100
+        else:
+            self.usage = None
+        self.vm_handles = ds_element.get('vm', None)
+        self.handle = ds_element.get('obj', None)
 
     def is_below_usage(self, usage):
         """
@@ -293,8 +302,13 @@ class DataStores:
         for ds_element in self.get_datastores_dict(vc):
             # ignore datastores with zero capacity
             if ds_element.get('summary.capacity') == 0:
-                log.info(
-                    "- WARN - ds {} has zero capacity!".format(ds_element.get('name', "no name")))
+                log.warning(
+                    "- WARN - ds {} has zero capacity - skipping it!".format(ds_element.get('name', "no name")))
+                continue
+            # ignore ds which do not have overallStatus green
+            if ds_element.get('overallStatus') == 'gray':
+                log.debug(
+                    "- DEBG - ds {} has gray overallStatus - skipping it!".format(ds_element.get('name', "no name")))
                 continue
             self.elements.append(DS(ds_element))
 
@@ -308,7 +322,7 @@ class DataStores:
         ds_view = vc.find_all_of_type(vc.vim.Datastore)
         datastores_dict = vc.collect_properties(ds_view, vc.vim.Datastore,
                                                 ['name', 'summary.freeSpace',
-                                                 'summary.capacity', 'vm'],
+                                                 'summary.capacity', 'vm', 'overallStatus'],
                                                 include_mors=True)
         return datastores_dict
 
