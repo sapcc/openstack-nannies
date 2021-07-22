@@ -55,10 +55,10 @@ def parse_commandline():
 
 # we move the lun/volume between the netapps by telling the vcenter to move the attached
 # storage of the corresponding shadow vm to another datastore (i.e. anorther netapp)
-def move_detached_volume_shadow_vm(args, vc, vm_info, ds_info, volume_uuid, target_ds):
+def move_detached_volume_shadow_vm(dry_run, vc, vm_info, ds_info, volume_uuid, target_ds):
     vm = vm_info.get_by_instanceuuid(volume_uuid)
     targetds = ds_info.get_by_name(target_ds)
-    if not args.dry_run:
+    if not dry_run:
         spec = vim.VirtualMachineRelocateSpec()
         spec.datastore = targetds.handle
         task = vm.handle.RelocateVM_Task(spec)
@@ -78,7 +78,7 @@ def move_detached_volume_shadow_vm(args, vc, vm_info, ds_info, volume_uuid, targ
 # if the volume is attached to an instance more extra steps are required to make
 # sure the file naming on the datastore stays consistent (i.e. volume uuid as
 # file name)
-def move_attached_volume_shadow_vm(args, vc, vm_info, ds_info, volume_uuid, instance_uuid, target_ds):
+def move_attached_volume_shadow_vm(dry_run, vc, vm_info, ds_info, volume_uuid, instance_uuid, target_ds):
     shadowvm = vm_info.get_by_name(volume_uuid)
     for device in shadowvm.hardware.device:
         if isinstance(device, vim.vm.device.VirtualDisk):
@@ -93,7 +93,7 @@ def move_attached_volume_shadow_vm(args, vc, vm_info, ds_info, volume_uuid, inst
     thinProvisioned = False
     eagerlyScrub = False
 
-    if not args.dry_run:
+    if not dry_run:
 
         vm_relocate_spec = vim.vm.RelocateSpec()
         list_locators = []
@@ -172,39 +172,39 @@ def move_attached_volume_shadow_vm(args, vc, vm_info, ds_info, volume_uuid, inst
     return True
 
 
-def detached_volume_move_test(args, vc, vm_info, ds_info, oh):
+def locking_and_move_detached_volume(dry_run, vc, vm_info, ds_info, oh, volume_uuid, target_ds, vcenter_host):
     # TODO: error handling
-    log.info("- INFO - detached volume move testing")
-    log.info("- INFO -  locking volume {} in openstack".format(args.volume_uuid))
-    oh.lock_volume_vc(args.volume_uuid, args.vcenter_host)
-    log.info("- INFO -  marking volume {} in vc".format(args.volume_uuid))
-    vc_mark_instance(vc, vm_info, args.volume_uuid, None)
-    log.info("- INFO -   move of detached volume {} to data store {}".format(args.volume_uuid, args.target_ds)) 
-    move_detached_volume_shadow_vm(args, vc, vm_info, ds_info, args.volume_uuid, args.target_ds)
-    log.info("- INFO -  unmarking volume {} in vc".format(args.volume_uuid))
-    vc_unmark_instance(vc, vm_info, args.volume_uuid)
-    log.info("- INFO -  unlocking volume {} in openstack".format(args.volume_uuid))
-    oh.unlock_volume_vc(args.volume_uuid, args.vcenter_host)
+    log.info("- INFO - detached volume locking and move")
+    log.info("- INFO -  locking volume {} in openstack".format(volume_uuid))
+    oh.lock_volume_vc(volume_uuid, vcenter_host)
+    log.info("- INFO -  marking volume {} in vc".format(volume_uuid))
+    vc_mark_instance(vc, vm_info, volume_uuid, None)
+    log.info("- INFO -   move of detached volume {} to data store {}".format(volume_uuid, target_ds)) 
+    move_detached_volume_shadow_vm(dry_run, vc, vm_info, ds_info, volume_uuid, target_ds)
+    log.info("- INFO -  unmarking volume {} in vc".format(volume_uuid))
+    vc_unmark_instance(vc, vm_info, volume_uuid)
+    log.info("- INFO -  unlocking volume {} in openstack".format(volume_uuid))
+    oh.unlock_volume_vc(volume_uuid, vcenter_host)
 
 
-def attached_volume_move_test(args, vc, vm_info, ds_info, oh):
+def locking_and_move_attached_volume(dry_run, vc, vm_info, ds_info, oh, volume_uuid, instance_uuid, target_ds, vcenter_host):
     # TODO: error handling
-    log.info("- INFO - attached volume move testing")
-    log.info("- INFO -  locking volume {} in openstack".format(args.volume_uuid))
-    oh.lock_volume_vc(args.volume_uuid, args.vcenter_host)
-    log.info("- INFO -  marking instance {} and volume {} in vc".format(args.instance_uuid, args.volume_uuid))
-    vc_mark_instance(vc, vm_info, args.volume_uuid, args.instance_uuid)
-    log.info("- INFO -   move of attached volume {} to data store {}".format(args.volume_uuid, args.target_ds)) 
-    move_attached_volume_shadow_vm(args, vc, vm_info, ds_info, args.volume_uuid, args.instance_uuid, args.target_ds)
-    log.info("- INFO -  unmarking instance {} in vc".format(args.instance_uuid))
-    vc_unmark_instance(vc, vm_info, args.instance_uuid)
-    log.info("- INFO -  unmarking volume {} in vc".format(args.volume_uuid))
-    vc_unmark_instance(vc, vm_info, args.volume_uuid)
-    log.info("- INFO -  unlocking volume {} in openstack".format(args.volume_uuid))
-    oh.unlock_volume_vc(args.volume_uuid, args.vcenter_host)
+    log.info("- INFO - attached volume locking and move")
+    log.info("- INFO -  locking volume {} in openstack".format(volume_uuid))
+    oh.lock_volume_vc(volume_uuid, vcenter_host)
+    log.info("- INFO -  marking instance {} and volume {} in vc".format(instance_uuid, volume_uuid))
+    vc_mark_instance(vc, vm_info, volume_uuid, instance_uuid)
+    log.info("- INFO -   move of attached volume {} to data store {}".format(volume_uuid, target_ds)) 
+    move_attached_volume_shadow_vm(dry_run, vc, vm_info, ds_info, volume_uuid, instance_uuid, target_ds)
+    log.info("- INFO -  unmarking instance {} in vc".format(instance_uuid))
+    vc_unmark_instance(vc, vm_info, instance_uuid)
+    log.info("- INFO -  unmarking volume {} in vc".format(volume_uuid))
+    vc_unmark_instance(vc, vm_info, volume_uuid)
+    log.info("- INFO -  unlocking volume {} in openstack".format(volume_uuid))
+    oh.unlock_volume_vc(volume_uuid, vcenter_host)
 
 
-def os_check_for_leftovers(args, oh):
+def os_check_for_leftovers(oh, vcenter_host):
     log.info("- INFO -  checking volumes for leftover storage_balancing metadata in openstack")
     result = True
     temporary_volume_list = list(oh.api.block_store.volumes(details=False, all_projects=1))
@@ -212,8 +212,8 @@ def os_check_for_leftovers(args, oh):
         for volume in temporary_volume_list:
             log.debug("- INFO -   volume uuid: {} - name: {}".format(volume.id, volume.name))
             # check if volumes have the storage_balancing property set for the current vc
-            # if oh.check_volume_metadata(volume.id, 'storage_balancing', args.vcenter_host):
-            #     log.info("- INFO -  volume {} has the storage_balancing property set for this vc {}".format(volume.id, args.vcenter_host))
+            # if oh.check_volume_metadata(volume.id, 'storage_balancing', vcenter_host):
+            #     log.info("- INFO -  volume {} has the storage_balancing property set for this vc {}".format(volume.id, vcenter_host))
             volume_sb_key = None
             if volume.metadata:
                 volume_sb_key = volume.metadata.get('storage_balancing', None)
@@ -223,7 +223,7 @@ def os_check_for_leftovers(args, oh):
 
     return result
 
-def vc_check_for_leftovers(args, vm_info):
+def vc_check_for_leftovers(vm_info):
     log.info("- INFO -  checking volumes for leftover storage_balancing metadata in vc")
     result = True
     # this functionsis run at the beginning so we can trust the fresh cashed values in vm_info
@@ -249,7 +249,7 @@ def vc_check_ds_connected_hosts(vc, ds_info, target_ds):
     return connected_hosts
 
 
-def os_check_attach_status(args, oh, volume_uuid):
+def os_check_attach_status(oh, volume_uuid):
     log.info("- INFO -  checking the attach status for volume {} in openstack".format(volume_uuid))
     log.info("- INFO -   checking in cinder")
     myvol = oh.api.block_storage.get_volume(volume_uuid).to_dict()
@@ -287,7 +287,7 @@ def os_check_attach_status(args, oh, volume_uuid):
     return instance_uuid
 
 
-def vc_check_attach_status(args, vc, vm_info, volume_uuid, instance_uuid):
+def vc_check_attach_status(vc, vm_info, volume_uuid, instance_uuid):
     log.info("- INFO -  checking the attach status for volume {} in the vcenter".format(volume_uuid))
     result = True
     instance = vm_info.get_by_instanceuuid(instance_uuid)
@@ -339,11 +339,36 @@ def vc_check_attach_status(args, vc, vm_info, volume_uuid, instance_uuid):
     return result
 
 
+def check_and_move_volume(dry_run, vc, vm_info, ds_info, oh, volume_uuid, target_ds, vcenter_host, connected_hosts):
+
+    instance_uuid = os_check_attach_status(oh, volume_uuid)
+
+    if instance_uuid:
+        instance = vm_info.get_by_instanceuuid(instance_uuid)
+        instance_node = instance.handle.runtime.host
+        if instance_node in connected_hosts:
+            log.info("- INFO -  the target ds {} is available on the node {} the instance {} with the volume {} attached is running on".format(target_ds, instance_node.name, instance_uuid, volume_uuid))
+        else:
+            log.warning("- WARN - the target ds {} is not available on the node {} the instance {} with the volume {} attached is running on - giving up".format(target_ds, instance_node.name, instance_uuid, volume_uuid))
+            return False
+        result = vc_check_attach_status(vc, vm_info, volume_uuid, instance_uuid)
+        if result:
+            log.info("- INFO - moving volume {} attached to instance {} to ds {}".format(volume_uuid, instance_uuid, target_ds))
+            locking_and_move_attached_volume(dry_run, vc, vm_info, ds_info, oh, volume_uuid, instance_uuid, target_ds, vcenter_host)
+        else:
+            log.warning("- WARN - the volume {} does not seem to be attached to the instance {} in the vc like it should be according to os - giving up",format(volume_uuid, instance_uuid))
+            return False
+    else:
+        log.info("- INFO -   moving detached volume {} to ds {}".format(volume_uuid, instance_uuid, target_ds))
+        locking_and_move_detached_volume(dry_run, vc, vm_info, ds_info, oh, volume_uuid, target_ds, vcenter_host)
+
+
 def main():
 
     args = parse_commandline()
 
-    print(args.dry_run)
+    if args.dry_run:
+        log.info("- INFO - running in dry run mode")
 
     log_level = logging.INFO
     if args.debug:
@@ -366,36 +391,17 @@ def main():
     # this is just for debugging to get rid of accidental maintenance states
     #oh.unlock_volume_vc(args.volume_uuid, args.vcenter_host)
 
-    if not os_check_for_leftovers(args, oh):
+    if not os_check_for_leftovers(oh, args.vcenter_host):
         log.warning("- WARN - storage_balancing metadata found in os - giving up")
         return False
     
-    if not vc_check_for_leftovers(args, vm_info):
+    if not vc_check_for_leftovers(vm_info):
         log.warning("- WARN - storage_balancing metadata found in vc - giving up")
         return False
 
-    instance_uuid = os_check_attach_status(args, oh, args.volume_uuid)
-
     connected_hosts = vc_check_ds_connected_hosts(vc, ds_info, args.target_ds)
 
-    if instance_uuid:
-        instance = vm_info.get_by_instanceuuid(instance_uuid)
-        instance_node = instance.handle.runtime.host
-        if instance_node in connected_hosts:
-            log.info("- INFO -  the target ds {} is available on the node {} the instance {} with the volume {} attached is running on".format(args.target_ds, instance_node.name, instance_uuid, args.volume_uuid))
-        else:
-            log.warning("- WARN - the target ds {} is not available on the node {} the instance {} with the volume {} attached is running on - giving up".format(args.target_ds, instance_node.name, instance_uuid, args.volume_uuid))
-            return False
-        if instance_uuid == args.instance_uuid:
-            result = vc_check_attach_status(args, vc, vm_info, args.volume_uuid, args.instance_uuid)
-            if result:
-                log.info("- INFO - moving volume {} attached to instance {} to ds {}".format(args.volume_uuid, args.instance_uuid, args.target_ds))
-                attached_volume_move_test(args, vc, vm_info, ds_info, oh)
-        else:
-            log.warning("- WARN - the instance {} the volume {} is attached to does not match the one given on the cmdline {} - not doing anything",format(instance_uuid, args.volume_uuid, args.instance_uuid))
-    else:
-        log.info("- INFO -   moving detached volume {} to ds {}".format(args.volume_uuid, args.instance_uuid, args.target_ds))
-        detached_volume_move_test(args, vc, vm_info, ds_info, oh)
+    check_and_move_volume(args.dry_run, vc, vm_info, ds_info, oh, args.volume_uuid, args.target_ds, args.vcenter_host, connected_hosts)
 
 
 if __name__ == '__main__':
