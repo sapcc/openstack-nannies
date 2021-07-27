@@ -132,11 +132,6 @@ def vvol_aggr_balancing(na_info, ds_info, vm_info, args):
         min_usage_aggr = all_vvol_aggr_list_sorted.pop(0)
         max_usage_aggr = all_vvol_aggr_list_sorted[-1]
 
-        # TODO: does this one really make sense?
-        if len(min_usage_aggr.luns) == 0:
-            log.warning("- WARN - min usage vvol aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
-            break
-
         if len(max_usage_aggr.luns) == 0:
             log.warning("- WARN - max usage vvol aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
             break
@@ -260,11 +255,6 @@ def vvol_flexvol_balancing(na_info, ds_info, vm_info, args):
 
         min_usage_aggr = all_vvol_aggr_list_sorted.pop(0)
         max_usage_aggr = all_vvol_aggr_list_sorted[-1]
-
-        # TODO: does this one really make sense?
-        if len(min_usage_aggr.luns) == 0:
-            log.warning("- WARN - min usage vvol aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
-            return False
 
         if len(max_usage_aggr.luns) == 0:
             log.warning("- WARN - max usage vvol aggr {} does not seem to have any luns/ds on it".format(min_usage_aggr.name))
