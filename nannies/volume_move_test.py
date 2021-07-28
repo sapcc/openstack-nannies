@@ -82,9 +82,9 @@ def move_attached_volume_shadow_vm(dry_run, vc, vm_info, ds_info, volume_uuid, i
     shadowvm = vm_info.get_by_name(volume_uuid)
     for device in shadowvm.hardware.device:
         if isinstance(device, vim.vm.device.VirtualDisk):
-            vmdk_origin_path = device.backing.fileName
+            vmdk_old_path = device.backing.fileName
             vmdk_vmware_uuid = device.backing.uuid
-    log.info(vmdk_origin_path)
+    log.info("- INFO -     old vmdk path: {}".format(vmdk_old_path))
     
     instance = vm_info.get_by_instanceuuid(instance_uuid)
     instance_vm_name = instance.name
@@ -120,20 +120,20 @@ def move_attached_volume_shadow_vm(dry_run, vc, vm_info, ds_info, volume_uuid, i
         vm_relocate_spec.disk = list_locators
         instance.handle.Rename(volume_uuid)
         my_task = instance.handle.Relocate(vm_relocate_spec)
-        log.info("Moving ....")
+        log.info("- INFO -     moving ...")
         state = None
         renamed = False
         while state not in (vim.TaskInfo.State.success, vim.TaskInfo.State.error):
             try:
                 task_info = my_task.info
                 if task_info.progress is not None:
-                    log.info("progress: {}".format(task_info.progress))
+                    log.info("- INFO -      progress: {}%".format(task_info.progress))
                 state = task_info.state
                 if state == 'running' and not renamed and task_info.progress is not None and task_info.progress > 30:
                     renamed = True
                     instance.handle.Rename(instance_vm_name)
             except vmodl.fault.ManagedObjectNotFound as e:
-                log.info("Task object has been deleted: {}".format(e.obj))
+                log.warning("- WARN - task object has been deleted: {}".format(e.obj))
                 break
         if not renamed:
                 instance.handle.Rename(instance_vm_name)
@@ -142,15 +142,15 @@ def move_attached_volume_shadow_vm(dry_run, vc, vm_info, ds_info, volume_uuid, i
         instance.hardware.device = instance.handle.config.hardware.device
         for device in instance.hardware.device:
             if isinstance(device, vim.vm.device.VirtualDisk) and device.backing.uuid == vmdk_vmware_uuid:
-                new_vmdk_path = device.backing.fileName
-                log.info(new_vmdk_path)
+                vmdk_new_path = device.backing.fileName
+                log.info("- INFO -     new vmdk path: {}".format(vmdk_new_path))
         
         disk_spec = vim.vm.device.VirtualDeviceSpec()
         disk_spec.operation =  vim.vm.device.VirtualDeviceSpec.Operation.edit
         for device in shadowvm.hardware.device:
             if isinstance(device, vim.vm.device.VirtualDisk) and device.backing.uuid == vmdk_vmware_uuid:
                 disk_spec.device = device
-        disk_spec.device.backing.fileName = new_vmdk_path
+        disk_spec.device.backing.fileName = vmdk_new_path
         disk_spec.device.backing.uuid = vmdk_vmware_uuid
 
         reconfig_spec = vim.vm.ConfigSpec()
