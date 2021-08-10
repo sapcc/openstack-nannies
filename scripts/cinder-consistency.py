@@ -18,7 +18,7 @@
 # this script checks for volume attachments of already deleted volumes in the cinder db
 
 import argparse
-import ConfigParser
+import configparser
 import datetime
 import logging
 import os
@@ -392,7 +392,7 @@ def makeConnection(db_url):
 
 # return the database connection string from the config file
 def get_db_url(config_file):
-    parser = ConfigParser.SafeConfigParser()
+    parser = configparser.SafeConfigParser()
     try:
         parser.read(config_file)
         db_url = parser.get('database', 'connection', raw=True)

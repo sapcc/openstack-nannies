@@ -25,6 +25,10 @@ export OS_AUTH_URL
 export OS_USERNAME
 export OS_PROJECT_DOMAIN_NAME
 
+# this is to make click in python3 happy
+export LC_ALL=C.UTF-8
+export LANG=C.UTF-8
+
 if [ "$CINDER_DB_CLEANUP_DRY_RUN" = "False" ] || [ "$CINDER_DB_CLEANUP_DRY_RUN" = "false" ]; then
     DRY_RUN=""
 else
