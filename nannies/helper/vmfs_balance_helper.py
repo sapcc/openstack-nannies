@@ -1029,6 +1029,10 @@ def aggr_name_to_ds_name(netapp_host, aggr_name):
     # example for the pattern for aggregate names: aggr_ssd_bb001_1
     m = re.match("^(?:aggr_ssd_bb)(?P<bb>\d+)_\d$", aggr_name)
     if m:
+        # this one is special: vVOL_BB056
+        if m.group('bb') == '56':
+          ds_name = 'vVOL_BB0' + m.group('bb')
+          return ds_name
         # example ds_name: vVOL_BB123
         ds_name = 'vVOL_BB' + m.group('bb')
         return ds_name
