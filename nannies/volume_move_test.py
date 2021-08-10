@@ -27,6 +27,7 @@ from helper.netapp import NetAppHelper
 from helper.vcenter import *
 from helper.vmfs_balance_helper import *
 from helper.openstack import OpenstackHelper
+from helper.prometheus_exporter import *
 
 log = logging.getLogger(__name__)
 
@@ -49,8 +50,18 @@ def parse_commandline():
                         help="openstack uuid of the instance the volume is attached to")
     parser.add_argument("--target-ds", required=True,
                         help="target ds to move the volume to")
+    parser.add_argument("--prometheus-port", type=int, default=9456,
+                        help="port to run the prometheus exporter for metrics on")
     args = parser.parse_args()
     return args
+
+
+def setup_prometheus(args):
+    balancing_data = PromDataClass()
+    balancing_metrics = PromMetricsClass()
+
+    REGISTRY.register(CustomCollector(balancing_metrics, balancing_data))
+    prometheus_http_start(int(args.prometheus_port))
 
 
 # we move the lun/volume between the netapps by telling the vcenter to move the attached
@@ -84,7 +95,7 @@ def move_attached_volume_shadow_vm(dry_run, vc, vm_info, ds_info, volume_uuid, i
         if isinstance(device, vim.vm.device.VirtualDisk):
             vmdk_old_path = device.backing.fileName
             vmdk_vmware_uuid = device.backing.uuid
-    log.info("- INFO -     old vmdk path: {}".format(vmdk_old_path))
+    log.info("- INFO -    old vmdk path: {}".format(vmdk_old_path))
     
     instance = vm_info.get_by_instanceuuid(instance_uuid)
     instance_vm_name = instance.name
@@ -124,6 +135,8 @@ def move_attached_volume_shadow_vm(dry_run, vc, vm_info, ds_info, volume_uuid, i
         state = None
         renamed = False
         while state not in (vim.TaskInfo.State.success, vim.TaskInfo.State.error):
+            # this is to have less frequent progress updates
+            time.sleep(5)
             try:
                 task_info = my_task.info
                 if task_info.progress is not None:
@@ -143,7 +156,7 @@ def move_attached_volume_shadow_vm(dry_run, vc, vm_info, ds_info, volume_uuid, i
         for device in instance.hardware.device:
             if isinstance(device, vim.vm.device.VirtualDisk) and device.backing.uuid == vmdk_vmware_uuid:
                 vmdk_new_path = device.backing.fileName
-                log.info("- INFO -     new vmdk path: {}".format(vmdk_new_path))
+                log.info("- INFO -    new vmdk path: {}".format(vmdk_new_path))
         
         disk_spec = vim.vm.device.VirtualDeviceSpec()
         disk_spec.operation =  vim.vm.device.VirtualDeviceSpec.Operation.edit
@@ -375,6 +388,9 @@ def main():
         log_level = logging.DEBUG
 
     logging.basicConfig(level=log_level, format='%(asctime)-15s %(message)s')
+
+    # do the basic prometheus exporter setup
+    setup_prometheus(args)
     
     # create a connection to openstack
     log.info("- INFO - region: {} - vcenter: {}".format(os.getenv('OS_REGION'), args.vcenter_host))
