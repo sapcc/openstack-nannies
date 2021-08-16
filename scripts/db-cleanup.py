@@ -187,12 +187,14 @@ class Cleanup:
 
         if self.cindercmdline:
 
+            self.snapshot_from = dict()
+
             # get all snapshots from cinder sorted by their id - do the snapshots before the volumes,
             # as they are created from them and thus should be deleted first
             try:
                 self.snapshots = sorted(self.conn.block_store.snapshots(details=True, all_projects=1), key=lambda x: x.id)
-                if not self.snapshots:
-                    raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any cinder snapshots back from the cinder api - this should in theory never happen ...')
+                # if not self.snapshots:
+                #     raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any cinder snapshots back from the cinder api - this should in theory never happen ...')
             except exceptions.HttpException as e:
                 log.warn("- PLEASE CHECK MANUALLY - got an http exception: %s - retrying in next loop run", str(e))
                 return
@@ -200,16 +202,15 @@ class Cleanup:
                 log.warn("- PLEASE CHECK MANUALLY - got an sdk exception: %s - retrying in next loop run", str(e))
                 return
 
-            self.snapshot_from = dict()
+            if self.snapshots:
+                # build a dict to check which volume a snapshot was created from quickly
+                for i in self.snapshots:
+                    self.snapshot_from[i.id] = i.volume_id
 
-            # build a dict to check which volume a snapshot was created from quickly
-            for i in self.snapshots:
-                self.snapshot_from[i.id] = i.volume_id
-
-            self.seen_dict = self.snapshots_seen
-            self.to_be_dict = self.snapshots_to_be_deleted
-            self.entity = self.snapshots
-            self.check_for_project_id("snapshot")
+                self.seen_dict = self.snapshots_seen
+                self.to_be_dict = self.snapshots_to_be_deleted
+                self.entity = self.snapshots
+                self.check_for_project_id("snapshot")
 
             self.is_server = dict()
             self.attached_to = dict()
