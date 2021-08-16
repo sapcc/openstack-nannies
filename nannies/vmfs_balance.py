@@ -168,8 +168,10 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args, ds_type):
 
     # useful for debugging
     ds_overall_average_usage = ds_info.get_overall_average_usage()
-    log.info("- INFO -  average usage across all vmfs ds is {:.1f}% ({:.0f}G free - {:.0f}G total)"
-             .format(ds_overall_average_usage,
+    log.info("- INFO -  average usage across all {} {}-vmfs ds is {:.1f}% ({:.0f}G free - {:.0f}G total)"
+             .format(len(ds_info.elements),
+                     ds_type,
+                     ds_overall_average_usage,
                      ds_info.get_overall_freespace() / 1024**3,
                      ds_info.get_overall_capacity() / 1024**3))
 
@@ -293,8 +295,10 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args, ds_type):
         return
 
     ds_overall_average_usage = ds_info.get_overall_average_usage()
-    log.info("- INFO -  average usage across all vmfs ds is {:.1f}% ({:.0f}G free - {:.0f}G total)"
-             .format(ds_overall_average_usage,
+    log.info("- INFO -  average usage across all {} {}-vmfs ds is {:.1f}% ({:.0f}G free - {:.0f}G total)"
+             .format(len(ds_info.elements),
+                     ds_type,
+                     ds_overall_average_usage,
                      ds_info.get_overall_freespace() / 1024**3,
                      ds_info.get_overall_capacity() / 1024**3))
 
