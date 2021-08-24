@@ -249,7 +249,7 @@ def vm_move_suggestions(args, vcenter_data):
                         vmotion_count += 1
                     elif migration_success is False:
                         vcenter_error_count += 1
-            except BaseException as error:
+            except Exception as error:
                 log.info(f"- Alert - Migration recommender failed for bb {bb} ({bb_fullname}), {error}", exc_info=error)
 
         vcenter_data.set_data('vm_balance_error_count', vcenter_error_count, ["vmotion_error"])
