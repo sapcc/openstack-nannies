@@ -202,6 +202,10 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args, ds_type):
     # exclude the ds from the above gernerated extended deny list
     ds_info.vmfs_ds(extended_ds_denylist, ds_type = ds_type)
 
+    if len(ds_info.elements) == 0:
+        log.warning("- WARN - it looks like all ds are on the same aggregate, so nothing to balance - giving up")
+        return False
+
     # balancing loop
     moves_done = 0
     moved_size = 0
