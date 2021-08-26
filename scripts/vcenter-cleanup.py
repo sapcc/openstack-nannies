@@ -546,10 +546,9 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
             known[volume.id] = 'volume'
         service = "cinder"
         temporary_snapshot_list = list(conn.block_store.snapshots(details=False, all_projects=1))
-        if not temporary_snapshot_list:
-            raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any cinder snapshots back from the cinder api - this should in theory never happen ...')
-        for snapshot in temporary_snapshot_list:
-            known[snapshot.id] = 'snapshot'
+	if temporary_snapshot_list:
+            for snapshot in temporary_snapshot_list:
+                known[snapshot.id] = 'snapshot'
         service = "glance"
         temporary_image_list = list(conn.image.images())
         if not temporary_image_list:
