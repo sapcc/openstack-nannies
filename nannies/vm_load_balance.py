@@ -158,32 +158,32 @@ def vm_move_suggestions(args, vcenter_data):
                     continue
                 host_consumed_size = host_consumed_size + vm.config.hardware.memoryMB
                 if vm.config.hardware.memoryMB > args.min_vm_size:
-                    big_vm_name_detail = str(vm.name)
+                    big_vm_name_detail = str(vm.name.replace('%2f','/'))
                     try:
                         if vm_uuid_re.match(re.split("\(|\)", big_vm_name_detail)[-2]):
                             big_vm_uuid_detail = re.split("\(|\)", big_vm_name_detail)[-2]
                             vm_detail = openstack_obj.get_server_detail(big_vm_uuid_detail)
-                            log.info("- INFO - vm name %s is big vm and size %.2f GB and created at: %s",vm.name, vm.config.hardware.memoryMB/1024,vm_detail.created_at)
+                            log.info("- INFO - vm name %s is big vm and size %.2f GB and created at: %s",vm.name.replace('%2f','/'), vm.config.hardware.memoryMB/1024,vm_detail.created_at)
                         else:
-                            log.info("- INFO - vm name %s is big vm and size %.2f GB", vm.name,vm.config.hardware.memoryMB / 1024)
+                            log.info("- INFO - vm name %s is big vm and size %.2f GB", vm.name.replace('%2f','/'),vm.config.hardware.memoryMB / 1024)
                     except IndexError :
-                        log.info("- ERROR - vm name %s having some issue",vm.name)
+                        log.info("- ERROR - vm name %s having some issue",vm.name.replace('%2f','/'))
                     big_vm_total_size = big_vm_total_size + vm.config.hardware.memoryMB
                     bb_bigvm_consume[int(re.findall(r"[0-9]+", host['name'])[1])] = bb_bigvm_consume[int(
                         re.findall(r"[0-9]+", host['name'])[1])] + vm.config.hardware.memoryMB
                     ##VM readiness
-                    vm_readiness = prom_connect.find_vm_readiness(args.vc_host,vm.name)
+                    vm_readiness = prom_connect.find_vm_readiness(args.vc_host,vm.name.replace('%2f','/'))
                     if vm_readiness == "no_vm_readiness":
                         log.info(
-                            "- INFO - vm started %s but its no_vm_readiness so will not consider vm for vmotion",vm.name)
+                            "- INFO - vm started %s but its no_vm_readiness so will not consider vm for vmotion",vm.name.replace('%2f','/'))
                         continue
                     elif vm_readiness == "vm_readiness":
-                        log.info("- INFO - vm started %s but its vm_readiness so will consider as vm for vmotion if its large vm",vm.name)
+                        log.info("- INFO - vm started %s but its vm_readiness so will consider as vm for vmotion if its large vm",vm.name.replace('%2f','/'))
                     else:
                         log.info("prom connection issue")
                         return "no_success"
                     if vm.config.hardware.memoryMB < max_big_vm_size_handle:
-                        big_vm_to_move = str(vm.name)
+                        big_vm_to_move = str(vm.name.replace('%2f','/'))
                         max_big_vm_size_handle = vm.config.hardware.memoryMB
             except vmodl.fault.ManagedObjectNotFound:  # VM went away, nothing we can really do about that.
                 pass
