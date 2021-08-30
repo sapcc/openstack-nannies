@@ -353,6 +353,10 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args, ds_type):
                 "- INFO -  max number of vms to move ({}) reached - stopping aggr balancing now".format(args.max_move_vms))
             break
 
+        if len(ds_info.elements) == 0:
+            log.warning("- WARN - it looks there are no ds left to balance - this should be checked - giving up")
+            return False
+
         most_used_ds = ds_info.elements[0]
 
         # resort based on aggr usage weights - for the target ds we want to
