@@ -119,6 +119,7 @@ def vm_move_suggestions(args, vcenter_data):
     target_host = []
     source_host = []
     all_big_vms: Dict[str, big_vm_template] = {}
+    all_ready_hosts: Dict[str, target_host_template] = {}
 
     # looping over each esxi node(which is random order)
     for host in hosts:
@@ -206,7 +207,9 @@ def vm_move_suggestions(args, vcenter_data):
         if host_consumed_size >= host_size:
             log.info("- INFO - host name {} over utilised ".format(host['name']))
 
-        if big_vm_total_size >= host_size*(1+percentage/100):
+        all_ready_hosts[host['name']] = target_host_template(host=host['name'], free_host_size=(host_size - big_vm_total_size))
+
+        if big_vm_total_size >= host_size * (1 + percentage / 100):
             if smallest_big_vm_to_move is not None:
                 log.info("- INFO - Alert host name {} over utilised with BIG_VM Alert".format(host['name']))
                 big_vm_to_move_list.append(smallest_big_vm_to_move)
@@ -242,7 +245,8 @@ def vm_move_suggestions(args, vcenter_data):
         for bb in bb_name:
             bb_fullname = f"productionbb{bb}"
             try:
-                recommendations: List[migration_template] = get_recommendations_from_api(args=args, bb_name=bb_fullname, all_big_vms=all_big_vms, vcenter_data=vcenter_data)
+                recommendations: List[migration_template] = get_recommendations_from_api(args=args, bb_name=bb_fullname, all_big_vms=all_big_vms, all_hosts=all_ready_hosts,
+                                                                                         vcenter_data=vcenter_data)
                 for migration in recommendations:
                     migration_success = apply_big_vm_migration(migration.vm, migration.target_host, args, vc, openstack_obj, vcenter_data, nanny_metadata_handle, denial_bb_name)
                     if migration_success is True:
@@ -263,7 +267,8 @@ def vm_move_suggestions(args, vcenter_data):
     return "success"
 
 
-def get_recommendations_from_api(args: argparse.Namespace, bb_name: str, all_big_vms: Dict[str, big_vm_template], vcenter_data: PromDataClass) -> List[migration_template]:
+def get_recommendations_from_api(args: argparse.Namespace, bb_name: str, all_big_vms: Dict[str, big_vm_template], all_hosts: Dict[str, target_host_template],
+                                 vcenter_data: PromDataClass) -> List[migration_template]:
     """
     Returns a list of VM migrations using the migration recommender API for the given building block (bb_name)
     """
@@ -296,6 +301,21 @@ def get_recommendations_from_api(args: argparse.Namespace, bb_name: str, all_big
                     log.info(f"- INFO - Migration recommender REST API wants to migrate vm {migration['virtual_machine_id']} from {migration['old_host_system_id']} "
                              f"but the vm was moved in the meantime to {big_vm.host} according to Nanny, skipping this VM")
                     continue
+                # is the target host ready?
+                if migration["new_host_system_id"] not in all_hosts:
+                    log.info(f"- INFO - Migration recommender REST API wants to migrate vm {migration['virtual_machine_id']} from {migration['old_host_system_id']} "
+                             f"but the target host is not ready according to Nanny, skipping this VM")
+                    continue
+                # is there enough memory left?
+                if all_hosts[migration["new_host_system_id"]].free_host_size < big_vm.big_vm_size:
+                    log.info(f"- INFO - Migration recommender REST API wants to migrate vm {migration['virtual_machine_id']} from {migration['old_host_system_id']} "
+                             f"but vm requires more memory than available according to Nanny, {big_vm.big_vm_size} > {all_hosts[migration['new_host_system_id']].free_host_size}, skipping this VM")
+                    continue
+
+                # update remaining space of target host
+                all_hosts[migration["new_host_system_id"]] = target_host_template(host=migration["new_host_system_id"],
+                                                                                  free_host_size=all_hosts[migration["new_host_system_id"]].free_host_size - big_vm.big_vm_size)
+
                 migrations.append(migration_template(vm=big_vm, target_host=target_host_template(host=migration["new_host_system_id"], free_host_size=None)))
             return migrations
 
