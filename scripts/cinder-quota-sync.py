@@ -74,7 +74,7 @@ def sync_quota_usages_project(meta, project_id, quota_usages_to_sync):
     print("Syncing %s", project_id)
     now = datetime.datetime.utcnow()
     quota_usages_t = Table('quota_usages', meta, autoload=True)
-    for resource, quota in quota_usages_to_sync.iteritems():
+    for resource, quota in iter(quota_usages_to_sync.items()):
         quota_usages_t.update().where(
             and_(quota_usages_t.c.project_id == project_id,
                  quota_usages_t.c.resource == resource)).values(

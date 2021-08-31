@@ -168,8 +168,10 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args, ds_type):
 
     # useful for debugging
     ds_overall_average_usage = ds_info.get_overall_average_usage()
-    log.info("- INFO -  average usage across all vmfs ds is {:.1f}% ({:.0f}G free - {:.0f}G total)"
-             .format(ds_overall_average_usage,
+    log.info("- INFO -  average usage across all {} {}-vmfs ds is {:.1f}% ({:.0f}G free - {:.0f}G total)"
+             .format(len(ds_info.elements),
+                     ds_type,
+                     ds_overall_average_usage,
                      ds_info.get_overall_freespace() / 1024**3,
                      ds_info.get_overall_capacity() / 1024**3))
 
@@ -199,6 +201,10 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args, ds_type):
 
     # exclude the ds from the above gernerated extended deny list
     ds_info.vmfs_ds(extended_ds_denylist, ds_type = ds_type)
+
+    if len(ds_info.elements) == 0:
+        log.warning("- WARN - it looks like all ds are on the same aggregate, so nothing to balance - giving up")
+        return False
 
     # balancing loop
     moves_done = 0
@@ -293,8 +299,10 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args, ds_type):
         return
 
     ds_overall_average_usage = ds_info.get_overall_average_usage()
-    log.info("- INFO -  average usage across all vmfs ds is {:.1f}% ({:.0f}G free - {:.0f}G total)"
-             .format(ds_overall_average_usage,
+    log.info("- INFO -  average usage across all {} {}-vmfs ds is {:.1f}% ({:.0f}G free - {:.0f}G total)"
+             .format(len(ds_info.elements),
+                     ds_type,
+                     ds_overall_average_usage,
                      ds_info.get_overall_freespace() / 1024**3,
                      ds_info.get_overall_capacity() / 1024**3))
 
@@ -344,6 +352,10 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args, ds_type):
             log.info(
                 "- INFO -  max number of vms to move ({}) reached - stopping aggr balancing now".format(args.max_move_vms))
             break
+
+        if len(ds_info.elements) == 0:
+            log.warning("- WARN - it looks there are no ds left to balance - this should be checked - giving up")
+            return False
 
         most_used_ds = ds_info.elements[0]
 
