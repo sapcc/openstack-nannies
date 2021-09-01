@@ -41,4 +41,4 @@ export OS_AUTH_URL
 export OS_USERNAME
 export OS_PROJECT_DOMAIN_NAME
 
-/var/lib/kolla/venv/bin/python /scripts/vcenter_consistency_fix_attachment.py --vchost $VCENTER_CONSISTENCY_HOST --vcusername $VCENTER_CONSISTENCY_USER --vcpassword $VCENTER_CONSISTENCY_PASSWORD --cinderconfig $CINDERCONFIG --novaconfig $NOVACONFIG --fix-uuid $1
+python3 /scripts/vcenter_consistency_fix_attachment.py --vchost $VCENTER_CONSISTENCY_HOST --vcusername $VCENTER_CONSISTENCY_USER --vcpassword $VCENTER_CONSISTENCY_PASSWORD --cinderconfig $CINDERCONFIG --novaconfig $NOVACONFIG --fix-uuid $1

@@ -18,6 +18,17 @@
 
 echo -n "INFO: checking consistency between vcenter, nova and cinder - "
 date
+if [ "$VCENTER_CONSISTENCY_DRY_RUN" = "False" ] || [ "$VCENTER_CONSISTENCY_DRY_RUN" = "false" ]; then
+    DRY_RUN=""
+else
+    DRY_RUN="--dry-run"
+fi
+
+if [ "$VCENTER_CONSISTENCY_FIX_LIMIT" != "" ]; then
+    FIX_LIMIT="--fix-limit $VCENTER_CONSISTENCY_FIX_LIMIT"
+else
+    FIX_LIMIT=""
+fi
 
 if { [ "$NOVA_CELL2_ENABLED" = "True" ] || [ "$NOVA_CELL2_ENABLED" = "true" ]; } && \
   [ "$NOVA_CELL2_VC" = "$VCENTER_CONSISTENCY_HOST" ]; then
@@ -35,4 +46,4 @@ export OS_AUTH_URL
 export OS_USERNAME
 export OS_PROJECT_DOMAIN_NAME
 
-/var/lib/kolla/venv/bin/python /scripts/vcenter_consistency_tool.py --vchost $VCENTER_CONSISTENCY_HOST --vcusername $VCENTER_CONSISTENCY_USER --vcpassword $VCENTER_CONSISTENCY_PASSWORD --cinderconfig $CINDERCONFIG --novaconfig $NOVACONFIG
+python3 /scripts/vcenter_consistency_check.py $DRY_RUN --vchost $VCENTER_CONSISTENCY_HOST --vcusername $VCENTER_CONSISTENCY_USER --vcpassword $VCENTER_CONSISTENCY_PASSWORD --iterations $VCENTER_CONSISTENCY_ITERATIONS --interval $VCENTER_CONSISTENCY_INTERVAL --cinderconfig $CINDERCONFIG --novaconfig $NOVACONFIG $FIX_LIMIT

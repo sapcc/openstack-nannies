@@ -17,13 +17,9 @@ LABEL source_repository="https://github.com/sapcc/openstack-nannies"
 
 USER root
 
-ADD scripts/cinder-* /scripts/
-ADD scripts/db-cleanup.py /scripts/
-ADD scripts/count-deleted.py /scripts/
+ADD nannies/cinder-* nannies/db-cleanup.py nannies/count-deleted.py nannies/requirements-cinder-nanny.txt /scripts/
 
-COPY scripts/requirements.txt /requirements/
-
-RUN /var/lib/openstack/bin/pip install -r /requirements/requirements.txt
+RUN pip3 install -r /scripts/requirements-cinder-nanny.txt
 
 # looks like uninstall of dogpile.core is required to avoid a conflict at runtime
 RUN /var/lib/openstack/bin/pip uninstall -y dogpile.core
