@@ -17,6 +17,6 @@ LABEL source_repository="https://github.com/sapcc/openstack-nannies"
 
 USER root
 
-ADD nannies/vcenter-cleanup.sh nannies/vcenter-cleanup.py nannies/requirements-vcenter-nanny.txt /scripts/
+ADD nannies/vcenter-consistency.sh nannies/vcenter_consistency* nannies/consistency-tool.sh nannies/fix-attachment.sh nannies/requirements-vcenter-nanny.txt /scripts/
 
 RUN pip3 install -r /scripts/requirements-vcenter-nanny.txt

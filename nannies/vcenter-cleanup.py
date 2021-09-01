@@ -546,7 +546,7 @@ def cleanup_items(host, username, password, iterations, dry_run, power_off, unre
             known[volume.id] = 'volume'
         service = "cinder"
         temporary_snapshot_list = list(conn.block_store.snapshots(details=False, all_projects=1))
-	if temporary_snapshot_list:
+        if temporary_snapshot_list:
             for snapshot in temporary_snapshot_list:
                 known[snapshot.id] = 'snapshot'
         service = "glance"

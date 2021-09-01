@@ -1,0 +1,10 @@
+click==8.0.1
+python-openstackclient==3.18.0
+openstacksdk==0.40.0
+prometheus-client==0.7.1
+os-client-config==1.31.2
+requestsexceptions==1.4.0
+keystoneauth1==4.0.0
+osc-lib==1.11.1
+PyMySQL==1.0.2
+SQLAlchemy==1.4.23

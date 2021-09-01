@@ -25,7 +25,7 @@ import ssl
 import time
 import sys
 import datetime
-import ConfigParser
+import configparser
 import uuid
 
 from pyVim.connect import SmartConnect, Disconnect
@@ -784,7 +784,7 @@ class ConsistencyCheck:
     # return the database connection string from the config file
     def get_db_url(self, config_file):
 
-        parser = ConfigParser.SafeConfigParser()
+        parser = configparser.SafeConfigParser()
         try:
             parser.read(config_file)
             db_url = parser.get('database', 'connection', raw=True)
@@ -1204,9 +1204,9 @@ class ConsistencyCheck:
     def volume_uuid_query_loop(self):
         while True:
             try:
-                self.volume_query=str(raw_input('please enter a volume uuid (ctrl-c to exit): '))
+                self.volume_query=str(input('please enter a volume uuid (ctrl-c to exit): '))
             except KeyboardInterrupt:
-                print ""
+                print("")
                 log.info("got keyboard interrupt ... good bye")
                 return
             except Exception as e:
@@ -1450,7 +1450,7 @@ class ConsistencyCheck:
 
     def ask_user_yes_no(self):
         while True:
-            yesno=str(raw_input('do you want to do the above action(s) (y/n): '))
+            yesno=str(input('do you want to do the above action(s) (y/n): '))
             if yesno == 'y':
                 return True
             elif yesno == 'n':
