@@ -175,7 +175,7 @@ def vvol_aggr_balancing(na_info, ds_info, vm_info, args):
 
         shadow_luns_and_vms_on_most_used_ds_on_most_used_aggr = []
         for lun in balancing_source_luns:
-            if lun.name in vm_info.vvol_shadow_vms_for_naaids.keys():
+            if lun.name in list(vm_info.vvol_shadow_vms_for_naaids.keys()):
                 shadow_luns_and_vms_on_most_used_ds_on_most_used_aggr.append((lun, vm_info.vvol_shadow_vms_for_naaids[lun.name]))
 
         shadow_luns_and_vms_on_most_used_ds_on_most_used_aggr_ok= []
@@ -277,7 +277,7 @@ def vvol_flexvol_balancing(na_info, ds_info, vm_info, args):
 
         shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr = []
         for lun in most_used_too_large_fvol.luns:
-            if lun.name in vm_info.vvol_shadow_vms_for_naaids.keys():
+            if lun.name in list(vm_info.vvol_shadow_vms_for_naaids.keys()):
                 shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr.append((lun, vm_info.vvol_shadow_vms_for_naaids[lun.name]))
 
         shadow_luns_and_vms_on_most_used_fvol_on_most_used_aggr_ok= []

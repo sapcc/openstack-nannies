@@ -41,10 +41,10 @@ def main():
 
     vc = VCenterHelper(host=os.getenv('VM_BALANCE_VCHOST'),user=os.getenv('VM_BALANCE_VCUSER'),password=os.getenv('VM_BALANCE_VCPASSWORD'))
 
-    big_vm_name_uuid = input("Enter BIG VM Instance UUID: ")
+    big_vm_name_uuid = eval(input("Enter BIG VM Instance UUID: "))
     # details about vm and  free node
     vm = vc.find_server(big_vm_name_uuid)
-    free_node_name = input("Enter Free Node name like(node*-bb*.cc.*-*-*.cloud.sap):")
+    free_node_name = eval(input("Enter Free Node name like(node*-bb*.cc.*-*-*.cloud.sap):"))
     vhost = vc.get_object_by_name(vim.HostSystem,free_node_name)
     log.info("INFO:  vmotion of instance uuid %s started to target node %s",big_vm_name_uuid,free_node_name)
 
