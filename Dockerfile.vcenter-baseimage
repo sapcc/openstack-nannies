@@ -1,22 +1,19 @@
-LABEL source_repository="https://github.com/sapcc/vcenter-operator"
-ARG GO_IMAGE=docker.io/golang:1.16.4-buster
-ARG RELEASE_IMAGE=keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/library/python:3.8-slim
-FROM ${GO_IMAGE} as builder
+FROM docker.io/golang:1.16.4-buster
 
 SHELL [ "/bin/bash", "-cex" ]
-RUN git clone https://github.com/airshipit/kubernetes-entrypoint.git usr/src/kubernetes-entrypoint
-WORKDIR /usr/src/kubernetes-entrypoint
-ENV GO111MODULE=on
+RUN git clone https://github.com/sapcc/kubernetes-entrypoint.git /go/src/github.com/stackanetes/kubernetes-entrypoint
+WORKDIR /go/src/github.com/stackanetes/kubernetes-entrypoint
+RUN go mod init
+RUN go mod vendor
+RUN go build
 
-RUN make get-modules
+FROM keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/library/python:3.8-slim
+LABEL source_repository="https://github.com/sapcc/vcenter-operator"
 
-ARG MAKE_TARGET=build
-RUN make ${MAKE_TARGET}
-
-FROM ${RELEASE_IMAGE} as release
-COPY --from=builder /usr/src/kubernetes-entrypoint/bin/kubernetes-entrypoint /usr/local/bin/kubernetes-entrypoint
-
+SHELL [ "/bin/bash", "-cex" ]
 USER root
+
+COPY --from=0 /go/src/github.com/stackanetes/kubernetes-entrypoint/kubernetes-entrypoint /usr/local/bin/kubernetes-entrypoint
 
 ADD nannies/requirements-vcenter-baseimage.txt /requirements-vcenter-baseimage.txt
 
