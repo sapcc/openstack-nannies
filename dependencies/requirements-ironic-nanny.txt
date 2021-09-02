@@ -1,0 +1,9 @@
+click==8.0.1
+python-openstackclient==5.5.0
+openstacksdk==0.58.0
+prometheus-client==0.11.0
+os-client-config==2.1.0
+requestsexceptions==1.4.0
+keystoneauth1==4.3.1
+osc-lib==2.4.1
+configparser==5.0.2
