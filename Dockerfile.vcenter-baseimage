@@ -1,0 +1,29 @@
+LABEL source_repository="https://github.com/sapcc/vcenter-operator"
+ARG GO_IMAGE=docker.io/golang:1.16.4-buster
+ARG RELEASE_IMAGE=keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/library/python:3.8-slim
+FROM ${GO_IMAGE} as builder
+
+SHELL [ "/bin/bash", "-cex" ]
+RUN git clone https://github.com/airshipit/kubernetes-entrypoint.git usr/src/kubernetes-entrypoint
+WORKDIR /usr/src/kubernetes-entrypoint
+ENV GO111MODULE=on
+
+RUN make get-modules
+
+ARG MAKE_TARGET=build
+RUN make ${MAKE_TARGET}
+
+FROM ${RELEASE_IMAGE} as release
+COPY --from=builder /usr/src/kubernetes-entrypoint/bin/kubernetes-entrypoint /usr/local/bin/kubernetes-entrypoint
+
+USER root
+
+ADD nannies/requirements-vcenter-baseimage.txt /requirements-vcenter-baseimage.txt
+
+RUN apt-get update
+RUN apt-get install -y gcc libssl-dev libssl1.* git
+RUN pip3 install --no-cache-dir -r requirements-vcenter-baseimage.txt
+RUN apt-get purge -y gcc libssl-dev
+RUN rm -r var/lib/apt/lists var/cache/apt/archives
+RUN mkdir -p var/cache/apt/archives
+RUN mkdir -p var/lib/apt/lists
