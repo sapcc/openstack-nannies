@@ -211,7 +211,7 @@ def fix_wrong_volume_admin_metadata(meta, wrong_admin_metadata):
 
 
 # get all the rows with a volume_glance_metadata still defined where the corresponding volume is already deleted
-def get_wrong_volume_glance_metadatai_volumes(meta):
+def get_wrong_volume_glance_metadata_volumes(meta):
 
     wrong_glance_metadata = {}
     volume_glance_metadata_t = Table('volume_glance_metadata', meta, autoload=True)
