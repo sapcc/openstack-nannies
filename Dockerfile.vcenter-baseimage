@@ -1,14 +1,14 @@
 FROM keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/library/golang:1.16.4-buster
 
 SHELL [ "/bin/bash", "-cex" ]
-RUN git clone https://github.com/sapcc/kubernetes-entrypoint.git /go/src/github.com/stackanetes/kubernetes-entrypoint
-WORKDIR /go/src/github.com/stackanetes/kubernetes-entrypoint
+RUN git clone https://github.com/sapcc/kubernetes-entrypoint.git /go/src/github.com/sapcc/kubernetes-entrypoint
+WORKDIR /go/src/github.com/sapcc/kubernetes-entrypoint
 RUN go mod init
 RUN go mod vendor
 RUN go build
 
 FROM keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/library/python:3.8-slim
-LABEL source_repository="https://github.com/sapcc/vcenter-operator"
+LABEL source_repository="https://github.com/sapcc/openstack-nannies"
 
 SHELL [ "/bin/bash", "-cex" ]
 USER root
