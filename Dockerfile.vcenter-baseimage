@@ -13,7 +13,7 @@ LABEL source_repository="https://github.com/sapcc/openstack-nannies"
 SHELL [ "/bin/bash", "-cex" ]
 USER root
 
-COPY --from=0 /go/src/github.com/stackanetes/kubernetes-entrypoint/kubernetes-entrypoint /usr/local/bin/kubernetes-entrypoint
+COPY --from=0 /go/src/github.com/sapcc/kubernetes-entrypoint/kubernetes-entrypoint /usr/local/bin/kubernetes-entrypoint
 
 ADD nannies/requirements-vcenter-baseimage.txt /requirements-vcenter-baseimage.txt
 
