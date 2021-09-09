@@ -1204,7 +1204,7 @@ class ConsistencyCheck:
     def volume_uuid_query_loop(self):
         while True:
             try:
-                self.volume_query=str(eval(input('please enter a volume uuid (ctrl-c to exit): ')))
+                self.volume_query=input('please enter a volume uuid (ctrl-c to exit): ')
             except KeyboardInterrupt:
                 print("")
                 log.info("got keyboard interrupt ... good bye")
@@ -1450,7 +1450,7 @@ class ConsistencyCheck:
 
     def ask_user_yes_no(self):
         while True:
-            yesno=str(eval(input('do you want to do the above action(s) (y/n): ')))
+            yesno=input('do you want to do the above action(s) (y/n): ')
             if yesno == 'y':
                 return True
             elif yesno == 'n':
