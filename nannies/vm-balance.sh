@@ -23,8 +23,16 @@ if [ "$VM_BALANCE_AUTO" = "True" ] || [ "$VM_BALANCE_AUTO" = "true" ]; then
 else
     AUTOMATION=""
 fi
+if [ "$VM_BALANCE_RECOMMENDER_ENDPOINT" != "" ]; then
+    RECOMMENDER_OPTIONS="--migration-recommender-endpoint $VM_BALANCE_RECOMMENDER_ENDPOINT"
+    if [ "$VM_BALANCE_RECOMMENDER_MAX_RETRIES" != "" ]; then
+        RECOMMENDER_OPTIONS="$RECOMMENDER_OPTIONS --migration-recommender-max-retries $VM_BALANCE_RECOMMENDER_MAX_RETRIES"
+    fi
+    if [ "$VM_BALANCE_RECOMMENDER_TIMEOUT" != "" ]; then
+        RECOMMENDER_OPTIONS="$RECOMMENDER_OPTIONS --migration-recommender-timeout $VM_BALANCE_RECOMMENDER_TIMEOUT"
+    fi
+else
+    RECOMMENDER_OPTIONS=""
+fi
 
-python3 /scripts/vm_load_balance.py $AUTOMATION --vc_host $VM_BALANCE_VCHOST --vc_user $VM_BALANCE_VCUSER --vc_password $VM_BALANCE_VCPASSWORD --region $REGION --username $OS_USERNAME --password $OS_PASSWORD --user_domain_name $OS_USER_DOMAIN_NAME --project_name $OS_PROJECT_NAME --project_domain_name $OS_PROJECT_DOMAIN_NAME --interval $VM_BALANCE_INTERVAL --denial_list $DENIAL_BB_LIST
-
-
-
+python3 /scripts/vm_load_balance.py $AUTOMATION --vc_host $VM_BALANCE_VCHOST --vc_user $VM_BALANCE_VCUSER --vc_password $VM_BALANCE_VCPASSWORD --region $REGION --username $OS_USERNAME --password $OS_PASSWORD --user_domain_name $OS_USER_DOMAIN_NAME --project_name $OS_PROJECT_NAME --project_domain_name $OS_PROJECT_DOMAIN_NAME --interval $VM_BALANCE_INTERVAL --denial_list $DENIAL_BB_LIST $RECOMMENDER_OPTIONS
