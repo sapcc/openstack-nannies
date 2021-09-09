@@ -23,7 +23,7 @@ if [ "$VM_BALANCE_AUTO" = "True" ] || [ "$VM_BALANCE_AUTO" = "true" ]; then
 else
     AUTOMATION=""
 fi
-if [ "$VM_BALANCE_RECOMMENDER_ENDPOINT" != "" ]; then
+if [ "$VM_BALANCE_RECOMMENDER_ENDPOINT" != "disabled" ]; then
     RECOMMENDER_OPTIONS="--migration-recommender-endpoint $VM_BALANCE_RECOMMENDER_ENDPOINT"
     if [ "$VM_BALANCE_RECOMMENDER_MAX_RETRIES" != "" ]; then
         RECOMMENDER_OPTIONS="$RECOMMENDER_OPTIONS --migration-recommender-max-retries $VM_BALANCE_RECOMMENDER_MAX_RETRIES"
