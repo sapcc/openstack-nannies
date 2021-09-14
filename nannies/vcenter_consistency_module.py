@@ -869,7 +869,7 @@ class ConsistencyCheck:
         # build a list of volume attachment ids
         volume_attachment_ids=[]
         for (attachment_id) in cinder_db_volume_attachment_ids_q.execute():
-            volume_attachment_ids.append(attachment_id[0].encode('ascii'))
+            volume_attachment_ids.append(attachment_id[0])
 
         return volume_attachment_ids
 
@@ -1154,16 +1154,16 @@ class ConsistencyCheck:
                 # we only care about volumes from the vcenter (shard) this nanny is taking care of
                 log.debug('==> p: %s - v: %s - v-vc: %s - vc-sn: %s', volume.project_id, volume.id, vc_from_volume_uuid.get(volume.id), self.vc_short_name())
                 if vc_from_volume_uuid.get(volume.id) == self.vc_short_name():
-                    self.cinder_os_all_volumes.append(volume.id.encode('ascii'))
+                    self.cinder_os_all_volumes.append(volume.id)
                     log.debug("==> os_all_volumes added: %s",str(volume.id))
-                    self.cinder_os_volume_status[volume.id.encode('ascii')] = volume.status.encode('ascii')
-                    self.cinder_os_volume_project_id[volume.id.encode('ascii')] = volume.project_id.encode('ascii')
+                    self.cinder_os_volume_status[volume.id] = volume.status
+                    self.cinder_os_volume_project_id[volume.id] = volume.project_id
                     if volume.attachments:
                         for attachment in volume.attachments:
-                            if self.cinder_os_servers_with_attached_volume.get(volume.id.encode('ascii')):
-                                self.cinder_os_servers_with_attached_volume[volume.id.encode('ascii')].append(attachment['server_id'].encode('ascii'))
+                            if self.cinder_os_servers_with_attached_volume.get(volume.id):
+                                self.cinder_os_servers_with_attached_volume[volume.id].append(attachment['server_id'])
                             else:
-                                self.cinder_os_servers_with_attached_volume[volume.id.encode('ascii')] = [attachment['server_id'].encode('ascii')]
+                                self.cinder_os_servers_with_attached_volume[volume.id] = [attachment['server_id']]
                 else:
                     log.debug("==> os_all_volumes not added: %s",str(volume.id))
             for server in temporary_server_list:
@@ -1183,10 +1183,10 @@ class ConsistencyCheck:
                     if server.attached_volumes:
                         for attachment in server.attached_volumes:
                             if self.nova_os_volumes_attached_at_server.get(server.id):
-                                self.nova_os_volumes_attached_at_server[server.id].append(attachment['id'].encode('ascii'))
+                                self.nova_os_volumes_attached_at_server[server.id].append(attachment['id'])
                             else:
-                                self.nova_os_volumes_attached_at_server[server.id] = [attachment['id'].encode('ascii')]
-                            self.nova_os_servers_with_attached_volume[attachment['id'].encode('ascii')] = server.id.encode('ascii')
+                                self.nova_os_volumes_attached_at_server[server.id] = [attachment['id']]
+                            self.nova_os_servers_with_attached_volume[attachment['id']] = server.id
                 else:
                     log.debug("==> os_all_servers not added: %s",str(server.id))
 
