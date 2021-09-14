@@ -731,7 +731,7 @@ class ConsistencyCheck:
                     # some debugging code just in case
                     log.debug("==> key: {} - value: {} - match: {} - instance: {}".format(str(j.key), str(j.value), str(match.group(1)),str(k['config.instanceUuid'])))
                     # warn if key and value does not match here, which should not happen
-                    if str(j.value) != str(match.group(1)):
+                    if str(j.value) != str(match.group(1)) and not self.interactive:
                         log.warn("- PLEASE CHECK MANUALLY - key and value uuid not matching for extraConfig volume entry - key: {} - value: {} - instance: {}".format(str(j.key),str(j.key),str(k['config.instanceUuid'])))
                 # we should not have any backing uuids left which could not be mapped against extraConfig
                 if backing_uuid_list:
