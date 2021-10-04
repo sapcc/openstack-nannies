@@ -168,6 +168,7 @@ def vm_move_suggestions(args, vcenter_data):
                                 vm.runtime.powerState == 'poweredOff':
                     continue
                 if not vm.config.annotation:
+                    log.info(f"- INFO - no vm annotation found, so will not consider vm '{vm.name.replace('%2f', '/')}' for vmotion")
                     continue
                 host_consumed_size = host_consumed_size + vm.config.hardware.memoryMB
                 if vm.config.hardware.memoryMB > args.min_vm_size:
@@ -187,11 +188,10 @@ def vm_move_suggestions(args, vcenter_data):
                     ##VM readiness
                     vm_readiness = prom_connect.find_vm_readiness(args.vc_host,vm.name.replace('%2f','/'))
                     if vm_readiness == "no_vm_readiness":
-                        log.info(
-                            "- INFO - vm started %s but its no_vm_readiness so will not consider vm for vmotion",vm.name.replace('%2f','/'))
+                        log.info(f"- INFO - vm '{vm.name.replace('%2f', '/')}' started but its readiness is no_vm_readiness, so will not consider vm for vmotion")
                         continue
                     elif vm_readiness == "vm_readiness":
-                        log.info("- INFO - vm started %s but its vm_readiness so will consider as vm for vmotion if its large vm",vm.name.replace('%2f','/'))
+                        log.info(f"- INFO - vm '{vm.name.replace('%2f', '/')}' started so will consider as vm for vmotion if its large vm")
                     else:
                         log.info("prom connection issue")
                         return "no_success"
