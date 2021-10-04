@@ -82,6 +82,7 @@ def vm_move_suggestions(args, vcenter_data):
     else:
         allowed_bb_name = []
 
+    use_migration_recommender_endpoint: bool = len(args.migration_recommender_endpoint) > 0
     percentage = args.percentage
     bb_consume  = {}
     bb_overall = {}
@@ -228,7 +229,7 @@ def vm_move_suggestions(args, vcenter_data):
         vcenter_data.set_data('vm_balance_building_block_consume_big_vm_bytes', int(bb_bigvm_consume[bb]*1024*1024), [str(bb)])
         vcenter_data.set_data('vm_balance_building_block_total_size_bytes', int(bb_overall[bb]*1024*1024), [str(bb)])
 
-    if args.migration_recommender_endpoint is None:
+    if not use_migration_recommender_endpoint:
         if len(big_vm_to_move_list) > 0:
             target_host = sorted(target_host, key=lambda x: x[1], reverse=True)
             big_vm_to_move_list = sorted(big_vm_to_move_list, key=lambda x: x[2], reverse=True)
@@ -425,7 +426,7 @@ def main():
     parser.add_argument("--min_vm_size", type=int, default=231056, help="Min Big_Vm size to handle 500000 ")
     parser.add_argument("--max_vm_size", type=int, default=550000, help="Max Big_Vm size to handle")
     parser.add_argument("--percentage", type=int, default=3, help="percentage of overbooked")
-    parser.add_argument("--migration-recommender-endpoint", type=str, default=None, help="API endpoint of the migration recommender service")
+    parser.add_argument("--migration-recommender-endpoint", type=str, default="", help="API endpoint of the migration recommender service")
     parser.add_argument("--migration-recommender-max-retries", type=int, default=3, help="Maximum number of retry attempts for long polling of migration recommender API")
     parser.add_argument("--migration-recommender-timeout", type=int, default=60, help="Timeout (s) for each request to the migration recommender API")
     parser.add_argument("--automated",action="store_true", help='false as automation of big_vm not doing vmotion only suggestion')
