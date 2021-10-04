@@ -137,16 +137,23 @@ def vm_move_suggestions(args, vcenter_data):
             continue
         log.info("- INFO - node started here %s and its status %s",host['name'],host['runtime'].connectionState)
         host_contention = prom_connect.find_host_contention(args.vc_host,host['name'])
-        if host_contention == "no_host_contention":
-            log.info("- INFO - node started %s but its no_host_contention so will not consider as target/source host\n",
-                     host['name'])
-            continue
-        elif host_contention == "host_contention":
-            log.info("- INFO - node started %s but its host_contention so will be consider as target/source host",
-                     host['name'])
+
+        if not use_migration_recommender_endpoint:
+            if host_contention == "no_host_contention":
+                log.info("- INFO - node started %s but its no_host_contention so will not consider as target/source host\n",
+                         host['name'])
+                continue
+            elif host_contention == "host_contention":
+                log.info("- INFO - node started %s but its host_contention so will be consider as target/source host",
+                         host['name'])
+            else:
+                log.info("prom connection issue")
+                return "no_success"
         else:
-            log.info("prom connection issue")
-            return "no_success"
+            if host_contention not in ["no_host_contention", "host_contention"]:
+                log.info(f"- INFO - Prometheus connection issues for host {host['name']}, status: '{host_contention}'")
+                continue
+
         host_size = host['hardware.memorySize']/1048576      # get host memory size in MB
         bb_overall[int(re.findall(r"[0-9]+",host['name'])[1])] = bb_overall[int(re.findall(r"[0-9]+",host['name'])[1])] + host_size
         log.info("- INFO - host name %s and size %.2f GB ",host['name'],host_size/1024)
