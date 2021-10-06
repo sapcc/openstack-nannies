@@ -140,14 +140,14 @@ def vm_move_suggestions(args, vcenter_data):
 
         if not use_migration_recommender_endpoint:
             if host_contention == "no_host_contention":
-                log.info("- INFO - node started %s but its no_host_contention so will not consider as target/source host\n",
+                log.info("- INFO - node started %s, value for host_contention is 'no_host_contention' so will not consider host as target/source host",
                          host['name'])
                 continue
             elif host_contention == "host_contention":
-                log.info("- INFO - node started %s but its host_contention so will be consider as target/source host",
+                log.info("- INFO - node started %s, value for host_contention is 'host_contention' so will consider as target/source host",
                          host['name'])
             else:
-                log.info("prom connection issue")
+                log.info(f"- INFO - Prometheus connection issues for host {host['name']}, status: '{host_contention}'")
                 return "no_success"
         else:
             if host_contention not in ["no_host_contention", "host_contention"]:
@@ -168,7 +168,7 @@ def vm_move_suggestions(args, vcenter_data):
                                 vm.runtime.powerState == 'poweredOff':
                     continue
                 if not vm.config.annotation:
-                    log.info(f"- INFO - no vm annotation found, so will not consider vm '{vm.name.replace('%2f', '/')}' for vmotion")
+                    log.info(f"- INFO - no vm annotation found: annotation={vm.config.annotation}, so will not consider vm '{vm.name.replace('%2f', '/')}' for vmotion")
                     continue
                 host_consumed_size = host_consumed_size + vm.config.hardware.memoryMB
                 if vm.config.hardware.memoryMB > args.min_vm_size:
@@ -188,12 +188,12 @@ def vm_move_suggestions(args, vcenter_data):
                     ##VM readiness
                     vm_readiness = prom_connect.find_vm_readiness(args.vc_host,vm.name.replace('%2f','/'))
                     if vm_readiness == "no_vm_readiness":
-                        log.info(f"- INFO - vm '{vm.name.replace('%2f', '/')}' started but its readiness is no_vm_readiness, so will not consider vm for vmotion")
+                        log.info(f"- INFO - vm '{vm.name.replace('%2f', '/')}' started but its readiness is 'no_vm_readiness', so will not consider vm for vmotion")
                         continue
                     elif vm_readiness == "vm_readiness":
-                        log.info(f"- INFO - vm '{vm.name.replace('%2f', '/')}' started so will consider as vm for vmotion if its large vm")
+                        log.info(f"- INFO - vm '{vm.name.replace('%2f', '/')}' started and readiness is 'vm_readiness', so will consider as vm for vmotion if the vm size checks pass")
                     else:
-                        log.info("prom connection issue")
+                        log.info(f"- INFO - Prometheus connection issues for vm {vm.name.replace('%2f', '/')}, vm_readiness: '{vm_readiness}'")
                         return "no_success"
                     if vm.config.hardware.memoryMB < max_big_vm_size_handle:
                         big_vm: big_vm_template = big_vm_template(host=host['name'], big_vm=str(vm.name.replace('%2f','/')), big_vm_size=vm.config.hardware.memoryMB)
