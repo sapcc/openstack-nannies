@@ -174,8 +174,8 @@ def vm_move_suggestions(args, vcenter_data):
                 if vm.config.hardware.memoryMB > args.min_vm_size:
                     big_vm_name_detail = str(vm.name.replace('%2f','/'))
                     try:
-                        if vm_uuid_re.match(re.split(r"\(|\)", big_vm_name_detail)[-2]):
-                            big_vm_uuid_detail = re.split(r"\(|\)", big_vm_name_detail)[-2]
+                        if vm_uuid_re.match(re.split("\(|\)", big_vm_name_detail)[-2]):
+                            big_vm_uuid_detail = re.split("\(|\)", big_vm_name_detail)[-2]
                             vm_detail = openstack_obj.get_server_detail(big_vm_uuid_detail)
                             log.info("- INFO - vm name %s is big vm and size %.2f GB and created at: %s",vm.name.replace('%2f','/'), vm.config.hardware.memoryMB/1024,vm_detail.created_at)
                         else:
@@ -349,8 +349,8 @@ def apply_big_vm_migration(big_vm, target_h, args, vc, openstack_obj, vcenter_da
     """
     if int(re.findall(r"[0-9]+", target_h.host)[1]) in denial_bb_name:
         vcenter_data.set_data('vm_balance_nanny_manual_suggestion_bytes', int(big_vm.big_vm_size * 1024), [big_vm.host, target_h.host, big_vm.big_vm])
-    if vm_uuid_re.match(re.split(r"\(|\)", big_vm.big_vm)[-2]):
-        big_vm_uuid = re.split(r"\(|\)", big_vm.big_vm)[-2]
+    if vm_uuid_re.match(re.split("\(|\)", big_vm.big_vm)[-2]):
+        big_vm_uuid = re.split("\(|\)", big_vm.big_vm)[-2]
     else:
         log.info("- INFO - VM UUID cant grab VM detail %s", big_vm.big_vm)
         return None
