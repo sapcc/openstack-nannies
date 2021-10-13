@@ -82,6 +82,7 @@ def vm_move_suggestions(args, vcenter_data):
     else:
         allowed_bb_name = []
 
+    use_migration_recommender_endpoint: bool = len(args.migration_recommender_endpoint) > 0
     percentage = args.percentage
     bb_consume  = {}
     bb_overall = {}
@@ -136,16 +137,23 @@ def vm_move_suggestions(args, vcenter_data):
             continue
         log.info("- INFO - node started here %s and its status %s",host['name'],host['runtime'].connectionState)
         host_contention = prom_connect.find_host_contention(args.vc_host,host['name'])
-        if host_contention == "no_host_contention":
-            log.info("- INFO - node started %s but its no_host_contention so will not consider as target/source host\n",
-                     host['name'])
-            continue
-        elif host_contention == "host_contention":
-            log.info("- INFO - node started %s but its host_contention so will be consider as target/source host",
-                     host['name'])
+
+        if not use_migration_recommender_endpoint:
+            if host_contention == "no_host_contention":
+                log.info("- INFO - node started %s, value for host_contention is 'no_host_contention' so will not consider host as target/source host",
+                         host['name'])
+                continue
+            elif host_contention == "host_contention":
+                log.info("- INFO - node started %s, value for host_contention is 'host_contention' so will consider as target/source host",
+                         host['name'])
+            else:
+                log.info(f"- INFO - Prometheus connection issues for host {host['name']}, status: '{host_contention}'")
+                return "no_success"
         else:
-            log.info("prom connection issue")
-            return "no_success"
+            if host_contention not in ["no_host_contention", "host_contention"]:
+                log.info(f"- INFO - Prometheus connection issues for host {host['name']}, status: '{host_contention}'")
+                continue
+
         host_size = host['hardware.memorySize']/1048576      # get host memory size in MB
         bb_overall[int(re.findall(r"[0-9]+",host['name'])[1])] = bb_overall[int(re.findall(r"[0-9]+",host['name'])[1])] + host_size
         log.info("- INFO - host name %s and size %.2f GB ",host['name'],host_size/1024)
@@ -160,6 +168,7 @@ def vm_move_suggestions(args, vcenter_data):
                                 vm.runtime.powerState == 'poweredOff':
                     continue
                 if not vm.config.annotation:
+                    log.info(f"- INFO - no vm annotation found: annotation={vm.config.annotation}, so will not consider vm '{vm.name.replace('%2f', '/')}' for vmotion")
                     continue
                 host_consumed_size = host_consumed_size + vm.config.hardware.memoryMB
                 if vm.config.hardware.memoryMB > args.min_vm_size:
@@ -179,13 +188,12 @@ def vm_move_suggestions(args, vcenter_data):
                     ##VM readiness
                     vm_readiness = prom_connect.find_vm_readiness(args.vc_host,vm.name.replace('%2f','/'))
                     if vm_readiness == "no_vm_readiness":
-                        log.info(
-                            "- INFO - vm started %s but its no_vm_readiness so will not consider vm for vmotion",vm.name.replace('%2f','/'))
+                        log.info(f"- INFO - vm '{vm.name.replace('%2f', '/')}' started but its readiness is 'no_vm_readiness', so will not consider vm for vmotion")
                         continue
                     elif vm_readiness == "vm_readiness":
-                        log.info("- INFO - vm started %s but its vm_readiness so will consider as vm for vmotion if its large vm",vm.name.replace('%2f','/'))
+                        log.info(f"- INFO - vm '{vm.name.replace('%2f', '/')}' started and readiness is 'vm_readiness', so will consider as vm for vmotion if the vm size checks pass")
                     else:
-                        log.info("prom connection issue")
+                        log.info(f"- INFO - Prometheus connection issues for vm {vm.name.replace('%2f', '/')}, vm_readiness: '{vm_readiness}'")
                         return "no_success"
                     if vm.config.hardware.memoryMB < max_big_vm_size_handle:
                         big_vm: big_vm_template = big_vm_template(host=host['name'], big_vm=str(vm.name.replace('%2f','/')), big_vm_size=vm.config.hardware.memoryMB)
@@ -228,7 +236,7 @@ def vm_move_suggestions(args, vcenter_data):
         vcenter_data.set_data('vm_balance_building_block_consume_big_vm_bytes', int(bb_bigvm_consume[bb]*1024*1024), [str(bb)])
         vcenter_data.set_data('vm_balance_building_block_total_size_bytes', int(bb_overall[bb]*1024*1024), [str(bb)])
 
-    if args.migration_recommender_endpoint is None:
+    if not use_migration_recommender_endpoint:
         if len(big_vm_to_move_list) > 0:
             target_host = sorted(target_host, key=lambda x: x[1], reverse=True)
             big_vm_to_move_list = sorted(big_vm_to_move_list, key=lambda x: x[2], reverse=True)
@@ -425,7 +433,7 @@ def main():
     parser.add_argument("--min_vm_size", type=int, default=231056, help="Min Big_Vm size to handle 500000 ")
     parser.add_argument("--max_vm_size", type=int, default=550000, help="Max Big_Vm size to handle")
     parser.add_argument("--percentage", type=int, default=3, help="percentage of overbooked")
-    parser.add_argument("--migration-recommender-endpoint", type=str, default=None, help="API endpoint of the migration recommender service")
+    parser.add_argument("--migration-recommender-endpoint", type=str, default="", help="API endpoint of the migration recommender service")
     parser.add_argument("--migration-recommender-max-retries", type=int, default=3, help="Maximum number of retry attempts for long polling of migration recommender API")
     parser.add_argument("--migration-recommender-timeout", type=int, default=60, help="Timeout (s) for each request to the migration recommender API")
     parser.add_argument("--automated",action="store_true", help='false as automation of big_vm not doing vmotion only suggestion')
