@@ -18,7 +18,7 @@ COPY --from=0 /go/src/github.com/sapcc/kubernetes-entrypoint/kubernetes-entrypoi
 ADD nannies/requirements-vcenter-baseimage.txt /requirements-vcenter-baseimage.txt
 
 RUN apt-get update
-RUN apt-get install -y gcc libssl-dev libssl1.* git
+RUN apt-get install -y gcc libssl-dev libssl1.* git procps
 RUN pip3 install --no-cache-dir -r requirements-vcenter-baseimage.txt
 RUN apt-get purge -y gcc libssl-dev
 RUN rm -r var/lib/apt/lists var/cache/apt/archives
