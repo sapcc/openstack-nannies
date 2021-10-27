@@ -362,8 +362,7 @@ class ManilaShareSyncNanny(ManilaNanny):
             }
 
         if status == 'online':
-            query = "netapp_volume_total_bytes{app='netapp-capacity-exporter-manila'} + "\
-                    "netapp_volume_snapshot_reserved_bytes"
+            query = "netapp_volume_total_bytes{app='netapp-capacity-exporter-manila'}"
             results = self._fetch_prom_metrics(query)
             return [
                 _merge_dicts(_filter_labels(vol['metric']),
