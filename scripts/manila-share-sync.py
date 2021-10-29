@@ -18,6 +18,7 @@
 from __future__ import absolute_import
 
 import argparse
+import configparser
 import logging
 import re
 import time
@@ -92,6 +93,18 @@ class ManilaShareSyncNanny(ManilaNanny):
         self.missing_volumes = {}
         self.offline_volumes_lock = Lock()
         self.offline_volumes = {}
+        self.net_capacity_snap_reserve = self.get_net_capacity_snap_reserve(config_file)
+
+    def get_net_capacity_snap_reserve(self, config_file):
+        """Return the snapshot_reserve_percent from the config file"""
+        parser = configparser.ConfigParser()
+        try:
+            parser.read(config_file)
+            snap_percent = parser.get('DEFAULT', 'netapp_volume_snapshot_reserve_percent')
+            return int(snap_percent)
+        except:
+            log.warning("WARN: Manila config file missing netapp_volume_snapshot_reserve_percent, setting to 50")
+            return 50
 
     def _run(self):
         # Need to recreate manila client each run, because of session timeout
@@ -136,7 +149,6 @@ class ManilaShareSyncNanny(ManilaNanny):
             if 'volume' not in share:
                 continue
             size, vsize = share['size'], share['volume']['size']
-
             # volume size can not be zero, could be in offline state
             if vsize == 0:
                 continue
@@ -145,13 +157,24 @@ class ManilaShareSyncNanny(ManilaNanny):
                 if is_utcts_recent(share['updated_at'], 3600):
                     continue
 
-            if size != vsize:
-                if dry_run:
-                    log.info(msg_dry_run, share_id, size, vsize)
-                else:
-                    log.info(msg, share_id, size, vsize)
-                    self.set_share_size(share_id, vsize)
-                    self.MANILA_SYNC_SHARE_SIZE_COUNTER.inc()
+            # shares with net_capacity feature enabled
+            if share['volume']['snap_percent'] == self.net_capacity_snap_reserve:
+                correct_size = (vsize * (100 - self.net_capacity_snap_reserve)/100)
+                if size != correct_size:
+                    if dry_run:
+                        log.info(msg_dry_run, share_id, size, correct_size)
+                    else:
+                        log.info(msg, share_id, size, correct_size)
+                        self.set_share_size(share_id, correct_size)
+                        self.MANILA_SYNC_SHARE_SIZE_COUNTER.inc()
+            else:
+                if size != vsize:
+                    if dry_run:
+                        log.info(msg_dry_run, share_id, size, vsize)
+                    else:
+                        log.info(msg, share_id, size, vsize)
+                        self.set_share_size(share_id, vsize)
+                        self.MANILA_SYNC_SHARE_SIZE_COUNTER.inc()
 
     def process_missing_volume(self, shares, dry_run=True):
         """ Set share state to error when backend volume is missing
@@ -364,12 +387,24 @@ class ManilaShareSyncNanny(ManilaNanny):
         if status == 'online':
             query = "netapp_volume_total_bytes{app='netapp-capacity-exporter-manila'} + "\
                     "netapp_volume_snapshot_reserved_bytes"
-            results = self._fetch_prom_metrics(query)
-            return [
+            res_size = self._fetch_prom_metrics(query)
+            size_list = [
                 _merge_dicts(_filter_labels(vol['metric']),
                              {'size': int(vol['value'][1]) / ONEGB})
-                for vol in results
+                for vol in res_size
             ]
+            query = "netapp_volume_percentage_snapshot_reserve{app='netapp-capacity-exporter-manila'}"
+            res_percentage = self._fetch_prom_metrics(query)
+            percentage_list = [
+                 _merge_dicts(_filter_labels(vol['metric']),
+                             {'snap_percent': int(vol['value'][1])})
+                for vol in res_percentage
+            ]
+            for vol in size_list:
+                for vol2 in percentage_list:
+                    if vol['volume'].startswith('share_') and vol['volume'] == vol2['volume']:
+                        vol.update(vol2)
+            return size_list
 
         if status == 'offline':
             query = "netapp_volume_state{app='netapp-capacity-exporter-manila'}==3"
