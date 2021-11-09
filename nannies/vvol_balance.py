@@ -85,6 +85,8 @@ def parse_commandline():
                         help="Maximum usage in percent a flexvol should have")
     parser.add_argument("--debug", action="store_true",
                         help="add additional debug output")
+    parser.add_argument("--project-denylist", nargs='*',
+                        required=False, help="ignore volumes from those projects")
     args = parser.parse_args()
     return args
 
@@ -167,7 +169,7 @@ def vvol_aggr_balancing(na_info, ds_info, vm_info, args):
             # we only care for vvol here
             if fvol.type != 'vvol':
                 continue
-            log.debug("- wDEBG -   {} - {:.0f}G".format(fvol.name, fvol.used/1024**3))
+            log.debug("- DEBG -   {} - {:.0f}G".format(fvol.name, fvol.used/1024**3))
 
         if len(balancing_source_luns) == 0:
             log.warning("- WARN - no volumes on the most used aggregate {} - this should not happen ...".format(max_usage_aggr.name))
@@ -323,6 +325,9 @@ def check_loop(args):
 
         # get the vm and ds info from the vcenter again before doing the ds balancing
         vm_info = VMs(vc)
+        # in case we do not want balance the shadow vms of certain projects: remove them
+        if args.project_denylist:
+            vm_info.remove_vms_from_project_denylist(args.project_denylist)
         ds_info = DataStores(vc)
         # get the info from the netapp again
         na_info = NAs(vc, args.netapp_user, args.netapp_password, args.region)
@@ -333,6 +338,9 @@ def check_loop(args):
 
         # get the vm and ds info from the vcenter
         vm_info = VMs(vc)
+        # in case we do not want balance the shadow vms of certain projects: remove them
+        if args.project_denylist:
+            vm_info.remove_vms_from_project_denylist(args.project_denylist)
         ds_info = DataStores(vc)
         # get the info from the netapp
         na_info = NAs(vc, args.netapp_user, args.netapp_password, args.region)

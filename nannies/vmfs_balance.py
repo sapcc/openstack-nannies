@@ -81,6 +81,8 @@ def parse_commandline():
                         help="balance hdd storage instead of ssd storage")
     parser.add_argument("--debug", action="store_true",
                         help="add additional debug output")
+    parser.add_argument("--project-denylist", nargs='*',
+                        required=False, help="ignore volumes from those projects")
     args = parser.parse_args()
     return args
 
@@ -416,6 +418,9 @@ def check_loop(args):
 
         # get the vm and ds info from the vcenter
         vm_info = VMs(vc)
+        # in case we do not want balance the shadow vms of certain projects: remove them
+        if args.project_denylist:
+            vm_info.remove_vms_from_project_denylist(args.project_denylist)
         ds_info = DataStores(vc)
         # get the info from the netapp
         na_info = NAs(vc, args.netapp_user, args.netapp_password, args.region)
@@ -427,6 +432,9 @@ def check_loop(args):
 
         # get the vm and ds info from the vcenter again before doing the ds balancing
         vm_info = VMs(vc)
+        # in case we do not want balance the shadow vms of certain projects: remove them
+        if args.project_denylist:
+            vm_info.remove_vms_from_project_denylist(args.project_denylist)
         ds_info = DataStores(vc)
         # get the info from the netapp again
         na_info = NAs(vc, args.netapp_user, args.netapp_password, args.region)
@@ -438,6 +446,9 @@ def check_loop(args):
 
             # get the vm and ds info from the vcenter again before doing the ds balancing
             vm_info = VMs(vc)
+            # in case we do not want balance the shadow vms of certain projects: remove them
+            if args.project_denylist:
+                vm_info.remove_vms_from_project_denylist(args.project_denylist)
             ds_info = DataStores(vc)
             # get the info from the netapp again
             na_info = NAs(vc, args.netapp_user, args.netapp_password, args.region)

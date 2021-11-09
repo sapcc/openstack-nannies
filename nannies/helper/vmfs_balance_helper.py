@@ -19,9 +19,12 @@
 # -*- coding: utf-8 -*-
 import re
 import logging
+import os
 
 from helper.netapp import NetAppHelper
 from helper.vcenter import *
+
+from helper.openstack import *
 
 from pyVim.task import WaitForTask
 
@@ -216,6 +219,32 @@ class VMs:
             if vm.handle in vm_handles and vm.is_shadow_vm():
                 shadow_vms.append(vm)
         return shadow_vms
+
+
+    def remove_vms_from_project_denylist(self, project_denylist):
+        """
+        remove (shadow) vms which are related to volumes from a volume id denylist
+        """
+        if not project_denylist:
+            return
+
+        log.info("- INFO -  getting volume information for volumes on projects to be excluded from balancing")
+        volume_id_denylist = []
+        for project_id in project_denylist:
+            volumes_in_denylist_project = os_get_volumes_for_project_id(project_id)
+            if volumes_in_denylist_project:
+                for v in volumes_in_denylist_project:
+                    log.debug(f"- DEBG -    excluding cinder volume {v.id} as it is in project {project_id} from the project denylist")
+                    volume_id_denylist.append(v.id)
+
+        # reamove the (shadow) vms which are affected by< the project denylist
+        shadow_vms_without_denylist_projects = []
+        for vm in self.elements:
+            if vm.instanceuuid not in volume_id_denylist:
+                shadow_vms_without_denylist_projects.append(vm)
+            else:
+                log.info(f"- INFO -    excluding volume {vm.instanceuuid} as it is in project {project_id} from the project denylist")
+        self.elements = shadow_vms_without_denylist_projects
 
 
 class DS:
@@ -1139,3 +1168,19 @@ def vc_unmark_instance(vc, vm_info, instance_uuid):
     vm.annotation = new_annotation
 
     return True
+
+
+def os_get_volumes_for_project_id(project_id):
+    """
+    get volumes for a certain project_id from openstack
+    """
+    log.info(f"- INFO -   getting cinder volume info for the project {project_id}")
+    os_handle=OpenstackHelper(os.getenv('OS_REGION'), os.getenv('OS_USER_DOMAIN_NAME'),
+        os.getenv('OS_PROJECT_DOMAIN_NAME'), os.getenv('OS_PROJECT_NAME'), os.getenv('OS_USERNAME'),
+        os.getenv('OS_PASSWORD'))
+
+    volume_list = list(os_handle.api.block_storage.volumes(details=True, all_projects=1, project_id=project_id))
+    if not volume_list:
+        log.info(f"- INFO -    did not get any cinder volumes back for project {project_id} from the cinder api")
+
+    return volume_list
