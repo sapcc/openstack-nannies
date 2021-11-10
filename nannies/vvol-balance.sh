@@ -32,5 +32,18 @@ else
         AUTOPILOT="--autopilot"
     fi
 fi
+if [ "$VVOL_BALANCE_PROJECT_DENYLIST" != "" ]; then
+    PROJECT_DENYLIST="--project-denylist $VVOL_BALANCE_PROJECT_DENYLIST"
+else
+    PROJECT_DENYLIST=""
+fi
 
-python3 /scripts/vvol_balance.py $DRY_RUN --vcenter-host $VVOL_BALANCE_VCHOST --vcenter-user $VVOL_BALANCE_VCUSER --vcenter-password $VVOL_BALANCE_VCPASSWORD --netapp-user $VVOL_BALANCE_NAUSER --netapp-password $VVOL_BALANCE_NAPASSWORD --region $VVOL_BALANCE_REGION --interval $VVOL_BALANCE_INTERVAL --min-usage $VVOL_BALANCE_MIN_USAGE --max-usage $VVOL_BALANCE_MAX_USAGE --min-max-difference $VVOL_BALANCE_MIN_MAX_DIFFERENCE --min-freespace $VVOL_BALANCE_MIN_FREESPACE --max-move-vms $VVOL_BALANCE_MAX_MOVE_VMS --aggr-volume-min-size $VVOL_BALANCE_AGGR_VOLUME_MIN_SIZE --aggr-volume-max-size $VVOL_BALANCE_AGGR_VOLUME_MAX_SIZE --ds-volume-min-size $VVOL_BALANCE_DS_VOLUME_MIN_SIZE --ds-volume-max-size $VVOL_BALANCE_DS_VOLUME_MAX_SIZE --flexvol-max-size $VVOL_BALANCE_FLEXVOL_MAX_SIZE --print-max $VVOL_BALANCE_PRINT_MAX $AUTOPILOT
+python3 /scripts/vvol_balance.py $DRY_RUN --vcenter-host $VVOL_BALANCE_VCHOST --vcenter-user $VVOL_BALANCE_VCUSER \
+    --vcenter-password $VVOL_BALANCE_VCPASSWORD --netapp-user $VVOL_BALANCE_NAUSER \
+    --netapp-password $VVOL_BALANCE_NAPASSWORD --region $VVOL_BALANCE_REGION --interval $VVOL_BALANCE_INTERVAL \
+    --min-usage $VVOL_BALANCE_MIN_USAGE --max-usage $VVOL_BALANCE_MAX_USAGE \
+    --min-max-difference $VVOL_BALANCE_MIN_MAX_DIFFERENCE --min-freespace $VVOL_BALANCE_MIN_FREESPACE \
+    --max-move-vms $VVOL_BALANCE_MAX_MOVE_VMS --aggr-volume-min-size $VVOL_BALANCE_AGGR_VOLUME_MIN_SIZE \
+    --aggr-volume-max-size $VVOL_BALANCE_AGGR_VOLUME_MAX_SIZE --ds-volume-min-size $VVOL_BALANCE_DS_VOLUME_MIN_SIZE \
+    --ds-volume-max-size $VVOL_BALANCE_DS_VOLUME_MAX_SIZE --flexvol-max-size $VVOL_BALANCE_FLEXVOL_MAX_SIZE \
+    --print-max $VVOL_BALANCE_PRINT_MAX $AUTOPILOT $PROJECT_DENYLIST

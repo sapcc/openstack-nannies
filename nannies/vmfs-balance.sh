@@ -37,5 +37,18 @@ else
         AUTOPILOT="--autopilot"
     fi
 fi
+if [ "$VMFS_BALANCE_PROJECT_DENYLIST" != "" ]; then
+    PROJECT_DENYLIST="--project-denylist $VMFS_BALANCE_PROJECT_DENYLIST"
+else
+    PROJECT_DENYLIST=""
+fi
 
-python3 /scripts/vmfs_balance.py $DRY_RUN --vcenter-host $VMFS_BALANCE_VCHOST --vcenter-user $VMFS_BALANCE_VCUSER --vcenter-password $VMFS_BALANCE_VCPASSWORD --netapp-user $VMFS_BALANCE_NAUSER --netapp-password $VMFS_BALANCE_NAPASSWORD --region $VMFS_BALANCE_REGION --interval $VMFS_BALANCE_INTERVAL --min-usage $VMFS_BALANCE_MIN_USAGE --max-usage $VMFS_BALANCE_MAX_USAGE --min-max-difference $VMFS_BALANCE_MIN_MAX_DIFFERENCE --min-freespace $VMFS_BALANCE_MIN_FREESPACE --max-move-vms $VMFS_BALANCE_MAX_MOVE_VMS --aggr-volume-min-size $VMFS_BALANCE_AGGR_VOLUME_MIN_SIZE --aggr-volume-max-size $VMFS_BALANCE_AGGR_VOLUME_MAX_SIZE --ds-volume-min-size $VMFS_BALANCE_DS_VOLUME_MIN_SIZE --ds-volume-max-size $VMFS_BALANCE_DS_VOLUME_MAX_SIZE --print-max $VMFS_BALANCE_PRINT_MAX $AUTOPILOT $BALANCE_HDD
+python3 /scripts/vmfs_balance.py $DRY_RUN --vcenter-host $VMFS_BALANCE_VCHOST --vcenter-user $VMFS_BALANCE_VCUSER \
+    --vcenter-password $VMFS_BALANCE_VCPASSWORD --netapp-user $VMFS_BALANCE_NAUSER \
+    --netapp-password $VMFS_BALANCE_NAPASSWORD --region $VMFS_BALANCE_REGION --interval $VMFS_BALANCE_INTERVAL \
+    --min-usage $VMFS_BALANCE_MIN_USAGE --max-usage $VMFS_BALANCE_MAX_USAGE \
+    --min-max-difference $VMFS_BALANCE_MIN_MAX_DIFFERENCE --min-freespace $VMFS_BALANCE_MIN_FREESPACE \
+    --max-move-vms $VMFS_BALANCE_MAX_MOVE_VMS --aggr-volume-min-size $VMFS_BALANCE_AGGR_VOLUME_MIN_SIZE \
+    --aggr-volume-max-size $VMFS_BALANCE_AGGR_VOLUME_MAX_SIZE --ds-volume-min-size $VMFS_BALANCE_DS_VOLUME_MIN_SIZE \
+    --ds-volume-max-size $VMFS_BALANCE_DS_VOLUME_MAX_SIZE --print-max $VMFS_BALANCE_PRINT_MAX \
+    $AUTOPILOT $BALANCE_HDD $PROJECT_DENYLIST
