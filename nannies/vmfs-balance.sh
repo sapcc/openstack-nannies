@@ -37,10 +37,10 @@ else
         AUTOPILOT="--autopilot"
     fi
 fi
-if [ "$VMFS_BALANCE_PROJECT_DENYLIST" != "" ]; then
-    PROJECT_DENYLIST="--project-denylist $VMFS_BALANCE_PROJECT_DENYLIST"
-else
+if [ "$VMFS_BALANCE_PROJECT_DENYLIST" = "False" ] || [ "$VMFS_BALANCE_PROJECT_DENYLIST" = "false" ]; then
     PROJECT_DENYLIST=""
+else
+    PROJECT_DENYLIST="--project-denylist $VMFS_BALANCE_PROJECT_DENYLIST"
 fi
 
 python3 /scripts/vmfs_balance.py $DRY_RUN --vcenter-host $VMFS_BALANCE_VCHOST --vcenter-user $VMFS_BALANCE_VCUSER \

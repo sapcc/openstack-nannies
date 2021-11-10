@@ -32,10 +32,10 @@ else
         AUTOPILOT="--autopilot"
     fi
 fi
-if [ "$VVOL_BALANCE_PROJECT_DENYLIST" != "" ]; then
-    PROJECT_DENYLIST="--project-denylist $VVOL_BALANCE_PROJECT_DENYLIST"
-else
+if [ "$VVOL_BALANCE_PROJECT_DENYLIST" = "False" ] || [ "$VVOL_BALANCE_PROJECT_DENYLIST" = "false" ]; then
     PROJECT_DENYLIST=""
+else
+    PROJECT_DENYLIST="--project-denylist $VVOL_BALANCE_PROJECT_DENYLIST"
 fi
 
 python3 /scripts/vvol_balance.py $DRY_RUN --vcenter-host $VVOL_BALANCE_VCHOST --vcenter-user $VVOL_BALANCE_VCUSER \
