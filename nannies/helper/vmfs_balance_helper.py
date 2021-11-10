@@ -243,7 +243,7 @@ class VMs:
             if vm.instanceuuid not in volume_id_denylist:
                 shadow_vms_without_denylist_projects.append(vm)
             else:
-                log.info(f"- INFO -    excluding volume {vm.instanceuuid} as it is in project {project_id} from the project denylist")
+                log.info(f"- INFO -    excluding volume {vm.instanceuuid} as it is in a project from the project denylist")
         self.elements = shadow_vms_without_denylist_projects
 
 
