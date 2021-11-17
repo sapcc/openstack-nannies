@@ -710,8 +710,8 @@ class NAs:
         na_hosts = self.get_na_hosts(vc, region)
 
         for na_host in na_hosts:
-            log.info(f"- INFO -  excluding netapp {na_host} as it is on the netapp denylist")
             if na_denylist and na_host.split('.')[0] in na_denylist:
+                log.info(f"- INFO -  excluding netapp {na_host} as it is on the netapp denylist")
                 continue
             na_element = {}
             na_element['host'] = na_host

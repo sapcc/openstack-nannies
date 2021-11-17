@@ -312,7 +312,7 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args, ds_type):
     # useful debugging info for ds and largest shadow vms
     for i in ds_info.elements:
         if args.ds_denylist and i.name in args.ds_denylist:
-            log.info("- INFO -   ds: {} - {:.1f}% - {:.0f}G free - ignored as it is on the deny list".format(i.name,
+            log.info("- INFO -   ds: {} - {:.1f}% - {:.0f}G free - excluded as it is on the deny list".format(i.name,
                                                                                                              i.usage, i.freespace/1024**3))
             break
         log.info("- INFO -   ds: {} - {:.1f}% - {:.0f}G free".format(i.name,
