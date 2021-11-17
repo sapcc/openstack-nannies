@@ -705,10 +705,12 @@ class NAs:
     def __init__(self, vc, na_user, na_password, region, na_denylist=[]):
         self.elements = []
 
+        log.info("- INFO -  getting information from the netapps")
+
         na_hosts = self.get_na_hosts(vc, region)
 
         for na_host in na_hosts:
-            # exclude the netapps from the na-denylist
+            log.info(f"- INFO -  excluding netapp {na_host} as it is on the netapp denylist")
             if na_denylist and na_host.split('.')[0] in na_denylist:
                 continue
             na_element = {}
