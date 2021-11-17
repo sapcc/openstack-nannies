@@ -50,7 +50,7 @@ fi
 if [ "$VMFS_BALANCE_DATASTORE_DENYLIST" = "False" ] || [ "$VMFS_BALANCE_DATASTORE_DENYLIST" = "false" ]; then
     DATASTORE_DENYLIST=""
 else
-    DATASTORE_DENYLIST="--na-denylist $VMFS_BALANCE_DATASTORE_DENYLIST"
+    DATASTORE_DENYLIST="--ds-denylist $VMFS_BALANCE_DATASTORE_DENYLIST"
 fi
 
 python3 /scripts/vmfs_balance.py $DRY_RUN --vcenter-host $VMFS_BALANCE_VCHOST --vcenter-user $VMFS_BALANCE_VCUSER \
