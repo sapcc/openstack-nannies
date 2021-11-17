@@ -37,6 +37,11 @@ if [ "$VVOL_BALANCE_PROJECT_DENYLIST" = "False" ] || [ "$VVOL_BALANCE_PROJECT_DE
 else
     PROJECT_DENYLIST="--project-denylist $VVOL_BALANCE_PROJECT_DENYLIST"
 fi
+if [ "$VVOL_BALANCE_NETAPP_DENYLIST" = "False" ] || [ "$VVOL_BALANCE_NETAPP_DENYLIST" = "false" ]; then
+    NETAPP_DENYLIST=""
+else
+    NETAPP_DENYLIST="--na-denylist $VVOL_BALANCE_NETAPP_DENYLIST"
+fi
 
 python3 /scripts/vvol_balance.py $DRY_RUN --vcenter-host $VVOL_BALANCE_VCHOST --vcenter-user $VVOL_BALANCE_VCUSER \
     --vcenter-password $VVOL_BALANCE_VCPASSWORD --netapp-user $VVOL_BALANCE_NAUSER \
@@ -46,4 +51,4 @@ python3 /scripts/vvol_balance.py $DRY_RUN --vcenter-host $VVOL_BALANCE_VCHOST --
     --max-move-vms $VVOL_BALANCE_MAX_MOVE_VMS --aggr-volume-min-size $VVOL_BALANCE_AGGR_VOLUME_MIN_SIZE \
     --aggr-volume-max-size $VVOL_BALANCE_AGGR_VOLUME_MAX_SIZE --ds-volume-min-size $VVOL_BALANCE_DS_VOLUME_MIN_SIZE \
     --ds-volume-max-size $VVOL_BALANCE_DS_VOLUME_MAX_SIZE --flexvol-max-size $VVOL_BALANCE_FLEXVOL_MAX_SIZE \
-    --print-max $VVOL_BALANCE_PRINT_MAX $AUTOPILOT $PROJECT_DENYLIST
+    --print-max $VVOL_BALANCE_PRINT_MAX $AUTOPILOT $PROJECT_DENYLIST $NETAPP_DENYLIST

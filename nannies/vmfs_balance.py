@@ -64,9 +64,10 @@ def parse_commandline():
                         help="Maximum number of VMs to (propose to) move")
     parser.add_argument("--print-max", type=int, default=10,
                         help="Maximum number largest volumes to print per ds")
-    # TODO: maybe add aggr-denylist as well
     parser.add_argument("--ds-denylist", nargs='*',
                         required=False, help="ignore those ds")
+    parser.add_argument("--na-denylist", nargs='*',
+                        required=False, help="ignore those netapps")
     parser.add_argument("--aggr-volume-min-size", type=int, required=False, default=0,
                         help="Minimum size (>=) in gb for a volume to move for aggr balancing")
     parser.add_argument("--aggr-volume-max-size", type=int, required=False, default=2500,
@@ -115,7 +116,7 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args, ds_type):
     all_aggr_list_sorted, avg_aggr_usage = get_aggr_usage(na_info, 'vmfs')
 
     if len(all_aggr_list_sorted) == 0:
-        log.info("- INFO - no aggegates found ...")
+        log.info("- INFO - no aggregates found ...")
         return False
 
     min_usage_aggr = all_aggr_list_sorted.pop(0)
@@ -286,7 +287,7 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args, ds_type):
     all_aggr_list_sorted, avg_aggr_usage = get_aggr_usage(na_info, 'vmfs')
 
     if len(all_aggr_list_sorted) == 0:
-        log.info("- INFO - no aggegates found ...")
+        log.info("- INFO - no aggregates found ...")
         return False
 
     min_usage_aggr = all_aggr_list_sorted.pop(0)
@@ -423,7 +424,7 @@ def check_loop(args):
             vm_info.remove_vms_from_project_denylist(args.project_denylist)
         ds_info = DataStores(vc)
         # get the info from the netapp
-        na_info = NAs(vc, args.netapp_user, args.netapp_password, args.region)
+        na_info = NAs(vc, args.netapp_user, args.netapp_password, args.region, args.na_denylist)
 
         # do the aggregate balancing first
         vmfs_aggr_balancing(na_info, ds_info, vm_info, args, 'ssd')
@@ -437,7 +438,7 @@ def check_loop(args):
             vm_info.remove_vms_from_project_denylist(args.project_denylist)
         ds_info = DataStores(vc)
         # get the info from the netapp again
-        na_info = NAs(vc, args.netapp_user, args.netapp_password, args.region)
+        na_info = NAs(vc, args.netapp_user, args.netapp_password, args.region, args.na_denylist)
 
         vmfs_ds_balancing(na_info, ds_info, vm_info, args, 'ssd')
 
@@ -451,7 +452,7 @@ def check_loop(args):
                 vm_info.remove_vms_from_project_denylist(args.project_denylist)
             ds_info = DataStores(vc)
             # get the info from the netapp again
-            na_info = NAs(vc, args.netapp_user, args.netapp_password, args.region)
+            na_info = NAs(vc, args.netapp_user, args.netapp_password, args.region, args.na_denylist)
 
             vmfs_ds_balancing(na_info, ds_info, vm_info, args, 'hdd')
         else:

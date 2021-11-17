@@ -42,6 +42,16 @@ if [ "$VMFS_BALANCE_PROJECT_DENYLIST" = "False" ] || [ "$VMFS_BALANCE_PROJECT_DE
 else
     PROJECT_DENYLIST="--project-denylist $VMFS_BALANCE_PROJECT_DENYLIST"
 fi
+if [ "$VVOL_BALANCE_NETAPP_DENYLIST" = "False" ] || [ "$VVOL_BALANCE_NETAPP_DENYLIST" = "false" ]; then
+    NETAPP_DENYLIST=""
+else
+    NETAPP_DENYLIST="--na-denylist $VVOL_BALANCE_NETAPP_DENYLIST"
+fi
+if [ "$VVOL_BALANCE_DATASTORE_DENYLIST" = "False" ] || [ "$VVOL_BALANCE_DATASTORE_DENYLIST" = "false" ]; then
+    DATASTORE_DENYLIST=""
+else
+    DATASTORE_DENYLIST="--na-denylist $VVOL_BALANCE_DATASTORE_DENYLIST"
+fi
 
 python3 /scripts/vmfs_balance.py $DRY_RUN --vcenter-host $VMFS_BALANCE_VCHOST --vcenter-user $VMFS_BALANCE_VCUSER \
     --vcenter-password $VMFS_BALANCE_VCPASSWORD --netapp-user $VMFS_BALANCE_NAUSER \
@@ -51,4 +61,4 @@ python3 /scripts/vmfs_balance.py $DRY_RUN --vcenter-host $VMFS_BALANCE_VCHOST --
     --max-move-vms $VMFS_BALANCE_MAX_MOVE_VMS --aggr-volume-min-size $VMFS_BALANCE_AGGR_VOLUME_MIN_SIZE \
     --aggr-volume-max-size $VMFS_BALANCE_AGGR_VOLUME_MAX_SIZE --ds-volume-min-size $VMFS_BALANCE_DS_VOLUME_MIN_SIZE \
     --ds-volume-max-size $VMFS_BALANCE_DS_VOLUME_MAX_SIZE --print-max $VMFS_BALANCE_PRINT_MAX \
-    $AUTOPILOT $BALANCE_HDD $PROJECT_DENYLIST
+    $AUTOPILOT $BALANCE_HDD $PROJECT_DENYLIST $NETAPP_DENYLIST $DATASTORE_DENYLIST

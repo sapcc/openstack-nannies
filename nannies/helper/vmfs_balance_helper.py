@@ -702,12 +702,15 @@ class NAs:
     this is for all netapps connected to the vcenter
     """
 
-    def __init__(self, vc, na_user, na_password, region):
+    def __init__(self, vc, na_user, na_password, region, na_denylist=[]):
         self.elements = []
 
         na_hosts = self.get_na_hosts(vc, region)
 
         for na_host in na_hosts:
+            # exclude the netapps from the na-denylist
+            if na_denylist and na_host.split('.')[0] in na_denylist:
+                continue
             na_element = {}
             na_element['host'] = na_host
             na_element['vc'] = vc
