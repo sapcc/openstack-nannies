@@ -710,9 +710,7 @@ class NAs:
         na_hosts = self.get_na_hosts(vc, region)
 
         for na_host in na_hosts:
-            # beware that na_denylist is not really a list but the first list element is a space separated
-            # string of the elements - this is ok in this case but important to keep in mind otherwise maybe
-            if na_denylist and na_host.split('.')[0] in na_denylist:
+            if na_denylist and na_host in na_denylist:
                 log.info(f"- INFO -  excluding netapp {na_host} as it is on the netapp denylist")
                 continue
             na_element = {}

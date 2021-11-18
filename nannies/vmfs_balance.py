@@ -180,7 +180,7 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args, ds_type):
 
     # useful debugging info for ds and largest shadow vms
     for i in ds_info.elements:
-        if args.ds_denylist and i.name in args.ds_denylist[0].split(' '):
+        if args.ds_denylist and i.name in args.ds_denylist:
             log.info("- INFO -   ds: {} - {:.1f}% - {:.0f}G free - excluded as it is on the datastore deny list".format(i.name,
                                                                                                              i.usage, i.freespace/1024**3))
             continue
@@ -198,8 +198,7 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args, ds_type):
     # we do not want to balance to ds on the most used aggr: put those ds onto the deny list
     extended_ds_denylist = [lun.name for lun in max_usage_aggr.luns]
     if args.ds_denylist:
-        # the split is required as the arguments are not arriving as a list but a string as it is done right now
-        extended_ds_denylist.extend(args.ds_denylist[0].split(' '))
+        extended_ds_denylist.extend(args.ds_denylist)
 
     # exclude the ds from the above gernerated extended deny list
     ds_info.vmfs_ds(extended_ds_denylist, ds_type = ds_type)
@@ -310,7 +309,7 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args, ds_type):
 
     # useful debugging info for ds and largest shadow vms
     for i in ds_info.elements:
-        if args.ds_denylist and i.name in args.ds_denylist[0].split(' '):
+        if args.ds_denylist and i.name in args.ds_denylist:
             log.info("- INFO -   ds: {} - {:.1f}% - {:.0f}G free - excluded as it is on the datastore deny list".format(i.name,
                                                                                                              i.usage, i.freespace/1024**3))
             continue
@@ -333,7 +332,7 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args, ds_type):
         extended_ds_denylist = []
     if args.ds_denylist:
         # the split is required as the arguments are not arriving as a list but a string as it is done right now
-        extended_ds_denylist.extend(args.ds_denylist[0].split(' '))
+        extended_ds_denylist.extend(args.ds_denylist)
 
     # exclude the ds from the above gernerated extended deny list
     ds_info.vmfs_ds(extended_ds_denylist, ds_type = ds_type)
