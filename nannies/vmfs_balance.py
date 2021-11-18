@@ -180,10 +180,10 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args, ds_type):
 
     # useful debugging info for ds and largest shadow vms
     for i in ds_info.elements:
-        if args.ds_denylist and i.name in args.ds_denylist:
+        if args.ds_denylist and i.name in args.ds_denylist[0].split(' '):
             log.info("- INFO -   ds: {} - {:.1f}% - {:.0f}G free - excluded as it is on the datastore deny list".format(i.name,
                                                                                                              i.usage, i.freespace/1024**3))
-            break
+            continue
         log.info("- INFO -   ds: {} - {:.1f}% - {:.0f}G free".format(i.name,
                                                                      i.usage, i.freespace/1024**3))
         shadow_vms = vm_info.get_shadow_vms(i.vm_handles)
@@ -196,11 +196,10 @@ def vmfs_aggr_balancing(na_info, ds_info, vm_info, args, ds_type):
                 printed += 1
 
     # we do not want to balance to ds on the most used aggr: put those ds onto the deny list
+    extended_ds_denylist = [lun.name for lun in max_usage_aggr.luns]
     if args.ds_denylist:
-        extended_ds_denylist = args.ds_denylist
-    else:
-        extended_ds_denylist = []
-    extended_ds_denylist.extend([lun.name for lun in max_usage_aggr.luns])
+        # the split is required as the arguments are not arriving as a list but a string as it is done right now
+        extended_ds_denylist.extend(args.ds_denylist[0].split(' '))
 
     # exclude the ds from the above gernerated extended deny list
     ds_info.vmfs_ds(extended_ds_denylist, ds_type = ds_type)
@@ -311,10 +310,10 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args, ds_type):
 
     # useful debugging info for ds and largest shadow vms
     for i in ds_info.elements:
-        if args.ds_denylist and i.name in args.ds_denylist:
-            log.info("- INFO -   ds: {} - {:.1f}% - {:.0f}G free - excluded as it is on the deny list".format(i.name,
+        if args.ds_denylist and i.name in args.ds_denylist[0].split(' '):
+            log.info("- INFO -   ds: {} - {:.1f}% - {:.0f}G free - excluded as it is on the datastore deny list".format(i.name,
                                                                                                              i.usage, i.freespace/1024**3))
-            break
+            continue
         log.info("- INFO -   ds: {} - {:.1f}% - {:.0f}G free".format(i.name,
                                                                      i.usage, i.freespace/1024**3))
         shadow_vms = vm_info.get_shadow_vms(i.vm_handles)
@@ -327,14 +326,14 @@ def vmfs_ds_balancing(na_info, ds_info, vm_info, args, ds_type):
                 printed += 1
 
     # we do not want to balance to ds on the most used aggr: put those ds onto the deny list
-    if args.ds_denylist:
-        extended_ds_denylist = args.ds_denylist
+    if max_usage_aggr.usage > args.aggr_max_usage:
+        # if the most used aggr is realatively full, remove its luns=ds from the target ds list
+        extended_ds_denylist = [lun.name for lun in max_usage_aggr.luns]
     else:
         extended_ds_denylist = []
-
-    # if the most used aggr is realatively full, remove its luns=ds from the target ds list
-    if max_usage_aggr.usage > args.aggr_max_usage:
-        extended_ds_denylist.extend([lun.name for lun in max_usage_aggr.luns])
+    if args.ds_denylist:
+        # the split is required as the arguments are not arriving as a list but a string as it is done right now
+        extended_ds_denylist.extend(args.ds_denylist[0].split(' '))
 
     # exclude the ds from the above gernerated extended deny list
     ds_info.vmfs_ds(extended_ds_denylist, ds_type = ds_type)
