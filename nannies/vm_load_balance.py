@@ -124,20 +124,24 @@ def vm_move_suggestions(args, vcenter_data):
 
     # looping over each esxi node(which is random order)
     for host in hosts:
-        if host['runtime'].inMaintenanceMode == True or host['runtime'].inQuarantineMode == True or \
-                        host['runtime'].connectionState == "notResponding":
-            continue
-        if host['config.host'] in big_vm_host or host['config.host'] in fail_over_hosts:
-            continue
-        if int(re.findall(r"[0-9]+",host['name'])[1]) not in bb_name:
-            continue
-        if allowed_bb_name and int(re.findall(r"[0-9]+",host['name'])[1]) not in allowed_bb_name:
-            continue
-        if not host['parent'].name.startswith("production"):
-            continue
-        log.info("- INFO - node started here %s and its status %s",host['name'],host['runtime'].connectionState)
-        host_contention = prom_connect.find_host_contention(args.vc_host,host['name'])
-
+        try:
+            if host['runtime'].inMaintenanceMode == True or host['runtime'].inQuarantineMode == True or \
+                            host['runtime'].connectionState == "notResponding":
+                continue
+            if host['config.host'] in big_vm_host or host['config.host'] in fail_over_hosts:
+                continue
+            if int(re.findall(r"[0-9]+",host['name'])[1]) not in bb_name:
+                continue
+            if allowed_bb_name and int(re.findall(r"[0-9]+",host['name'])[1]) not in allowed_bb_name:
+                continue
+            if not host['parent'].name.startswith("production"):
+                continue
+            log.info("- INFO - node started here %s and its status %s",host['name'],host['runtime'].connectionState)
+            host_contention = prom_connect.find_host_contention(args.vc_host,host['name'])
+        except AttributeError as error:
+            log.info("- INFO - No attribute is defined with error %s", error)
+        except IndexError as error:
+            log.info("- ERROR - host index error %s",error)
         if not use_migration_recommender_endpoint:
             if host_contention == "no_host_contention":
                 log.info("- INFO - node started %s, value for host_contention is 'no_host_contention' so will not consider host as target/source host",
