@@ -142,6 +142,8 @@ def vm_move_suggestions(args, vcenter_data):
             log.info("- INFO - No attribute is defined with error %s", error)
         except IndexError as error:
             log.info("- ERROR - host index error %s",error)
+        except KeyError as error:
+            log.info("- ERROR - host index error %s",error)
         if not use_migration_recommender_endpoint:
             if host_contention == "no_host_contention":
                 log.info("- INFO - node started %s, value for host_contention is 'no_host_contention' so will not consider host as target/source host",
