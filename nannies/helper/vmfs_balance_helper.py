@@ -246,6 +246,14 @@ class VMs:
                 log.info(f"- INFO -    excluding volume {vm.instanceuuid} as it is in a project from the project denylist")
         self.elements = shadow_vms_without_denylist_projects
 
+        # recalculate these to exclude the ones from the project_denylist there too
+        all_shadow_vm_handles = self.get_shadow_vms(
+            [vm.handle for vm in self.elements])
+        self.vvol_shadow_vms_for_naaids = self.get_vvol_shadow_vms_for_naaids(
+            vc, all_shadow_vm_handles)
+        self.vmfs_shadow_vms_for_datastores = self.get_vmfs_shadow_vms_for_datastores(
+            vc, all_shadow_vm_handles)
+
 
 class DS:
     """
