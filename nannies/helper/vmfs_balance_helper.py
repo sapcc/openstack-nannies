@@ -221,7 +221,7 @@ class VMs:
         return shadow_vms
 
 
-    def remove_vms_from_project_denylist(self, project_denylist):
+    def remove_vms_from_project_denylist(self, vc, project_denylist):
         """
         remove (shadow) vms which are related to volumes from a volume id denylist
         """
