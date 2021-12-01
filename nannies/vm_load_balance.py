@@ -306,23 +306,27 @@ def get_recommendations_from_api(args: argparse.Namespace, bb_name: str, all_big
             for migration in response_data["migrations"]:
                 # is the VM ready to be migrated?
                 if migration["virtual_machine_id"] not in all_big_vms:
-                    log.info(f"- INFO - Migration recommender REST API wants to migrate vm {migration['virtual_machine_id']} "
+                    log.info(f"- INFO - Migration recommender REST API wants to migrate vm {migration['virtual_machine_id']} from {migration['old_host_system_id']} "
+                             f" to {migration['new_host_system_id']} "
                              f"but the vm is not ready to be migrated now according to Nanny, skipping this VM")
                     continue
                 big_vm = all_big_vms[migration["virtual_machine_id"]]
                 # was the VM moved in the meantime?
                 if big_vm.host != migration["old_host_system_id"]:
                     log.info(f"- INFO - Migration recommender REST API wants to migrate vm {migration['virtual_machine_id']} from {migration['old_host_system_id']} "
+                             f" to {migration['new_host_system_id']} "
                              f"but the vm was moved in the meantime to {big_vm.host} according to Nanny, skipping this VM")
                     continue
                 # is the target host ready?
                 if migration["new_host_system_id"] not in all_hosts:
                     log.info(f"- INFO - Migration recommender REST API wants to migrate vm {migration['virtual_machine_id']} from {migration['old_host_system_id']} "
+                             f" to {migration['new_host_system_id']} "
                              f"but the target host is not ready according to Nanny, skipping this VM")
                     continue
                 # is there enough memory left?
                 if all_hosts[migration["new_host_system_id"]].free_host_size < big_vm.big_vm_size:
                     log.info(f"- INFO - Migration recommender REST API wants to migrate vm {migration['virtual_machine_id']} from {migration['old_host_system_id']} "
+                             f" to {migration['new_host_system_id']} "
                              f"but vm requires more memory than available according to Nanny, {big_vm.big_vm_size} > {all_hosts[migration['new_host_system_id']].free_host_size}, skipping this VM")
                     continue
 
