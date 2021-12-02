@@ -419,7 +419,7 @@ def check_loop(args):
         vm_info = VMs(vc)
         # in case we do not want balance the shadow vms of certain projects: remove them
         if args.project_denylist:
-            vm_info.remove_vms_from_project_denylist(args.project_denylist)
+            vm_info.remove_vms_from_project_denylist(vc, args.project_denylist)
         ds_info = DataStores(vc)
         # get the info from the netapp
         na_info = NAs(vc, args.netapp_user, args.netapp_password, args.region, args.na_denylist)
@@ -433,7 +433,7 @@ def check_loop(args):
         vm_info = VMs(vc)
         # in case we do not want balance the shadow vms of certain projects: remove them
         if args.project_denylist:
-            vm_info.remove_vms_from_project_denylist(args.project_denylist)
+            vm_info.remove_vms_from_project_denylist(vc, args.project_denylist)
         ds_info = DataStores(vc)
         # get the info from the netapp again
         na_info = NAs(vc, args.netapp_user, args.netapp_password, args.region, args.na_denylist)
@@ -447,7 +447,7 @@ def check_loop(args):
             vm_info = VMs(vc)
             # in case we do not want balance the shadow vms of certain projects: remove them
             if args.project_denylist:
-                vm_info.remove_vms_from_project_denylist(args.project_denylist)
+                vm_info.remove_vms_from_project_denylist(vc, args.project_denylist)
             ds_info = DataStores(vc)
             # get the info from the netapp again
             na_info = NAs(vc, args.netapp_user, args.netapp_password, args.region, args.na_denylist)

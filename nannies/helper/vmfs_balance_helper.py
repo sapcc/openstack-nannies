@@ -221,7 +221,7 @@ class VMs:
         return shadow_vms
 
 
-    def remove_vms_from_project_denylist(self, project_denylist):
+    def remove_vms_from_project_denylist(self, vc, project_denylist):
         """
         remove (shadow) vms which are related to volumes from a volume id denylist
         """
@@ -245,6 +245,14 @@ class VMs:
             else:
                 log.info(f"- INFO -    excluding volume {vm.instanceuuid} as it is in a project from the project denylist")
         self.elements = shadow_vms_without_denylist_projects
+
+        # recalculate these to exclude the ones from the project_denylist there too
+        all_shadow_vm_handles = self.get_shadow_vms(
+            [vm.handle for vm in self.elements])
+        self.vvol_shadow_vms_for_naaids = self.get_vvol_shadow_vms_for_naaids(
+            vc, all_shadow_vm_handles)
+        self.vmfs_shadow_vms_for_datastores = self.get_vmfs_shadow_vms_for_datastores(
+            vc, all_shadow_vm_handles)
 
 
 class DS:
