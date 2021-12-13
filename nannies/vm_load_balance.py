@@ -138,27 +138,27 @@ def vm_move_suggestions(args, vcenter_data):
                 continue
             log.info("- INFO - node started here %s and its status %s",host['name'],host['runtime'].connectionState)
             host_contention = prom_connect.find_host_contention(args.vc_host,host['name'])
+            if not use_migration_recommender_endpoint:
+                if host_contention == "no_host_contention":
+                    log.info("- INFO - node started %s, value for host_contention is 'no_host_contention' so will not consider host as target/source host",
+                            host['name'])
+                    continue
+                elif host_contention == "host_contention":
+                    log.info("- INFO - node started %s, value for host_contention is 'host_contention' so will consider as target/source host",
+                            host['name'])
+                else:
+                    log.info(f"- INFO - Prometheus connection issues for host {host['name']}, status: '{host_contention}'")
+                    return "no_success"
+            else:
+                if host_contention not in ["no_host_contention", "host_contention"]:
+                    log.info(f"- INFO - Prometheus connection issues for host {host['name']}, status: '{host_contention}'")
+                    continue
         except AttributeError as error:
             log.info("- INFO - No attribute is defined with error %s", error)
         except IndexError as error:
             log.info("- ERROR - host index error %s",error)
         except KeyError as error:
             log.info("- ERROR - host index error %s",error)
-        if not use_migration_recommender_endpoint:
-            if host_contention == "no_host_contention":
-                log.info("- INFO - node started %s, value for host_contention is 'no_host_contention' so will not consider host as target/source host",
-                         host['name'])
-                continue
-            elif host_contention == "host_contention":
-                log.info("- INFO - node started %s, value for host_contention is 'host_contention' so will consider as target/source host",
-                         host['name'])
-            else:
-                log.info(f"- INFO - Prometheus connection issues for host {host['name']}, status: '{host_contention}'")
-                return "no_success"
-        else:
-            if host_contention not in ["no_host_contention", "host_contention"]:
-                log.info(f"- INFO - Prometheus connection issues for host {host['name']}, status: '{host_contention}'")
-                continue
 
         host_size = host['hardware.memorySize']/1048576      # get host memory size in MB
         bb_overall[int(re.findall(r"[0-9]+",host['name'])[1])] = bb_overall[int(re.findall(r"[0-9]+",host['name'])[1])] + host_size
