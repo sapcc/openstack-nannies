@@ -330,12 +330,14 @@ def get_recommendations_from_api(args: argparse.Namespace, bb_name: str, all_big
                              f"but vm requires more memory than available according to Nanny, {big_vm.big_vm_size} > {all_hosts[migration['new_host_system_id']].free_host_size}, skipping this VM")
                     continue
 
+                log.info(f"- INFO - Migration recommender REST API wants to migrate vm {migration['virtual_machine_id']} from {migration['old_host_system_id']} to {migration['new_host_system_id']}")
+
                 # update remaining space of target host
                 all_hosts[migration["new_host_system_id"]] = target_host_template(host=migration["new_host_system_id"],
                                                                                   free_host_size=all_hosts[migration["new_host_system_id"]].free_host_size - big_vm.big_vm_size)
 
                 migrations.append(migration_template(vm=big_vm, target_host=target_host_template(host=migration["new_host_system_id"], free_host_size=None)))
-            log.info(f"- INFO - Migration recommender service response contains {len(response_data['migrations'])} migration(s); {len(migrations)} migration(s) left after sanity checks.")
+            log.info(f"- INFO - Migration recommender service response for bb {bb_name} contains {len(response_data['migrations'])} migration(s); {len(migrations)} migration(s) left after sanity checks.")
             return migrations
 
         elif response.status_code == requests.codes.bad_request:
