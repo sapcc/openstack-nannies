@@ -296,7 +296,7 @@ def get_recommendations_from_api(args: argparse.Namespace, bb_name: str, all_big
             continue  # treat timeout like 202 responses
         response_data = response.json()
         if response_data["bb_id"] != bb_name:
-            raise ValueError(f"Migration recommender REST API returned data for bb {response_data['bb_id']} but was requested for {bb_name}, correlation ID {response_data['correlation_id']}")
+            raise ValueError(f"Migration recommender REST API returned data for bb {response_data['bb_id']}, but was requested for {bb_name}, correlation ID {response_data['correlation_id']}")
         if response.status_code == requests.codes.accepted:
             continue  # response not yet ready, try another attempt
         elif response.status_code == requests.codes.ok:
@@ -307,35 +307,37 @@ def get_recommendations_from_api(args: argparse.Namespace, bb_name: str, all_big
                 # is the VM ready to be migrated?
                 if migration["virtual_machine_id"] not in all_big_vms:
                     log.info(f"- INFO - Migration recommender REST API wants to migrate vm {migration['virtual_machine_id']} from {migration['old_host_system_id']} "
-                             f"to {migration['new_host_system_id']} "
+                             f"to {migration['new_host_system_id']}, "
                              f"but the vm is not ready to be migrated now according to Nanny, skipping this VM")
                     continue
                 big_vm = all_big_vms[migration["virtual_machine_id"]]
                 # was the VM moved in the meantime?
                 if big_vm.host != migration["old_host_system_id"]:
                     log.info(f"- INFO - Migration recommender REST API wants to migrate vm {migration['virtual_machine_id']} from {migration['old_host_system_id']} "
-                             f"to {migration['new_host_system_id']} "
+                             f"to {migration['new_host_system_id']}, "
                              f"but the vm was moved in the meantime to {big_vm.host} according to Nanny, skipping this VM")
                     continue
                 # is the target host ready?
                 if migration["new_host_system_id"] not in all_hosts:
                     log.info(f"- INFO - Migration recommender REST API wants to migrate vm {migration['virtual_machine_id']} from {migration['old_host_system_id']} "
-                             f"to {migration['new_host_system_id']} "
+                             f"to {migration['new_host_system_id']}, "
                              f"but the target host is not ready according to Nanny, skipping this VM")
                     continue
                 # is there enough memory left?
                 if all_hosts[migration["new_host_system_id"]].free_host_size < big_vm.big_vm_size:
                     log.info(f"- INFO - Migration recommender REST API wants to migrate vm {migration['virtual_machine_id']} from {migration['old_host_system_id']} "
-                             f"to {migration['new_host_system_id']} "
+                             f"to {migration['new_host_system_id']}, "
                              f"but vm requires more memory than available according to Nanny, {big_vm.big_vm_size} > {all_hosts[migration['new_host_system_id']].free_host_size}, skipping this VM")
                     continue
+
+                log.info(f"- INFO - Migration recommender REST API wants to migrate vm {migration['virtual_machine_id']} from {migration['old_host_system_id']} to {migration['new_host_system_id']}.")
 
                 # update remaining space of target host
                 all_hosts[migration["new_host_system_id"]] = target_host_template(host=migration["new_host_system_id"],
                                                                                   free_host_size=all_hosts[migration["new_host_system_id"]].free_host_size - big_vm.big_vm_size)
 
                 migrations.append(migration_template(vm=big_vm, target_host=target_host_template(host=migration["new_host_system_id"], free_host_size=None)))
-            log.info(f"- INFO - Migration recommender service response contains {len(response_data['migrations'])} migration(s); {len(migrations)} migration(s) left after sanity checks.")
+            log.info(f"- INFO - Migration recommender service response for bb {bb_name} contains {len(response_data['migrations'])} migration(s); {len(migrations)} migration(s) left after sanity checks.")
             return migrations
 
         elif response.status_code == requests.codes.bad_request:
