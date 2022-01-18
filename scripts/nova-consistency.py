@@ -40,6 +40,7 @@ from sqlalchemy.ext.declarative import declarative_base
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
+
 # get all volumes from cinder
 def get_cinder_volumes(conn):
 
@@ -50,7 +51,8 @@ def get_cinder_volumes(conn):
         for cinder_volume in conn.block_store.volumes(details=False, all_projects=1):
             cinder_volumes[cinder_volume.id] = cinder_volume
         if not cinder_volumes:
-            raise RuntimeError('- PLEASE CHECK MANUALLY - did not get any cinder volumes back from the cinder api - this should in theory never happen ...')
+            raise RuntimeError("- PLEASE CHECK MANUALLY - did not get any cinder volumes back from "
+                               "the cinder api - this should in theory never happen ...")
 
     except exceptions.HttpException as e:
         log.warn("- PLEASE CHECK MANUALLY - got an http exception connecting to openstack: %s", str(e))
@@ -60,10 +62,11 @@ def get_cinder_volumes(conn):
         log.warn("- PLEASE CHECK MANUALLY - got an sdk exception connecting to openstack: %s", str(e))
         sys.exit(1)
 
-    #for i in cinder_volumes:
-    #    print cinder_volumes[i].id
+    # for i in cinder_volumes:
+    #     print cinder_volumes[i].id
 
     return cinder_volumes
+
 
 # get all block device mappings for volumes
 def get_block_device_mappings(meta):
@@ -75,11 +78,13 @@ def get_block_device_mappings(meta):
                                                      block_device_mapping_t.c.volume_id.isnot(None),
                                                      block_device_mapping_t.c.destination_type == "volume"))
 
-    # return a dict indexed by block_device_mapping_id and with the value cinder_volume_id for non deleted block_device_mappings
+    # return a dict indexed by block_device_mapping_id and with the value
+    # cinder_volume_id for non deleted block_device_mappings
     for (block_device_mapping_id, cinder_volume_id) in block_device_mapping_q.execute():
         block_device_mappings[block_device_mapping_id] = cinder_volume_id
 
     return block_device_mappings
+
 
 # get all the block_device_mappings in the nova db for already deleted volumes in cinder
 def get_wrong_block_device_mappings(cinder_volumes, block_device_mappings):
@@ -92,6 +97,7 @@ def get_wrong_block_device_mappings(cinder_volumes, block_device_mappings):
 
     return wrong_block_device_mappings
 
+
 # delete block_device_mappings in the nova db for already deleted volumes in cinder
 def fix_wrong_block_device_mappings(meta, wrong_block_device_mappings, fix_limit):
 
@@ -99,12 +105,17 @@ def fix_wrong_block_device_mappings(meta, wrong_block_device_mappings, fix_limit
         block_device_mapping_t = Table('block_device_mapping', meta, autoload=True)
 
         for block_device_mapping_id in wrong_block_device_mappings:
-            log.info ("-- action: deleting block device mapping id: %s", block_device_mapping_id)
+            log.info("-- action: deleting block device mapping id: %s", block_device_mapping_id)
             now = datetime.datetime.utcnow()
-            delete_block_device_mapping_q = block_device_mapping_t.update().where(block_device_mapping_t.c.id == block_device_mapping_id).values(updated_at=now, deleted_at=now, deleted=block_device_mapping_id)
+            delete_block_device_mapping_q = block_device_mapping_t.update().\
+                where(block_device_mapping_t.c.id == block_device_mapping_id).\
+                values(updated_at=now, deleted_at=now,
+                       deleted=block_device_mapping_id)
             delete_block_device_mapping_q.execute()
     else:
-        log.warn("- PLEASE CHECK MANUALLY - too many (more than %s) wrong block device mappings - denying to fix them automatically", str(fix_limit))
+        log.warn("- PLEASE CHECK MANUALLY - too many (more than %s) wrong block device mappings - "
+                 "denying to fix them automatically", str(fix_limit))
+
 
 # delete block_device_mappings in the nova db with the deleted flag set and older than a certain time
 # looks like the nova db purge does not clean those up properly
@@ -112,10 +123,13 @@ def purge_block_device_mappings(meta, older_than):
 
     block_device_mapping_t = Table('block_device_mapping', meta, autoload=True)
 
-    log.info ("- action: purging deleted block device mappings older than %s days", older_than)
+    log.info("- action: purging deleted block device mappings older than %s days", older_than)
     older_than_date = datetime.datetime.utcnow() - datetime.timedelta(days=older_than)
-    purge_block_device_mapping_q = block_device_mapping_t.delete().where(and_(block_device_mapping_t.c.deleted != 0, block_device_mapping_t.c.deleted_at < older_than_date))
+    purge_block_device_mapping_q = block_device_mapping_t.delete().\
+        where(and_(block_device_mapping_t.c.deleted != 0,
+                   block_device_mapping_t.c.deleted_at < older_than_date))
     purge_block_device_mapping_q.execute()
+
 
 # delete reservations in the nova db with the deleted flag set and older than a certain time
 # looks like the nova db purge does not clean those up properly
@@ -123,17 +137,19 @@ def purge_reservations(meta, older_than):
 
     reservations_t = Table('reservations', meta, autoload=True)
 
-    log.info ("- action: purging deleted reservations older than %s days", older_than)
+    log.info("- action: purging deleted reservations older than %s days", older_than)
     older_than_date = datetime.datetime.utcnow() - datetime.timedelta(days=older_than)
-    purge_reservations_q = reservations_t.delete().where(and_(reservations_t.c.deleted != 0, reservations_t.c.deleted_at < older_than_date))
+    purge_reservations_q = reservations_t.delete().\
+        where(and_(reservations_t.c.deleted != 0, reservations_t.c.deleted_at < older_than_date))
     purge_reservations_q.execute()
+
 
 # delete old instance fault entries in the nova db
 def purge_instance_faults(session, meta, max_instance_faults):
 
     instance_faults_t = Table('instance_faults', meta, autoload=True)
 
-    log.info ("- purging instance faults to at maximum %s per instance", max_instance_faults)
+    log.info("- purging instance faults to at maximum %s per instance", max_instance_faults)
     # get the max_instance_faults latest oinstance fault entries per instance and delete all others
     subquery = session.query(
         instance_faults_t,
@@ -147,6 +163,7 @@ def purge_instance_faults(session, meta, max_instance_faults):
         purge_instance_faults_q = instance_faults_t.delete().where(instance_faults_t.c.id == i.id)
         purge_instance_faults_q.execute()
 
+
 # establish an openstack connection
 def makeOsConnection():
     try:
@@ -159,7 +176,7 @@ def makeOsConnection():
                                      identity_api_version="3")
     except Exception as e:
         log.warn("- PLEASE CHECK MANUALLY - problems connecting to openstack: %s",
-                     str(e))
+                 str(e))
         sys.exit(1)
 
     return conn
@@ -177,6 +194,7 @@ def makeConnection(db_url):
     Base = declarative_base()
     return thisSession, metadata, Base
 
+
 # return the database connection string from the config file
 def get_db_url(config_file):
 
@@ -184,10 +202,11 @@ def get_db_url(config_file):
     try:
         parser.read(config_file)
         db_url = parser.get('database', 'connection', raw=True)
-    except:
+    except Exception:
         log.info("ERROR: Check Nova configuration file.")
         sys.exit(2)
     return db_url
+
 
 # cmdline handling
 def parse_cmdline_args():
@@ -196,18 +215,20 @@ def parse_cmdline_args():
                         default='./nova.conf',
                         help='configuration file')
     parser.add_argument("--dry-run",
-                       action="store_true",
-                       help='print only what would be done without actually doing it')
+                        action="store_true",
+                        help="print only what would be done without actually doing it")
     parser.add_argument("--older-than",
-                       type=int,
-                       help='how many days of marked as deleted entries to keep')
+                        type=int,
+                        help="how many days of marked as deleted entries to keep")
     parser.add_argument("--max-instance-faults",
-                       type=int,
-                       help='how many instance faults entries to keep')
+                        type=int,
+                        help="how many instance faults entries to keep")
     parser.add_argument("--fix-limit",
-                       default=25,
-                       help='maximum number of inconsistencies to fix automatically - if there are more, automatic fixing is denied')
+                        default=25,
+                        help="maximum number of inconsistencies to fix automatically - if there are more, "
+                        "automatic fixing is denied")
     return parser.parse_args()
+
 
 def main():
     try:
@@ -234,13 +255,15 @@ def main():
         log.info("- block device mapping inconsistencies found:")
         # print out what we would delete
         for block_device_mapping_id in wrong_block_device_mappings:
-            log.info("-- block device mapping (id in nova db: %s) for non existent volume in cinder: %s", block_device_mapping_id,
+            log.info("-- block device mapping (id in nova db: %s) for non existent volume in cinder: %s",
+                     block_device_mapping_id,
                      block_device_mappings[block_device_mapping_id])
         if not args.dry_run:
             log.info("- deleting block device mapping inconsistencies found")
             fix_wrong_block_device_mappings(nova_metadata, wrong_block_device_mappings, args.fix_limit)
     else:
         log.info("- block device mappings are consistent")
+
 
 if __name__ == "__main__":
     main()
