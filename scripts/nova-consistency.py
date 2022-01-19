@@ -144,6 +144,34 @@ def purge_reservations(meta, older_than):
     purge_reservations_q.execute()
 
 
+# delete instance_id_mappings in the nova db with the deleted flag set and older than a certain time
+# looks like the nova db purge does not clean those up properly
+def purge_instance_id_mappings(meta, older_than):
+
+    instance_id_mappings_t = Table('instance_id_mappings', meta, autoload=True)
+
+    log.info("- action: purging deleted instance_id_mappings older than %s days", older_than)
+    older_than_date = datetime.datetime.utcnow() - datetime.timedelta(days=older_than)
+    purge_instance_id_mappings_q = instance_id_mappings_t.delete().\
+        where(and_(instance_id_mappings_t.c.deleted != 0, instance_id_mappings_t.c.deleted_at < older_than_date))
+    purge_instance_id_mappings_q.execute()
+
+
+# it looks like this is not required as the purging is already done properly via the instance purging
+# # delete instance_system_metadata in the nova db with the deleted flag set and older than a certain time
+# # looks like the nova db purge does not clean those up properly
+# def purge_instance_system_metadata(meta, older_than):
+#
+#     instance_system_metadata_t = Table('instance_system_metadata', meta, autoload=True)
+#
+#     log.info("- action: purging deleted instance_system_metadata older than %s days", older_than)
+#     older_than_date = datetime.datetime.utcnow() - datetime.timedelta(days=older_than)
+#     purge_instance_system_metadata_q = instance_system_metadata_t.delete().\
+#         where(and_(instance_system_metadata_t.c.
+#                    deleted != 0, instance_system_metadata_t.c.deleted_at < older_than_date))
+#     purge_instance_system_metadata_q.execute()
+
+
 # delete old instance fault entries in the nova db
 def purge_instance_faults(session, meta, max_instance_faults):
 
@@ -246,6 +274,8 @@ def main():
     if args.older_than and not args.dry_run:
         purge_block_device_mappings(nova_metadata, args.older_than)
         purge_reservations(nova_metadata, args.older_than)
+        purge_instance_id_mappings(nova_metadata, args.older_than)
+        # purge_instance_system_metadata(nova_metadata, args.older_than)
     if args.max_instance_faults and not args.dry_run:
         purge_instance_faults(nova_session, nova_metadata, args.max_instance_faults)
     block_device_mappings = get_block_device_mappings(nova_metadata)
