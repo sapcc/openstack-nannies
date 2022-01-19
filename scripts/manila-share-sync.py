@@ -235,10 +235,11 @@ class ManilaShareSyncNanny(ManilaNanny):
                     'share_status': share_status,
                 }
 
+        # remove outdated record from gauge
         for (share_id, instance_id) in self.missing_volumes:
             s = self.missing_volumes[(share_id, instance_id)]
             share_name, share_status = s['share_name'], s['share_status']
-            if (share_id, instance_id) not in shares:
+            if (share_id, instance_id) not in missing_volumes:
                 self.manila_missing_volume_shares_gauge.remove(share_id, instance_id, share_name,
                                                                share_status)
 
