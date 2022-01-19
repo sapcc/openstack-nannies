@@ -155,18 +155,28 @@ class ManilaShareSyncNanny(ManilaNanny):
         for (share_id, _), share in shares.items():
             if 'volume' not in share:
                 continue
-            size, vsize = share['size'], share['volume']['size']
             # volume size can not be zero, could be in offline state
-            if vsize == 0:
+            if share['volume']['size'] == 0:
                 continue
-
+            # skip volumes that are snapmirror targets
+            if share['volume']['volume_type'] == 'dp':
+                continue
+            # skip shars that are updated less than 1 hr
             if share['updated_at'] is not None:
                 if is_utcts_recent(share['updated_at'], 3600):
                     continue
 
+            # Below, comparing share size (integer from Manila db) and volume
+            # size (float) is correct because python can compare int and float.
+            # For example (1 == 1.0) is True.
+
+            size = share['size']
+            vsize = share['volume']['size']
+            snap_percent = share['volume']['snap_percent']
+
             # shares with net_capacity feature enabled
-            if share['volume']['snap_percent'] == self.net_capacity_snap_reserve:
-                correct_size = (vsize * (100 - self.net_capacity_snap_reserve)/100)
+            if snap_percent == self.net_capacity_snap_reserve:
+                correct_size = (vsize * (100 - self.net_capacity_snap_reserve) / 100)
                 if size != correct_size:
                     if dry_run:
                         log.info(msg_dry_run, share_id, size, correct_size)
@@ -380,45 +390,36 @@ class ManilaShareSyncNanny(ManilaNanny):
         """ get netapp volumes from prometheus metrics
         return [<vol>, <vol>, ...]
         """
-        def _merge_dicts(dict_a, dict_b):
-            dict_a.update(dict_b)
-            return dict_a
-
-        def _filter_labels(vol):
-            return {
-                'volume': vol['volume'],
-                'vserver': vol['vserver'],
-                'filer': vol['filer'],
-            }
-
         if status == 'online':
             query = "netapp_volume_total_bytes{app='netapp-capacity-exporter-manila'} + "\
                     "netapp_volume_snapshot_reserved_bytes"
-            res_size = self._fetch_prom_metrics(query)
-            size_list = [
-                _merge_dicts(_filter_labels(vol['metric']),
-                             {'size': int(vol['value'][1]) / ONEGB})
-                for vol in res_size
-            ]
+            vol_t_size = self._fetch_prom_metrics(query) or []
             query = "netapp_volume_percentage_snapshot_reserve{app='netapp-capacity-exporter-manila'}"
-            res_percentage = self._fetch_prom_metrics(query)
-            percentage_list = [
-                 _merge_dicts(_filter_labels(vol['metric']),
-                             {'snap_percent': int(vol['value'][1])})
-                for vol in res_percentage
-            ]
-            for vol in size_list:
-                for vol2 in percentage_list:
-                    if vol['volume'].startswith('share_') and vol['volume'] == vol2['volume']:
-                        vol.update(vol2)
-            return size_list
+            snap_percentage = self._fetch_prom_metrics(query) or []
+            snap_percentage = {
+                vol['metric']['volume']: int(vol['value'][1])
+                for vol in snap_percentage if 'volume' in vol['metric']
+            }
+
+            return [{
+                'volume': vol['metric']['volume'],
+                'volume_type': vol['metric'].get('volume_type'),
+                'vserver': vol['metric'].get('vserver', ''),
+                'filer': vol['metric'].get('filer'),
+                'size': int(vol['value'][1]) / ONEGB,
+                'snap_percent': snap_percentage.get(vol['metric']['volume']),
+            } for vol in vol_t_size
+                    if 'volume' in vol['metric'] and vol['metric']['volume'].startswith('share_')]
 
         if status == 'offline':
             query = "netapp_volume_state{app='netapp-capacity-exporter-manila'}==3"
-            results = self._fetch_prom_metrics(query)
-            return [
-                _filter_labels(vol['metric']) for vol in results
-            ]
+            offline_vols = self._fetch_prom_metrics(query) or []
+            return [{
+                'volume': vol['metric']['volume'],
+                'vserver': vol['metric'].get('vserver', ''),
+                'filer': vol['metric'].get('filer'),
+            } for vol in offline_vols
+                    if 'volume' in vol['metric'] and vol['metric']['volume'].startswith('share_')]
 
     def _fetch_prom_metrics(self, query):
         try:
