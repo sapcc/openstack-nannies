@@ -944,7 +944,7 @@ def move_vmfs_shadow_vm_from_ds_to_ds(ds1, ds2, vm):
         "- INFO - move vm {} ({:.0f}G) from ds {} to ds {}".format(vm.name, vm.get_total_disksize() / 1024**3, ds1.name, ds2.name))
     log.info(
         "- INFO -  source ds: {:.1f}% -> {:.1f}% target ds: {:.1f}% -> {:.1f}%".format(source_usage_before, source_usage_after, target_usage_before, target_usage_after))
-    log.info("- CMND -  svmotion_cinder_v2.py {} {}".format(vm.name, ds2.name))
+    log.info("- CMND -  svmotion_cinder_v3.py {} {}".format(vm.name, ds2.name))
 
 
 def move_vvol_shadow_vm_from_aggr_to_aggr(ds_info, aggr1, aggr2, lun, vm):
@@ -989,7 +989,7 @@ def move_vvol_shadow_vm_from_aggr_to_aggr(ds_info, aggr1, aggr2, lun, vm):
         "- INFO -  source aggr: {:.1f}% -> {:.1f}% target aggr: {:.1f}% -> {:.1f}%".format(source_aggr_usage_before, source_aggr_usage_after, target_aggr_usage_before, target_aggr_usage_after))
     log.info(
         "- INFO -  source ds: {:.1f}% -> {:.1f}% target ds: {:.1f}% -> {:.1f}%".format(source_ds_usage_before, source_ds_usage_after, target_ds_usage_before, target_ds_usage_after))
-    log.info("- CMND -  svmotion_cinder_v2.py {} {}".format(vm.name, ds2.name))
+    log.info("- CMND -  svmotion_cinder_v3.py {} {}".format(vm.name, ds2.name))
 
 def get_aggr_and_ds_stats(na_info, ds_info):
     """
