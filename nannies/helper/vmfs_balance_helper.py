@@ -781,9 +781,37 @@ class NAs:
                         str(m.group('stname')).replace('_', '-'), region)
                     na_hosts_set.add(netapp_name)
                     continue
+                # example for the pattern: vmfs_vc_a_0_p_ssd_stnpca1-st123_004_ds01
+                #                      or: vmfs_vc-a_0_p_ssd_stnpca1-st123_004_ds02
+                ds_name_regex_pattern = '^(?:vmfs_vc(-|_).*_ssd)_(?P<stname>.*)_\d+_ds\d+$'
+                m = re.match(ds_name_regex_pattern, ds_name)
+                if m:
+                    # hack to only include the storage really wanted
+                    is_stnpc = re.match(".*stnpc.*", m.group('stname'))
+                    if not is_stnpc:
+                        continue
+                    # e.g. stnpca1-st123.cc.<region>.cloud.sap - those are the netapp cluster addresses (..np_c_a1..)
+                    netapp_name = "{}.cc.{}.cloud.sap".format(
+                        str(m.group('stname')).replace('_', '-'), region)
+                    na_hosts_set.add(netapp_name)
+                    continue
                 # example for the pattern: vmfs_vc_a_0_p_hdd_stnpca1-st123_004
                 #                      or: vmfs_vc-a_0_p_hdd_stnpca1-st123_004
                 ds_name_regex_pattern = '^(?:vmfs_vc(-|_).*_hdd)_(?P<stname>.*)_\d+$'
+                m = re.match(ds_name_regex_pattern, ds_name)
+                if m:
+                    # hack to only include the storage really wanted
+                    is_stnpc = re.match(".*stnpc.*", m.group('stname'))
+                    if not is_stnpc:
+                        continue
+                    # e.g. stnpca1-st123.cc.<region>.cloud.sap - those are the netapp cluster addresses (..np_c_a1..)
+                    netapp_name = "{}.cc.{}.cloud.sap".format(
+                        str(m.group('stname')).replace('_', '-'), region)
+                    na_hosts_set.add(netapp_name)
+                    continue
+                # example for the pattern: vmfs_vc_a_0_p_hdd_stnpca1-st123_004_ds01
+                #                      or: vmfs_vc-a_0_p_hdd_stnpca1-st123_004_ds02
+                ds_name_regex_pattern = '^(?:vmfs_vc(-|_).*_hdd)_(?P<stname>.*)_\d+_ds\d+$'
                 m = re.match(ds_name_regex_pattern, ds_name)
                 if m:
                     # hack to only include the storage really wanted
