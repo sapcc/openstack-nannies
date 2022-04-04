@@ -38,7 +38,10 @@ echo "INFO: syncing between manila share and backend"
     --task-offline-volume $TASK_OFFLINE_VOLUME \
     --task-offline-volume-dry-run $TASK_OFFLINE_VOLUME_DRY_RUN \
     --task-orphan-volume $TASK_ORPHAN_VOLUME \
-    --task-orphan-volume-dry-run $TASK_ORPHAN_VOLUME_DRY_RUN
+    --task-orphan-volume-dry-run $TASK_ORPHAN_VOLUME_DRY_RUN \
+    --task-share-state $TASK_SHARE_STATE \
+    --task-share-state-dry-run $TASK_SHARE_STATE_DRY_RUN \
+
 
 # start a test command
 # /var/lib/openstack/bin/python /scripts/manila-share-sync.py --netapp-prom-host http://prometheus-infra-collector.infra-monitoring.svc:9090 --prom-port 9602 --http-port 9003 --task-share-size true  --task-share-size-dry-run true

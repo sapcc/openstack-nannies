@@ -29,5 +29,7 @@ echo "INFO: working on manila share snapshot"
     --config /etc/manila/manila.conf \
     --interval $MANILA_NANNY_INTERVAL \
     --prom-port $MANILA_NANNY_PROMETHEUS_PORT \
-    --listen-port $MANILA_NANNY_LISTEN_PORT
+    --listen-port $MANILA_NANNY_LISTEN_PORT \
+    --task-share-snapshot-state $TASK_SHARE_SNAPSHOT_STATE \
+    --task-share-snapshot-state-dry-run $TASK_SHARE_SNAPSHOT_STATE_DRY_RUN \
 
