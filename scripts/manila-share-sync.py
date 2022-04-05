@@ -454,12 +454,11 @@ class ManilaShareSyncNanny(ManilaNanny):
         r = q.execute()
         return [dict(zip(r.keys(), x)) for x in r.fetchall()]
 
-    def _query_shares(self):
+    def _query_shares(self, only_active_instance=False):
         """ Get shares that are not deleted """
 
         shares = Table('shares', self.db_metadata, autoload=True)
         instances = Table('share_instances', self.db_metadata, autoload=True)
-
         stmt = select([shares.c.id,
                        shares.c.display_name,
                        shares.c.size,
@@ -468,24 +467,54 @@ class ManilaShareSyncNanny(ManilaNanny):
                        instances.c.id,
                        instances.c.status,
                        instances.c.host,
+                       instances.c.replica_state,
                        ])\
             .select_from(
                 shares.join(instances, shares.c.id == instances.c.share_id))\
             .where(shares.c.deleted == 'False')
 
         shares = []
-        for (sid, name, size, ctime, utime, siid, status, host) in stmt.execute():
-            shares.append({
-                'id': sid,
-                'name': name,
-                'size': size,
-                'created_at': ctime,
-                'updated_at': utime,
-                'instance_id': siid,
-                'status': status,
-                'host': host,
-            })
+        for (sid, name, size, ctime, utime, siid, status, host, replica_state) in stmt.execute():
+            if (only_active_instance == False or
+               (only_active_instance == True and replica_state == 'active')):
+                shares.append({
+                    'id': sid,
+                    'name': name,
+                    'size': size,
+                    'created_at': ctime,
+                    'updated_at': utime,
+                    'instance_id': siid,
+                    'status': status,
+                    'host': host,
+                    'replica_state': replica_state,
+                })
         return shares
+
+    def _query_share_instances(self, share_id):
+        """ Get share instances for given share and that are not deleted """
+
+        instances = Table('share_instances', self.db_metadata, autoload=True)
+        stmt = select([instances.c.id,
+                       instances.c.share_id,
+                       instances.c.status,
+                       instances.c.updated_at,
+                       instances.c.host,
+                       instances.c.replica_state,
+                       ])\
+            .where(instances.c.share_id == share_id) \
+            .where(instances.c.deleted == 'False')
+
+        share_instances = []
+        for (iid, sid, status, utime, host, replica_state) in stmt.execute():
+            share_instances.append({
+                'id': iid,
+                'share_id': sid,
+                'status': status,
+                'updated_at': utime,
+                'host': host,
+                'replica_state': replica_state,
+            })
+        return share_instances
 
     def _merge_share_and_volumes(self, shares, volumes):
         """ Merge shares and volumes by share id and volume name
