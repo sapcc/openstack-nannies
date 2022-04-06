@@ -104,6 +104,13 @@ class ManilaNanny(http.server.HTTPServer):
             log.exception("share_snapshot_reset_state(snapshot_id=%s, state=%s): %s",
                 snapshot_id, state, e)
 
+    def share_snapshot_instance_reset_state(self, snapshot_instance_id, state):
+        try:
+            self.manilaclient.share_snapshot_instances.reset_state(snapshot_instance_id, state)
+        except Exception as e:
+            log.exception("share_snapshot_instance_reset_state(snapshot_instance_id=%s, state=%s): %s",
+                snapshot_instance_id, state, e)
+
     def list_shares(self, status=None):
         try:
             search_opts={'all_tenants': 1}
