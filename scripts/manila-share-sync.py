@@ -41,6 +41,7 @@ TASK_SHARE_SIZE = '1'
 TASK_MISSING_VOLUME = '2'
 TASK_OFFLINE_VOLUME = '3'
 TASK_ORPHAN_VOLUME = '4'
+TASK_SHARE_STATE = '5'
 
 
 class MyHandler(BaseHTTPRequestHandler):
@@ -120,7 +121,7 @@ class ManilaShareSyncNanny(ManilaNanny):
         # fetch data
         try:
             if self._tasks[TASK_SHARE_SIZE] or self._tasks[TASK_MISSING_VOLUME]\
-                    or self._tasks[TASK_ORPHAN_VOLUME]:
+                    or self._tasks[TASK_ORPHAN_VOLUME] or self._tasks[TASK_SHARE_STATE]:
                 _share_list = self._query_shares()
                 _volume_list = self._get_netapp_volumes()
                 _shares, _orphan_volumes = self._merge_share_and_volumes(_share_list, _volume_list)
@@ -147,6 +148,11 @@ class ManilaShareSyncNanny(ManilaNanny):
         if self._tasks[TASK_OFFLINE_VOLUME]:
             dry_run = self._dry_run_tasks[TASK_OFFLINE_VOLUME]
             self.process_offline_volumes(_offline_volume_list, dry_run)
+
+        if self._tasks[TASK_SHARE_STATE]:
+            _shares = self._query_shares(only_active_instance=True)
+            dry_run = self._dry_run_tasks[TASK_SHARE_STATE]
+            self.sync_share_state(_shares, dry_run)
 
     def sync_share_size(self, shares, dry_run=True):
         """ Backend volume exists, but share size does not match """
@@ -192,6 +198,66 @@ class ManilaShareSyncNanny(ManilaNanny):
                         log.info(msg, share_id, size, vsize)
                         self.set_share_size(share_id, vsize)
                         self.MANILA_SYNC_SHARE_SIZE_COUNTER.inc()
+
+    def sync_share_state(self, shares, dry_run=True):
+        """ Deal with share in stuck states for more than 15 minutes """
+        msg = "ManilaSyncShareState: share=%s, instance=%s status=%s"
+        msg_dry_run = "Dry run: " + msg
+        for share in shares:
+            share_status = share['status']
+            if share_status not in ['creating', 'error_deleting', 'deleting']:
+                continue
+
+            share_id = share['id']
+            instances = self._query_share_instances(share_id)
+            if len(instances) == 0:
+                continue
+            elif len(instances) == 1:
+                instance = instances[0]
+                instance_updated_at = instance['updated_at']
+                if instance_updated_at is not None:
+                    if is_utcts_recent(instance_updated_at, 900):
+                        continue
+                else:
+                    continue
+
+                instance_id = instance['id']
+                instance_status = instance['status']
+                if dry_run:
+                    log.info(msg_dry_run, share_id, instance_id, instance_status)
+                    continue
+                log.info(msg, share_id, instance_id, instance_status)
+                if share_status == 'error_deleting':
+                    self.share_force_delete(share_id)
+                    continue
+                self.share_reset_state(share_id, 'error')
+                if share_status == 'deleting':
+                    self.share_delete(share_id)
+            else:
+                for instance in instances:
+                    instance_updated_at = instance['updated_at']
+                    if instance_updated_at is not None:
+                        if is_utcts_recent(instance_updated_at, 900):
+                            continue
+                    else:
+                        continue
+
+                    if instance.get('replica_state', None) in ['active', None]:
+                        continue
+
+                    instance_id = instance['id']
+                    instance_status = instance['status']
+                    if dry_run:
+                        log.info(msg_dry_run, share_id, instance_id, instance_status)
+                        continue
+                    log.info(msg, share_id, instance_id, instance_status)
+                    if instance_status == 'error_deleting':
+                        self.share_instance_force_delete(instance_id)
+                        continue
+                    self.share_instance_reset_state(instance_id, 'error')
+                    if instance_status == 'deleting':
+                        self.share_replica_delete(instance_id)
+
 
     def process_missing_volume(self, shares, dry_run=True):
         """ Set share state to error when backend volume is missing
@@ -616,6 +682,10 @@ def parse_cmdline_args():
                         type=str2bool,
                         default=False,
                         help="enable orphan-volume task")
+    parser.add_argument("--task-share-state",
+                        type=str2bool,
+                        default=False,
+                        help="enable share state task")
     parser.add_argument("--task-share-size-dry-run",
                         type=str2bool,
                         default=True,
@@ -632,6 +702,10 @@ def parse_cmdline_args():
                         type=str2bool,
                         default=True,
                         help="dry run mode for orphan-volume task")
+    parser.add_argument("--task-share-state-dry-run",
+                        type=str2bool,
+                        default=True,
+                        help="dry run mode for share state task")
     return parser.parse_args()
 
 
@@ -642,12 +716,14 @@ def main():
         TASK_MISSING_VOLUME: args.task_missing_volume,
         TASK_OFFLINE_VOLUME: args.task_offline_volume,
         TASK_ORPHAN_VOLUME: args.task_orphan_volume,
+        TASK_SHARE_STATE: args.task_share_state,
     }
     dry_run_tasks = {
         TASK_SHARE_SIZE: args.task_share_size_dry_run,
         TASK_MISSING_VOLUME: args.task_missing_volume_dry_run,
         TASK_OFFLINE_VOLUME: args.task_offline_volume_dry_run,
         TASK_ORPHAN_VOLUME: args.task_orphan_volume_dry_run,
+        TASK_SHARE_STATE: args.task_share_state_dry_run,
     }
 
     ManilaShareSyncNanny(args.config,
