@@ -85,19 +85,22 @@ while true; do
         /var/lib/kolla/venv/bin/python /scripts/nova-queens-instance-mapping.py --config /etc/nova/nova.conf $DRY_RUN
     fi
     if [ "$NOVA_DB_PURGE_ENABLED" = "True" ] || [ "$NOVA_DB_PURGE_ENABLED" = "true" ]; then
-        echo -n "INFO: purge old deleted instances from the nova db - "
-        date
-        if [ "$NOVA_DB_PURGE_DRY_RUN" = "False" ] ||  [ "$NOVA_DB_PURGE_DRY_RUN" = "false" ]; then
-            echo -n "INFO: "
-            DRY_RUN=""
-        else
-            echo -n "INFO: dry run mode only - "
-            DRY_RUN="--dry-run"
+        # the purge_deleted_instances command meanwhile handles all cells so only required for the non cell2 case
+        if [ "$NOVA_CELL2_ENABLED" = "False" ] || [ "$NOVA_CELL2_ENABLED" = "false" ]; then
+            echo -n "INFO: purge old deleted instances from the nova db - "
+            date
+            if [ "$NOVA_DB_PURGE_DRY_RUN" = "False" ] ||  [ "$NOVA_DB_PURGE_DRY_RUN" = "false" ]; then
+                echo -n "INFO: "
+                DRY_RUN=""
+            else
+                echo -n "INFO: dry run mode only - "
+                DRY_RUN="--dry-run"
+            fi
+            echo -n "purging at max $NOVA_DB_PURGE_MAX_NUMBER deleted instances older than $NOVA_DB_PURGE_OLDER_THAN days from the nova db - "
+            echo -n `date`
+            echo -n " - "
+            /var/lib/kolla/venv/bin/nova-manage db purge_deleted_instances $DRY_RUN --all-cells --older-than $NOVA_DB_PURGE_OLDER_THAN --max-number $NOVA_DB_PURGE_MAX_NUMBER
         fi
-        echo -n "purging at max $NOVA_DB_PURGE_MAX_NUMBER deleted instances older than $NOVA_DB_PURGE_OLDER_THAN days from the nova db - "
-        echo -n `date`
-        echo -n " - "
-        /var/lib/kolla/venv/bin/nova-manage db purge_deleted_instances $DRY_RUN --older-than $NOVA_DB_PURGE_OLDER_THAN --max-number $NOVA_DB_PURGE_MAX_NUMBER
     fi
     echo -n "INFO: waiting $NOVA_NANNY_INTERVAL minutes before starting the next loop run - "
     date
