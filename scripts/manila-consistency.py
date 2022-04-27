@@ -137,6 +137,44 @@ def fix_wrong_share_gtstm(meta, wrong_share_gtstm):
             values(updated_at=now, deleted_at=now, deleted=share_gtstm_id)
         delete_share_gtstm_q.execute()
 
+# get all the rows with a share_instance_access_map still defined where the corresponding share_instance is already deleted
+def get_wrong_share_instance_access_mapping(meta):
+    wrong_share_instance_access_mapping = {}
+    share_instance_access_mapping_t = Table('share_instance_access_map', meta, autoload=True)
+    share_instances_t = Table('share_instances', meta, autoload=True)
+    share_instance_access_mapping_join = share_instance_access_mapping_t.join(
+        share_instances_t,
+        share_instance_access_mapping_t.c.share_instance_id == share_instances_t.c.id)
+    wrong_share_instance_access_mapping_q = select(
+        columns=[
+            share_instances_t.c.id,
+            share_instances_t.c.deleted,
+            share_instance_access_mapping_t.c.id,
+            share_instance_access_mapping_t.c.deleted
+        ]).select_from(share_instance_access_mapping_join).where(
+            and_(
+                share_instances_t.c.deleted != "False",
+                share_instance_access_mapping_t.c.deleted == "False"
+            )
+    )
+
+    # return a dict indexed by share_instance_access_mapping id and with the value share_instance_id for non deleted mappings
+    for (share_instance_id, _, share_instance_access_mapping_id, _) in wrong_share_instance_access_mapping_q.execute():
+        wrong_share_instance_access_mapping[share_instance_access_mapping_id] = share_instance_id
+    return wrong_share_instance_access_mapping
+
+# delete share_instance_access_mapping still defined where the corresponding share_instance is already deleted
+def fix_wrong_share_instance_access_mapping(meta, wrong_share_instance_access_mapping):
+    share_instance_access_mapping_t = Table('share_instance_access_map', meta, autoload=True)
+
+    now = datetime.datetime.utcnow()
+    for share_instance_access_mapping_id in wrong_share_instance_access_mapping:
+        log.info("-- action: deleting share instance access mapping id: %s", share_instance_access_mapping_id)
+        delete_share_instance_access_mapping_q = update(share_instance_access_mapping_t).\
+            where(share_instance_access_mapping_t.c.id == share_instance_access_mapping_id).\
+            values(updated_at=now, deleted_at=now, deleted=share_instance_access_mapping_id)
+        delete_share_instance_access_mapping_q.execute()
+
 # establish a database connection and return the handle
 def makeConnection(db_url):
 
@@ -232,6 +270,21 @@ def main():
             fix_wrong_share_gtstm(manila_metadata, wrong_share_gtstm)
     else:
         log.info("- share group type share type mapping is consistent")
+
+
+    wrong_share_instance_access_mapping = get_wrong_share_instance_access_mapping(manila_metadata)
+    if len(wrong_share_instance_access_mapping) != 0:
+        log.info("- share instance access mapping inconsistencies found")
+        # print out what we would delete
+        for share_instance_access_mapping_id, share_instance_id in wrong_share_instance_access_mapping.items():
+            log.info("-- share group type share type mapping id: %s - deleted share instance id: %s",
+                     share_instance_access_mapping_id,
+                     share_instance_id)
+        if not args.dry_run:
+            log.info("- deleting share group type share type mapping inconsistencies found")
+            fix_wrong_share_instance_access_mapping(manila_metadata, wrong_share_instance_access_mapping)
+    else:
+        log.info("- share instance access mapping is consistent")
 
 
 if __name__ == "__main__":
