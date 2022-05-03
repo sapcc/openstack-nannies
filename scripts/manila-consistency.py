@@ -39,7 +39,18 @@ def get_wrong_share_network_ssas(meta):
     share_network_ssa_t = Table('share_network_security_service_association', meta, autoload=True)
     share_networks_t = Table('share_networks', meta, autoload=True)
     share_network_ssa_join = share_network_ssa_t.join(share_networks_t,share_network_ssa_t.c.share_network_id == share_networks_t.c.id)
-    wrong_share_network_ssa_q = select(columns=[share_networks_t.c.id,share_networks_t.c.deleted,share_network_ssa_t.c.id,share_network_ssa_t.c.deleted]).select_from(share_network_ssa_join).where(and_(share_networks_t.c.deleted != "False",share_network_ssa_t.c.deleted == 0))
+    wrong_share_network_ssa_q = select(
+        columns=[
+            share_networks_t.c.id,
+            share_networks_t.c.deleted,
+            share_network_ssa_t.c.id,
+            share_network_ssa_t.c.deleted
+        ]).select_from(share_network_ssa_join).where(
+            and_(
+                share_networks_t.c.deleted != "False",
+                share_network_ssa_t.c.deleted == 0
+            )
+    )
 
     # return a dict indexed by share_network_security_service_association id and with the value share_network_id for non deleted ssas
     for (share_network_id, share_network_deleted, share_network_ssa_id, share_network_ssa_deleted) in wrong_share_network_ssa_q.execute():
@@ -53,7 +64,7 @@ def fix_wrong_share_network_ssas(meta, wrong_share_network_ssas):
 
     now = datetime.datetime.utcnow()
     for share_network_ssa_id in wrong_share_network_ssas:
-        log.info ("-- action: deleting share network security service association id: %s", share_network_ssa_id)
+        log.info("-- action: deleting share network security service association id: %s", share_network_ssa_id)
         delete_share_network_ssa_q = share_network_ssa_t.update().\
             where(share_network_ssa_t.c.id == share_network_ssa_id).\
             values(updated_at=now, deleted_at=now, deleted=share_network_ssa_id)
@@ -66,7 +77,18 @@ def get_wrong_network_allocations(meta):
     network_allocations_t = Table('network_allocations', meta, autoload=True)
     share_servers_t = Table('share_servers', meta, autoload=True)
     network_allocations_join = network_allocations_t.join(share_servers_t,network_allocations_t.c.share_server_id == share_servers_t.c.id)
-    wrong_network_allocations_q = select(columns=[share_servers_t.c.id,share_servers_t.c.deleted,network_allocations_t.c.id,network_allocations_t.c.deleted]).select_from(network_allocations_join).where(and_(share_servers_t.c.deleted != "False",network_allocations_t.c.deleted == "False"))
+    wrong_network_allocations_q = select(
+        columns=[
+            share_servers_t.c.id,
+            share_servers_t.c.deleted,
+            network_allocations_t.c.id,
+            network_allocations_t.c.deleted
+        ]).select_from(network_allocations_join).where(
+            and_(
+                share_servers_t.c.deleted != "False",
+                network_allocations_t.c.deleted == "False"
+            )
+    )
 
     # return a dict indexed by share_network_security_service_association id and with the value share_server_id for non deleted ssas
     for (share_server_id, share_network_deleted, network_allocations_id, network_allocations_deleted) in wrong_network_allocations_q.execute():
@@ -79,7 +101,7 @@ def fix_wrong_network_allocations(meta, wrong_network_allocations):
 
     now = datetime.datetime.utcnow()
     for network_allocations_id in wrong_network_allocations:
-        log.info ("-- action: deleting network allocation id: %s", network_allocations_id)
+        log.info("-- action: deleting network allocation id: %s", network_allocations_id)
         delete_network_allocations_q = network_allocations_t.update().\
             where(network_allocations_t.c.id == network_allocations_id).\
             values(updated_at=now, deleted_at=now, deleted=network_allocations_id)
@@ -92,7 +114,18 @@ def get_wrong_share_metadata(meta):
     share_metadata_t = Table('share_metadata', meta, autoload=True)
     shares_t = Table('shares', meta, autoload=True)
     share_metadata_join = share_metadata_t.join(shares_t,share_metadata_t.c.share_id == shares_t.c.id)
-    wrong_share_metadata_q = select(columns=[shares_t.c.id,shares_t.c.deleted,share_metadata_t.c.id,share_metadata_t.c.deleted]).select_from(share_metadata_join).where(and_(shares_t.c.deleted != "False",share_metadata_t.c.deleted == 0))
+    wrong_share_metadata_q = select(
+        columns=[
+            shares_t.c.id,
+            shares_t.c.deleted,
+            share_metadata_t.c.id,
+            share_metadata_t.c.deleted
+        ]).select_from(share_metadata_join).where(
+            and_(
+                shares_t.c.deleted != "False",
+                share_metadata_t.c.deleted == 0
+            )
+    )
 
     # return a dict indexed by share_network_security_service_association id and with the value share_id for non deleted ssas
     for (share_id, share_deleted, share_metadata_id, share_metadata_deleted) in wrong_share_metadata_q.execute():
@@ -105,7 +138,7 @@ def fix_wrong_share_metadata(meta, wrong_share_metadata):
 
     now = datetime.datetime.utcnow()
     for share_metadata_id in wrong_share_metadata:
-        log.info ("-- action: deleting share metadata id: %s", share_metadata_id)
+        log.info("-- action: deleting share metadata id: %s", share_metadata_id)
         delete_share_metadata_q = share_metadata_t.update().\
             where(share_metadata_t.c.id == share_metadata_id).\
             values(updated_at=now, deleted_at=now, deleted=share_metadata_id)
@@ -118,7 +151,18 @@ def get_wrong_share_gtstm(meta):
     share_gtstm_t = Table('share_group_type_share_type_mappings', meta, autoload=True)
     share_group_types_t = Table('share_group_types', meta, autoload=True)
     share_gtstm_join = share_gtstm_t.join(share_group_types_t,share_gtstm_t.c.share_group_type_id == share_group_types_t.c.id)
-    wrong_share_gtstm_q = select(columns=[share_group_types_t.c.id,share_group_types_t.c.deleted,share_gtstm_t.c.id,share_gtstm_t.c.deleted]).select_from(share_gtstm_join).where(and_(share_group_types_t.c.deleted != "False",share_gtstm_t.c.deleted == "False"))
+    wrong_share_gtstm_q = select(
+        columns=[
+            share_group_types_t.c.id,
+            share_group_types_t.c.deleted,
+            share_gtstm_t.c.id,
+            share_gtstm_t.c.deleted
+        ]).select_from(share_gtstm_join).where(
+            and_(
+                share_group_types_t.c.deleted != "False",
+                share_gtstm_t.c.deleted == "False"
+            )
+    )
 
     # return a dict indexed by share_network_security_service_association id and with the value share_id for non deleted ssas
     for (share_group_type_id, share_group_type_deleted, share_gtstm_id, share_gtstm_deleted) in wrong_share_gtstm_q.execute():
@@ -131,7 +175,7 @@ def fix_wrong_share_gtstm(meta, wrong_share_gtstm):
 
     now = datetime.datetime.utcnow()
     for share_gtstm_id in wrong_share_gtstm:
-        log.info ("-- action: deleting share group type id: %s", share_gtstm_id)
+        log.info("-- action: deleting share group type id: %s", share_gtstm_id)
         delete_share_gtstm_q = update(share_gtstm_t).\
             where(share_gtstm_t.c.id == share_gtstm_id).\
             values(updated_at=now, deleted_at=now, deleted=share_gtstm_id)
@@ -194,7 +238,7 @@ def get_db_url(config_file):
     try:
         parser.read(config_file)
         db_url = parser.get('database', 'connection', raw=True)
-    except:
+    except Exception:
         log.info("ERROR: Check Manila configuration file.")
         sys.exit(2)
     return db_url
@@ -206,8 +250,8 @@ def parse_cmdline_args():
                         default='./manila.conf',
                         help='configuration file')
     parser.add_argument("--dry-run",
-                       action="store_true",
-                       help='print only what would be done without actually doing it')
+                        action="store_true",
+                        help='print only what would be done without actually doing it')
     return parser.parse_args()
 
 def main():
