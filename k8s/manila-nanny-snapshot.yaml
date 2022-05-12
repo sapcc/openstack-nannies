@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    name: manila-nanny
+  name: manila-nanny-debug
+spec:
+  containers:
+  - name: nanny
+    image: keppel.eu-de-1.cloud.sap/ccloud/manila-nanny:latest
+    imagePullPolicy: IfNotPresent
+    command: [ "python" ] 
+    args: 
+      - "/scripts/manila-missing-snapshot.py"
+      - "--config"
+      - "/manila-etc/manila.conf"
+      - "--interval"
+      - "15"
+      - "--exporter-port"
+      - "9505"
+    ports:
+      - containerPort: 9505
+    env:
+    - name: DEPENDENCY_SERVICE
+      value: manila-mariadb,manila-api
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    volumeMounts:
+    - mountPath: /manila-etc
+      name: manila-etc
+  volumes:
+  - name: manila-etc
+    configMap:
+      defaultMode: 420
+      name: manila-etc
