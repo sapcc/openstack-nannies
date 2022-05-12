@@ -37,13 +37,13 @@ class Nanny:
     the business logic in _run() in subclass.
     """
 
-    def __init__(self, config_file, interval, exporter_port=9000, dry_run=False):
+    def __init__(self, config_file, interval, prom_port, dry_run):
         self.config_file = config_file
         self.interval = interval
         self.dry_run = dry_run
 
         # start prometheus exporter server
-        prometheus_http_start(exporter_port)
+        prometheus_http_start(prom_port)
 
     def _run(self):
         raise Exception("not implemented")
@@ -55,14 +55,8 @@ class Nanny:
 
 
 class ManilaNanny(Nanny):
-    def __init__(
-        self,
-        config_file,
-        interval,
-        exporter_port=9000,
-        dry_run=False,
-    ):
-        super(ManilaNanny, self).__init__(config_file, interval, exporter_port, dry_run)
+    def __init__(self, config_file, interval, prom_port=9500, dry_run=False):
+        super(ManilaNanny, self).__init__(config_file, interval, prom_port, dry_run)
 
     def get_manilaclient(self, version="2.7"):
         """Parse manila config file and create manila client"""
@@ -93,8 +87,8 @@ class ManilaNanny(Nanny):
 
     def get_netappclient(self, host):
         # all manila netapp filers get same user and password for api access
-        username = os.getenv("MANILA_NANNY_NETAPP_USERNAME")
-        password = os.getenv("MANILA_NANNY_NETAPP_PASSWORD")
+        username = os.getenv("MANILA_NANNY_NETAPP_API_USERNAME")
+        password = os.getenv("MANILA_NANNY_NETAPP_API_PASSWORD")
         return NetAppHelper(host, username, password)
 
 
@@ -106,5 +100,5 @@ def base_command_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="/manila-etc/manila.conf", help="configuration file")
     parser.add_argument("--interval", type=float, default=600, help="interval in seconds")
-    parser.add_argument("--exporter-port", type=int, default=9000, help="prometheus exporter port")
+    parser.add_argument("--prom-port", type=int, default=9000, help="prometheus exporter port")
     return parser
