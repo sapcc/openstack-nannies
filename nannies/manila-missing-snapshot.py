@@ -30,7 +30,7 @@ class MissingSnapshotNanny(ManilaNanny):
         # intialize gauge
         self.missing_snapshot_gauge = LabelGauge(
             "manila_nanny_missing_snapshot_instance",
-            "snapshot not found on netapp filer",
+            "list snapshot instances that are not found on Netapp filers",
             ["id", "snapshot_id", "status"],
         )
 

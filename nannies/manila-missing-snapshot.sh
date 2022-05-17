@@ -30,4 +30,4 @@ echo "INFO: exporting missing snapshots"
     --prom-port $MANILA_NANNY_PROMETHEUS_PORT
 
 # start a test command
-# /var/lib/openstack/bin/python /scripts/manila-share-sync.py --netapp-prom-host http://prometheus-infra-collector.infra-monitoring.svc:9090 --prom-port 9602 --http-port 9003 --task-share-size true  --task-share-size-dry-run true
+# /var/lib/openstack/bin/python /scripts/manila-missing-snapshot.py --prom-port 9605
