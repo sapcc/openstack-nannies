@@ -43,8 +43,10 @@ class MissingSnapshotNanny(ManilaNanny):
         # list snapshots from Manila; and build a hash table with snapshot id as key
         manilaclient = self.get_manilaclient("2.19")
         search_opts = {"all_tenants": True}
-        resp = manilaclient.share_snapshot_instances.list(search_opts=search_opts)
-        snapshot_table = {s._info["id"]: s._info for s in resp}
+        response = manilaclient.share_snapshot_instances.list(search_opts=search_opts)
+        snapshot_instance_table = {
+            snapshot_instance.id: snapshot_instance for snapshot_instance in response
+        }
 
         # find snapshots from Netapp Filer with snapshot name in the format
         # "share_snapshot_<id>", and build a list of their ids
@@ -61,8 +63,16 @@ class MissingSnapshotNanny(ManilaNanny):
 
         # return missing snapshot list
         for sid in snapshots_on_netapp:
-            snapshot_table.pop(sid)
-        return snapshot_table.values()
+            if sid in snapshot_instance_table:
+                snapshot_instance_table.pop(sid)
+        return [
+            {
+                "id": snapshot_instance.id,
+                "status": snapshot_instance.status,
+                "snapshot_id": snapshot_instance.snapshot_id,
+            }
+            for snapshot_instance in snapshot_instance_table.values()
+        ]
 
 
 def main():
