@@ -18,3 +18,4 @@
 .venv
 .style.*
 .flake8
+Dockerfile.manila-nanny-debug

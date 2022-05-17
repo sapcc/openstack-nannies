@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: manila-netapp-filers-debug
+  labels:
+    system: openstack
+    service: manila-nanny
+data:
+  netapp-filers.yaml: |
+    filers:
+    - stnpca3-cp090.cc.qa-de-1.cloud.sap
+    - stnpca1-md005.cc.qa-de-1.cloud.sap
+    - stnpca1-st051.cc.qa-de-1.cloud.sap
+    - stnpca1-md004.cc.qa-de-1.cloud.sap
+

@@ -1,0 +1,29 @@
+#  develop and debug with skaffold:
+#     skaffold dev --kube-context <context> --port-forward=user,debug,pods
+#     skaffold debug --kube-context <context> --port-forward=user,debug,pods
+apiVersion: skaffold/v2beta28
+kind: Config
+metadata:
+  name: manila-nanny-debug
+
+build:
+  artifacts:
+    - image: keppel.eu-de-1.cloud.sap/ccloud/manila-nanny
+      docker:
+        dockerfile: ./Dockerfile.manila-nanny-debug
+      platforms:
+        - linux/amd64
+      sync:
+        infer:
+          - "nannies/manila*.py"
+          - "nannies/helper/*.py"
+    
+deploy:
+  kubectl:
+    defaultNamespace: monsoon3
+    manifests:
+      - k8s/manila-nanny-snapshot.yaml
+      - k8s/configmap-netapp-filers.yaml
+
+
+

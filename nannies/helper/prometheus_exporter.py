@@ -15,15 +15,15 @@
 #    under the License.
 #
 
-from prometheus_client import start_http_server
-from prometheus_client.core import GaugeMetricFamily, REGISTRY
-
 import logging
-import time
+
+from prometheus_client import start_http_server
+from prometheus_client.core import Gauge, GaugeMetricFamily
 
 log = logging.getLogger(__name__)
 
-class CustomCollector():
+
+class CustomCollector:
     def __init__(self, metricsobject, dataobject):
         self.metricsobject = metricsobject
         self.dataobject = dataobject
@@ -69,6 +69,65 @@ class PromDataClass:
 
     def get_data(self):
         return self.values_out
+
+
+class LabelGaugeError(Exception):
+    pass
+
+
+class LabelGauge:
+    """
+    Parse input data as labels and export them as promethues Gauge
+
+    Usage: Initiate as the normal Gauge, with name, helper string and label list.
+    Call the method export() to set gauge labels.
+    """
+
+    def __init__(self, name, helper, labels):
+        self._gauge = Gauge(name, helper, labels)
+        self._labelkey_cache = {}
+
+    def export(self, data):
+        """
+        This method expects a list of gauge lables as input data:
+            [
+                { "id": "xxx", "server": "xxx" },
+                { "id": "yyy", "server": "yyy" },
+            ]
+        and export them as gauge labels. Gauge with labels that are not in the
+        input data are removed.
+        """
+        _labelkey_cache = {}
+
+        # process labels and set gauge
+        for labels_input in data:
+            # remove invalid gauge labels from input
+            labels = {}
+            for labelname in self._gauge._labelnames:
+                if labelname not in labels_input:
+                    raise LabelGaugeError(f'label "{labelname}" not found while exporting')
+                labels[labelname] = labels_input[labelname]
+
+            # generate gauge label key and cache them
+            # the key is built from concatenated {label_name} and {label_value}
+            _labelkey_cache[self.serialize_labels(labels)] = labels
+            # set gauge
+            self._gauge.labels(**labels).set(1)
+
+        # remove gauge with unfound labels
+        for labelkey, labels in self._labelkey_cache.items():
+            if labelkey not in _labelkey_cache.keys():
+                self._gauge.remove(*labels.values())
+
+        # cache labels
+        self._labelkey_cache = _labelkey_cache
+
+    def serialize_labels(self, labels):
+        result = ""
+        for lname in self._gauge._labelnames:
+            result = f"{result}__{lname}_{labels[lname]}"
+        return result + "__"
+
 
 # start prometheus exporter if needed
 def prometheus_http_start(prometheus_port):
