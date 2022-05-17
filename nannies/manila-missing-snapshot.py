@@ -25,7 +25,7 @@ class MissingSnapshotNanny(ManilaNanny):
     def __init__(self, config_file, netapp_filers, interval, prom_port) -> None:
         super(MissingSnapshotNanny, self).__init__(config_file, interval, prom_port)
         with open(netapp_filers, "r") as f:
-            self.netapp_filers = yaml.safe_load(f)
+            self.netapp_filers = yaml.safe_load(f)["filers"]
 
         # intialize gauge
         self.missing_snapshot_gauge = LabelGauge(
@@ -68,9 +68,9 @@ class MissingSnapshotNanny(ManilaNanny):
 def main():
     parser = base_command_parser()
     parser.add_argument(
-        "--netapp-filers", default="/manila-etc/netapp-filers.yaml", helper="Netapp filers list"
+        "--netapp-filers", default="/manila-etc/netapp-filers.yaml", help="Netapp filers list"
     )
-    args = base_command_parser().parse_args()
+    args = parser.parse_args()
 
     MissingSnapshotNanny(
         args.config,

@@ -23,6 +23,7 @@ deploy:
     defaultNamespace: monsoon3
     manifests:
       - k8s/manila-nanny-snapshot.yaml
+      - k8s/configmap-netapp-filers.yaml
 
 
 
