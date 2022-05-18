@@ -25,7 +25,7 @@ RUN /var/lib/openstack/bin/pip install -q --no-cache-dir \
 ADD scripts/manila* /scripts/
 ADD scripts/db-cleanup.py /scripts/
 ADD scripts/count-deleted.py /scripts/
-ADD nannies/manila* /scripts
+ADD nannies/manila* /scripts/
 ADD nannies/helper/__init__.py /scripts/helper/
 ADD nannies/helper/manilananny.py /scripts/helper/
 ADD nannies/helper/netapp.py /scripts/helper/
