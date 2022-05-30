@@ -373,7 +373,7 @@ class ManilaShareSyncNanny(ManilaNanny):
         for volname, vol in self.offline_volumes.items():
             if volname not in offline_volumes:
                 self.manila_offline_volumes_gauge.remove(vol['share_id'], vol['status'],
-                                                         vol['filer'], vol['vserver'], vol['name'])
+                                                         vol['filer'], vol['vserver'], vol['volume'])
 
         with self.offline_volumes_lock:
             self.offline_volumes = update_records(self.offline_volumes, offline_volumes)
