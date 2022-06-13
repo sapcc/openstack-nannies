@@ -27,6 +27,16 @@ spec:
       value: manila-mariadb,manila-api
     - name: PYTHONUNBUFFERED
       value: "1"
+    - name: MANILA_NANNY_NETAPP_API_USERNAME
+      valueFrom:
+        secretKeyRef:
+          key: manila_netapp_api_username
+          name: manila-nanny-secret
+    - name: MANILA_NANNY_NETAPP_API_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          key: manila_netapp_api_password
+          name: manila-nanny-secret
     volumeMounts:
     - name: manila-etc
       mountPath: /manila-etc/manila.conf
@@ -34,6 +44,8 @@ spec:
     - name: manila-netapp-filers
       mountPath: /manila-etc/netapp-filers.yaml
       subPath: netapp-filers.yaml
+    tty: true
+    stdin: true
   volumes:
   - name: manila-etc
     configMap:
