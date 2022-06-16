@@ -631,6 +631,10 @@ class NA:
         fvol_info = []
         # get flexvols
         for fvol in nh.get_volume_usage():
+            if not fvol.get('volume-space-attributes'):
+                log.info("- INFO -   flexvol {} has no volume-space-attributes - ignoring it"
+                         .format(fvol['volume-id-attributes']['name']))
+                continue
             nafvol_element = {}
             # print info for fvol_denylisted flexvols
             if fvol['volume-id-attributes']['name'] in fvol_denylist:
