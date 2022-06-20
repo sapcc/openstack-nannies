@@ -16,20 +16,24 @@
 from __future__ import absolute_import
 
 import argparse
-from datetime import datetime
+import logging
 from http.server import BaseHTTPRequestHandler
 from threading import Lock
 from typing import Dict
 
+from manilananny import ManilaNanny, is_utcts_recent, response, update_records
 from prometheus_client import Gauge
 from sqlalchemy import Table, select
 
-from manilananny import ManilaNanny, response, update_records
-
 TASK_SHARE_SNAPSHOT_STATE = '1'
+
+log = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
+
 
 class MyHandler(BaseHTTPRequestHandler):
     ''' http server handler '''
+
     def do_GET(self):
         if self.path == '/':
             status_code, header, data = self.server.get_orphan_snapshots()
