@@ -17,6 +17,7 @@
 #
 import yaml
 from helper.manilananny import ManilaNanny, base_command_parser
+from helper.netapp_rest import NetAppRestHelper
 from helper.prometheus_exporter import LabelGauge
 
 
@@ -53,27 +54,31 @@ class MissingSnapshotNanny(ManilaNanny):
         #     "provider_location": "share_snapshot_57c9b9a2_14fe_47fa_bb47_9c3b80a088bd",
         # }
         manila = self.get_manilaclient("2.19")
-        response = manila.share_snapshot_instances.list(search_opts={"all_tenants": True},
-                                                        detailed=True)
+        response = manila.share_snapshot_instances.list(
+            search_opts={"all_tenants": True}, detailed=True)
         snapshot_instance_table = {
             snapshot_instance.id: snapshot_instance.to_dict()
             for snapshot_instance in response
         }
 
-        # 1. Find snapshots from Netapp Filer and retrieve snapshot instance id
-        # by format "share_snapshot_<id>"
-        # 2. Remove _id from snapshot_instance_table if corresponding snapshot
-        # is found on Netapp filers, the rest are the missing ones
+        # Remove snapshot instances that are found on Netapp filers, and return
+        # the rest as missing snaspshots
         for filer in self.netapp_filers:
-            netapp = self.get_netappclient(filer)
-            resp = netapp.get_list("snapshot-get-iter",
-                                   des_result={"snapshot-info": ["name", "volume"]})
+            netapp = self.get_netapprestclient(filer)
+            resp = list_share_snapshots(netapp)
             for snapshot in resp:
-                if snapshot["name"].startswith("share_snapshot_"):
-                    _id = snapshot["name"][len("share_snapshot_"):].replace("_", "-")
-                    if _id in snapshot_instance_table:
-                        snapshot_instance_table.pop(_id)
+                _id = snapshot["name"][len("share_snapshot_"):].replace("_", "-")
+                snapshot_instance_table.pop(_id, None)
         return snapshot_instance_table.values()
+
+
+def list_share_snapshots(netappclient: NetAppRestHelper):
+    """ Get snapshots of all volumes on Netapp filer """
+    snapshots = []
+    for vol in netappclient.get_volumes(name="share_*"):
+        volsnapshots = netappclient.get_snapshots(vol.uuid, name="share_snapshot_*")
+        snapshots.extend(volsnapshots)
+    return snapshots
 
 
 def main():
@@ -83,12 +88,8 @@ def main():
                         help="Netapp filers list")
     args = parser.parse_args()
 
-    MissingSnapshotNanny(
-        args.config,
-        args.netapp_filers,
-        args.interval,
-        args.prom_port,
-    ).run()
+    MissingSnapshotNanny(args.config, args.netapp_filers, args.interval,
+                         args.prom_port).run()
 
 
 if __name__ == "__main__":

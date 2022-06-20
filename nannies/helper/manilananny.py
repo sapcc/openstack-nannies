@@ -27,6 +27,7 @@ from keystoneauth1.identity import v3
 from manilaclient import client as manilaclient
 
 from .netapp import NetAppHelper
+from .netapp_rest import NetAppRestHelper
 from .prometheus_exporter import prometheus_http_start
 
 
@@ -55,6 +56,7 @@ class Nanny:
 
 
 class ManilaNanny(Nanny):
+
     def __init__(self, config_file, interval, prom_port=9500, dry_run=False):
         super(ManilaNanny, self).__init__(config_file, interval, prom_port, dry_run)
 
@@ -91,6 +93,11 @@ class ManilaNanny(Nanny):
         password = os.getenv("MANILA_NANNY_NETAPP_API_PASSWORD")
         return NetAppHelper(host, username, password)
 
+    def get_netapprestclient(self, host):
+        username = os.getenv("MANILA_NANNY_NETAPP_API_USERNAME")
+        password = os.getenv("MANILA_NANNY_NETAPP_API_PASSWORD")
+        return NetAppRestHelper(host, username, password)
+
 
 def base_command_parser():
     """Returns a basic command parser, including common args.
@@ -98,7 +105,15 @@ def base_command_parser():
     The returned parser can be extended by its add_argument() method.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="/manila-etc/manila.conf", help="configuration file")
-    parser.add_argument("--interval", type=float, default=600, help="interval in seconds")
-    parser.add_argument("--prom-port", type=int, default=9000, help="prometheus exporter port")
+    parser.add_argument("--config",
+                        default="/manila-etc/manila.conf",
+                        help="configuration file")
+    parser.add_argument("--interval",
+                        type=float,
+                        default=600,
+                        help="interval in seconds")
+    parser.add_argument("--prom-port",
+                        type=int,
+                        default=9000,
+                        help="prometheus exporter port")
     return parser
