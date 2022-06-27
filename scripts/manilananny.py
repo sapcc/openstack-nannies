@@ -5,6 +5,7 @@ import configparser
 import datetime
 import http.server
 import json
+import logging
 import sys
 import time
 from threading import Thread
@@ -16,6 +17,8 @@ from prometheus_client import start_http_server
 from sqlalchemy import MetaData, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+
+log = logging.getLogger(__name__)
 
 
 class ManilaNanny(http.server.HTTPServer):
