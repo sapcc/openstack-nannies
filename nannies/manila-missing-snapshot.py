@@ -15,10 +15,18 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 #
+import logging
+
 import yaml
 from helper.manilananny import ManilaNanny, base_command_parser
 from helper.netapp_rest import NetAppRestHelper
 from helper.prometheus_exporter import LabelGauge
+from netapp_ontap.error import NetAppRestError
+
+log = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)-15s %(levelname)s %(message)s')
+logging.getLogger('helper').setLevel(logging.DEBUG)
 
 
 class MissingSnapshotNanny(ManilaNanny):
@@ -36,7 +44,7 @@ class MissingSnapshotNanny(ManilaNanny):
         )
 
     def _run(self):
-        print("export missing snapshots")
+        log.info(f'start {self.__class__.__name__}.{self._run.__name__}()')
         self.missing_snapshot_gauge.export(self._get_missing_snapshots())
 
     def _get_missing_snapshots(self):
@@ -76,8 +84,13 @@ def list_share_snapshots(netappclient: NetAppRestHelper):
     """ Get snapshots of all volumes on Netapp filer """
     snapshots = []
     for vol in netappclient.get_volumes(name="share_*"):
-        volsnapshots = netappclient.get_snapshots(vol.uuid, name="share_snapshot_*")
-        snapshots.extend(volsnapshots)
+        try:
+            volsnapshots = netappclient.get_snapshots(vol.uuid, name="share_snapshot_*")
+            snapshots.extend(volsnapshots)
+        except NetAppRestError as e:
+            # Normally the exception can be ignored, for example volume can be
+            # deleted in the mean time.
+            log.warn(f'failed to get snapshot: {e}')
     return snapshots
 
 
@@ -87,6 +100,12 @@ def main():
                         default="/manila-etc/netapp-filers.yaml",
                         help="Netapp filers list")
     args = parser.parse_args()
+
+    log.info(f'start MissingSnapshotNanny...')
+    log.info(f'parameter: config file: {args.config}')
+    log.info(f'parameter: refresh interval: {args.interval}s')
+    log.info(f'parameter: Netapp filers file: {args.netapp_filers}')
+    log.info(f'parameter: Prometheus exporter port: {args.prom_port}')
 
     MissingSnapshotNanny(args.config, args.netapp_filers, args.interval,
                          args.prom_port).run()

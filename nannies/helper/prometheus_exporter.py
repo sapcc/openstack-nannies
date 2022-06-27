@@ -24,6 +24,7 @@ log = logging.getLogger(__name__)
 
 
 class CustomCollector:
+
     def __init__(self, metricsobject, dataobject):
         self.metricsobject = metricsobject
         self.dataobject = dataobject
@@ -37,14 +38,19 @@ class CustomCollector:
         metric = self.metricsobject.get_metrics()
         gauge = dict()
         metrics_data = self.dataobject.get_data()
-        if len(metrics_data)>0:
+        if len(metrics_data) > 0:
             # metric = metricname, metric[0] = description, metric[1] = labelnames
             for data in metrics_data:
-                gauge[data[0]] = GaugeMetricFamily(data[0], metric[data[0]][0], labels=metric[data[0]][1])
-                gauge[data[0]].add_metric(labels=metrics_data[data]['labels'], value = metrics_data[data]['values'])
+                gauge[data[0]] = GaugeMetricFamily(data[0],
+                                                   metric[data[0]][0],
+                                                   labels=metric[data[0]][1])
+                gauge[data[0]].add_metric(labels=metrics_data[data]['labels'],
+                                          value=metrics_data[data]['values'])
                 yield gauge[data[0]]
 
+
 class PromMetricsClass:
+
     def __init__(self):
         self.metrics = dict()
 
@@ -55,13 +61,17 @@ class PromMetricsClass:
     def get_metrics(self):
         return self.metrics
 
+
 class PromDataClass:
+
     def __init__(self):
         self.values_in = dict()
         self.values_out = dict()
 
     def set_data(self, metricname, datavalue, labelvalues):
-        self.values_in[(metricname,tuple(labelvalues))] = { 'values': datavalue, 'labels': labelvalues }
+        self.values_in[(metricname, tuple(labelvalues))] = {
+            'values': datavalue, 'labels': labelvalues
+        }
 
     def sync_data(self):
         self.values_out = self.values_in.copy()
@@ -105,19 +115,21 @@ class LabelGauge:
             labels = {}
             for labelname in self._gauge._labelnames:
                 if labelname not in labels_input:
-                    raise LabelGaugeError(f'label "{labelname}" not found while exporting')
+                    raise LabelGaugeError(
+                        f'label "{labelname}" not found while exporting')
                 labels[labelname] = labels_input[labelname]
 
             # generate gauge label key and cache them
             # the key is built from concatenated {label_name} and {label_value}
             _labelkey_cache[self.serialize_labels(labels)] = labels
-            # set gauge
             self._gauge.labels(**labels).set(1)
+            log.debug(f'set gauge {labels} to 1')
 
         # remove gauge with unfound labels
         for labelkey, labels in self._labelkey_cache.items():
             if labelkey not in _labelkey_cache.keys():
                 self._gauge.remove(*labels.values())
+                log.debug(f'remove gauge {labels}')
 
         # cache labels
         self._labelkey_cache = _labelkey_cache
@@ -136,4 +148,5 @@ def prometheus_http_start(prometheus_port):
         start_http_server(prometheus_port)
         log.info("INFO: prometheus metrics exporter started")
     except Exception as e:
-        log.error("- ERROR - failed to start prometheus exporter http server: %s", str(e))
+        log.error("- ERROR - failed to start prometheus exporter http server: %s",
+                  str(e))
