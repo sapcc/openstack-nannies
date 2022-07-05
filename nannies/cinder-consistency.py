@@ -335,6 +335,41 @@ def fix_wrong_volume_attachments(meta, wrong_attachments, fix_limit):
         log.warn("- PLEASE CHECK MANUALLY - too many (more than %s) wrong volume attachments - denying to fix them automatically", str(fix_limit))
 
 
+# get all the rows with a group_volume_type_mapping still defined where the corresponding group_id is already deleted
+def get_wrong_group_volume_type_mappings(meta):
+
+    wrong_group_volume_type_mappings = {}
+    group_volume_type_mapping_t = Table('group_volume_type_mapping', meta, autoload=True)
+    groups_t = Table('groups', meta, autoload=True)
+    group_volume_type_mapping_join = group_volume_type_mapping_t.join(groups_t,group_volume_type_mapping_t.c.group_id == groups_t.c.id)
+    columns = [groups_t.c.id, groups_t.c.deleted, group_volume_type_mapping_t.c.id, group_volume_type_mapping_t.c.deleted]
+    wrong_group_volume_type_mapping_q = select(columns=columns).select_from(group_volume_type_mapping_join).\
+        where(and_(groups_t.c.deleted == 1, group_volume_type_mapping_t.c.deleted == 0))
+
+    # return a dict indexed by volume_attachment_id and with the value volume_id for non deleted volume_attachments
+    for (group_id, group_deleted, group_volume_type_mapping_id, group_volume_type_mapping_deleted) in wrong_group_volume_type_mapping_q.execute():
+        wrong_group_volume_type_mappings[group_volume_type_mapping_id] = group_id
+    return wrong_group_volume_type_mappings
+
+
+# delete group_volume_type_mapping still defined where the corresponding groupid is already deleted
+def fix_wrong_group_volume_type_mappings(meta, wrong_group_volume_type_mappings, fix_limit):
+
+    if len(wrong_group_volume_type_mappings) <= int(fix_limit):
+
+        group_volume_type_mapping_t = Table('group_volume_type_mapping', meta, autoload=True)
+
+        for group_volume_type_mapping_id in wrong_group_volume_type_mappings:
+            log.info("-- action: deleting group_volume_type_mapping id: %s", group_volume_type_mapping_id)
+            now = datetime.datetime.utcnow()
+            delete_group_volume_type_mapping_q = group_volume_type_mapping_t.update().\
+                where(group_volume_type_mapping_t.c.id == group_volume_type_mapping_id).values(updated_at=now, deleted_at=now, deleted=1)
+            delete_group_volume_type_mapping_q.execute()
+
+    else:
+        log.warn("- PLEASE CHECK MANUALLY - too many (more than %s) wrong group_volume_type_mappings - denying to fix them automatically", str(fix_limit))
+
+
 # get all the rows, which have the deleted flag set, but not the delete_at column
 def get_missing_deleted_at(meta, table_names):
 
@@ -566,6 +601,19 @@ def main():
             fix_wrong_volume_attachments(cinder_metadata, wrong_attachments, args.fix_limit)
     else:
         log.info("- volume attachments are consistent")
+
+    # fixing possible wrong group_volume_type_mappings entries
+    wrong_group_volume_type_mappings = get_wrong_group_volume_type_mappings(cinder_metadata)
+    if len(wrong_group_volume_type_mappings) != 0:
+        log.info("- group_volume_type_mappings inconsistencies found")
+        # print out what we would delete
+        for group_volume_type_mapping_id in wrong_group_volume_type_mappings:
+            log.info("-- group_volume_type_mapping id: %s - deleted group id: %s", group_volume_type_mapping_id, wrong_group_volume_type_mappings[group_volume_type_mapping_id])
+        if not args.dry_run:
+            log.info("- removing group_volume_type_mapping inconsistencies found")
+            fix_wrong_group_volume_type_mappings(cinder_metadata, wrong_group_volume_type_mappings, args.fix_limit)
+    else:
+        log.info("- group_volume_type_mappings are consistent")
 
     # fixing possible missing deleted_at timestamps in some tables
     # tables which sometimes have missing deleted_at values
