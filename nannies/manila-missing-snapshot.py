@@ -17,6 +17,7 @@
 #
 import logging
 
+import manilaclient.common.apiclient.exceptions as manilaexceptions
 import yaml
 from helper.manilananny import ManilaNanny, base_command_parser
 from helper.netapp_rest import NetAppRestHelper
@@ -24,8 +25,7 @@ from helper.prometheus_exporter import LabelGauge
 from netapp_ontap.error import NetAppRestError
 
 log = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)-15s %(levelname)s %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(levelname)s %(message)s')
 logging.getLogger('helper').setLevel(logging.DEBUG)
 
 
@@ -39,8 +39,11 @@ class MissingSnapshotNanny(ManilaNanny):
         # intialize gauge
         self.missing_snapshot_gauge = LabelGauge(
             "manila_nanny_missing_snapshot_instance",
-            "list snapshot instances that are not found on Netapp filers",
-            ["share_id", "snapshot_id", "provider_location", "status"],
+            "Missing Snapshot Instances on Netapp filers",
+            [
+                'netapp_host', 'netapp_volume', 'netapp_provider_location', 'share_id',
+                'share_instance_id', 'snapshot_id', 'snapshot_instance_id', 'status', 'created_at'
+            ],
         )
 
     def _run(self):
@@ -49,35 +52,85 @@ class MissingSnapshotNanny(ManilaNanny):
 
     def _get_missing_snapshots(self):
         """get list of snapshots that are not found on netapp filer"""
-        # List Manila's snapshots with details, e.g. a snapshot response
-        # {
-        #     "id": "57c9b9a2-14fe-47fa-bb47-9c3b80a088bd",
-        #     "snapshot_id": "fbc23c16-c10f-4d96-a456-f4ab62454bf8",
-        #     "created_at": "2022-06-13T14:05:40.190032",
-        #     "updated_at": "2022-06-13T14:05:40.627164",
-        #     "status": "available",
-        #     "share_id": "0fa59dbe-b1bd-4699-9a3b-6d86996a019f",
-        #     "share_instance_id": "b8fa6b49-941f-44ae-a485-9c77c0ca314a",
-        #     "progress": "100%",
-        #     "provider_location": "share_snapshot_57c9b9a2_14fe_47fa_bb47_9c3b80a088bd",
-        # }
         manila = self.get_manilaclient("2.19")
-        response = manila.share_snapshot_instances.list(
-            search_opts={"all_tenants": True}, detailed=True)
-        snapshot_instance_table = {
-            snapshot_instance.id: snapshot_instance.to_dict()
-            for snapshot_instance in response
+        manila_snaps = {}
+        missing_snaps = []
+        missing_snapshots = []
+
+        # mapping of filer name and host
+        # 'manila-share-netapp-ma01-st051': 'stnpca1-st051.cc.qa-de-1.cloud.sap'
+        manila_filers = {
+            f'manila-share-netapp-{filer["name"]}': filer['host'] for filer in self.netapp_filers
         }
 
-        # Remove snapshot instances that are found on Netapp filers, and return
-        # the rest as missing snaspshots
-        for filer in self.netapp_filers:
-            netapp = self.get_netapprestclient(filer)
-            resp = list_share_snapshots(netapp)
-            for snapshot in resp:
-                _id = snapshot["name"][len("share_snapshot_"):].replace("_", "-")
-                snapshot_instance_table.pop(_id, None)
-        return snapshot_instance_table.values()
+        logging.info("fetching Manila Sanpshots...")
+
+        for _snapshot in manila.share_snapshots.list(search_opts={'all_tenants': True}):
+            try:
+                _snap_instances = manila.share_snapshot_instances.list(detailed=True,
+                                                                       snapshot=_snapshot)
+            except manilaexceptions.InternalServerError as e:
+                # with detailed=True, above call may abort with an internal error
+                logging.error(e)
+                continue
+
+            for _snap_instance in _snap_instances:
+                if _snap_instance.status == 'available':
+                    _share_instance = manila.share_instances.get(_snap_instance.share_instance_id)
+                    # map Share Instance Host to NetApp Filer's fqdn, like
+                    # 'manila-share-netapp-ma01-md004@ma01-md004#aggr_ssd_stnpa1_01_md004_1'
+                    #   -> 'stnpca1-md004.cc.qa-de-1.cloud.sap'
+                    fname = _share_instance.host.split('@')[0]
+                    fhost = manila_filers.get(fname)
+                    if not fhost:
+                        logging.warning(f'{fname} not in {manila_filers.keys()}')
+                        continue
+                    # map Share Instance Id to NetApp Volume name
+                    volume = 'share_' + _share_instance.id.replace('-', '_')
+
+                    manila_snaps[fhost] = manila_snaps.get(fhost, {})
+                    manila_snaps[fhost][volume] = manila_snaps[fhost].get(volume, [])
+                    manila_snaps[fhost][volume].append({
+                        'netapp_host': fhost,
+                        'netapp_volume': volume,
+                        'netapp_provider_location': _snap_instance.provider_location,
+                        'share_id': _snap_instance.share_id,
+                        'share_instance_id': _snap_instance.share_instance_id,
+                        'snapshot_id': _snap_instance.snapshot_id,
+                        'snapshot_instance_id': _snap_instance.id,
+                        'status': _snap_instance.status,
+                        'created_at': _snap_instance.created_at,
+                    })
+
+        for host, volume_snaps in manila_snaps.items():
+            netapp = self.get_netapprestclient(host)
+            snap_count = sum([len(v) for v in volume_snaps.values()])
+            logging.info(f"checking {snap_count} snapshots on filer {host}...")
+
+            for vol_name, snapshots in volume_snaps.items():
+                vols = netapp.get_volumes(name=vol_name)
+                if len(vols) > 0:
+                    _snaps = netapp.get_snapshots(vols[0].uuid, name="share_snapshot_*")
+                    _snap_names = [_.name for _ in _snaps]
+                    for s in snapshots:
+                        if s['netapp_provider_location'] not in _snap_names:
+                            missing_snaps.append(s)
+                else:
+                    logging.warning(f'Volume {vol_name} not found on {host}')
+                    missing_snaps.extend(snapshots)
+
+        # check if the share instances are still available in the mean while
+        for snap in missing_snaps:
+            try:
+                snap_instance = manila.share_snapshot_instances.get(snap['snapshot_instance_id'])
+            except manilaexceptions.NotFound:
+                continue
+            if snap_instance.status == 'available':
+                logging.warning(f'Snapshot not found: {snap}')
+                missing_snapshots.append(snap)
+
+        logging.info(f'{len(missing_snapshots)} missing Snapshot Instances found')
+        return missing_snapshots
 
 
 def list_share_snapshots(netappclient: NetAppRestHelper):
@@ -107,8 +160,7 @@ def main():
     log.info(f'parameter: Netapp filers file: {args.netapp_filers}')
     log.info(f'parameter: Prometheus exporter port: {args.prom_port}')
 
-    MissingSnapshotNanny(args.config, args.netapp_filers, args.interval,
-                         args.prom_port).run()
+    MissingSnapshotNanny(args.config, args.netapp_filers, args.interval, args.prom_port).run()
 
 
 if __name__ == "__main__":
