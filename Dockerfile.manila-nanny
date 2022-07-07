@@ -18,7 +18,7 @@ LABEL source_repository="https://github.com/sapcc/openstack-nannies"
 USER root
 
 RUN /var/lib/openstack/bin/pip uninstall -y psycopg2
-RUN /var/lib/openstack/bin/pip install -q --no-cache-dir \
+RUN /var/lib/openstack/bin/pip install -q --no-cache-dir --use-feature=2020-resolver \
   psycopg2-binary==2.8.4 prometheus-client==0.7.1  python-manilaclient==2.0.0 \
   netapp-lib==2020.3.12 netapp-ontap~=9.10
 

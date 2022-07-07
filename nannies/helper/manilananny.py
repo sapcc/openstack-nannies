@@ -24,7 +24,8 @@ import time
 
 from keystoneauth1 import session
 from keystoneauth1.identity import v3
-from manilaclient import client as manilaclient
+from manilaclient.client import Client as ManilaClient
+from manilaclient.v2.client import Client as ManilaClientV2
 
 from .netapp import NetAppHelper
 from .netapp_rest import NetAppRestHelper
@@ -60,7 +61,7 @@ class ManilaNanny(Nanny):
     def __init__(self, config_file, interval, prom_port=9500, dry_run=False):
         super(ManilaNanny, self).__init__(config_file, interval, prom_port, dry_run)
 
-    def get_manilaclient(self, version="2.7"):
+    def get_manilaclient(self, version="2.7") -> ManilaClientV2:
         """Parse manila config file and create manila client"""
         try:
             parser = configparser.ConfigParser()
@@ -84,7 +85,7 @@ class ManilaNanny(Nanny):
             auth_url=auth_url,
         )
         sess = session.Session(auth=auth)
-        manila = manilaclient.Client(version, session=sess)
+        manila = ManilaClient(version, session=sess)
         return manila
 
     def get_netappclient(self, host):
@@ -105,15 +106,7 @@ def base_command_parser():
     The returned parser can be extended by its add_argument() method.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config",
-                        default="/manila-etc/manila.conf",
-                        help="configuration file")
-    parser.add_argument("--interval",
-                        type=float,
-                        default=600,
-                        help="interval in seconds")
-    parser.add_argument("--prom-port",
-                        type=int,
-                        default=9000,
-                        help="prometheus exporter port")
+    parser.add_argument("--config", default="/manila-etc/manila.conf", help="configuration file")
+    parser.add_argument("--interval", type=float, default=600, help="interval in seconds")
+    parser.add_argument("--prom-port", type=int, default=9000, help="prometheus exporter port")
     return parser

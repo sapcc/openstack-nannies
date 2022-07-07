@@ -17,7 +17,7 @@ spec:
       - "--netapp-filers"
       - "/manila-etc/netapp-filers.yaml"
       - "--interval"
-      - "15"
+      - "100"
       - "--prom-port"
       - "9505"
     ports:
