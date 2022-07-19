@@ -25,7 +25,7 @@ cp -v /glance-etc/* /etc/glance
 
 # glance is now using proxysql by default in its config - change that back to a normal
 # config for the nanny as we do not need it and do not have the proxy around by default
-sed -i 's,@/glance.*,@glance-mariadb/glance?charset=utf8,g' /etc/glance/glance-api.conf
+sed -i 's,@/glance?unix_socket=/run/proxysql/mysql.sock&,@glance-mariadb/glance?,g' /etc/glance/glance-api.conf
 
 # we run an endless loop to run the script periodically
 echo "INFO: starting a loop to periodically run the nanny job for the glance db consistency check and purge"
