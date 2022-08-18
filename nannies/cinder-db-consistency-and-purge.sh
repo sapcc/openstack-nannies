@@ -25,6 +25,10 @@ cp -v /cinder-etc/* /etc/cinder
 # this is a temporary hack to avoid annoying raven warnings - we do not need sentry for this nanny for now
 sed -i 's,raven\.handlers\.logging\.SentryHandler,logging.NullHandler,g' /etc/cinder/logging.ini
 
+# cinder is now using proxysql by default in its config - change that back to a normal
+# config for the nanny as we do not need it and do not have the proxy around by default
+sed -i 's,@/cinder?unix_socket=/run/proxysql/mysql.sock&,@cinder-mariadb/cinder?,g' /etc/cinder/cinder.conf
+
 # we run an endless loop to run the script periodically
 echo "INFO: starting a loop to periodically run the nanny job for the cinder db consistency check and purge"
 while true; do
