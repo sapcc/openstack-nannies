@@ -55,8 +55,8 @@ def get_nova_instances(conn):
         log.warn("- PLEASE CHECK MANUALLY - got an sdk exception connecting to openstack: %s", str(e))
         sys.exit(1)
 
-    #for i in nova_instances:
-    #    print nova_instances[i].id
+    # for i in nova_instances:
+    #     print nova_instances[i].id
 
     if not nova_instances:
         raise RuntimeError('Did not get any nova instances back.')
@@ -99,7 +99,7 @@ def fix_wrong_orphan_volume_attachments(meta, wrong_orphan_volume_attachments, f
         orphan_volume_attachment_t = Table('volume_attachment', meta, autoload=True)
 
         for orphan_volume_attachment_id in wrong_orphan_volume_attachments:
-            log.info ("-- action: deleting orphan volume attachment id: %s", orphan_volume_attachment_id)
+            log.info("-- action: deleting orphan volume attachment id: %s", orphan_volume_attachment_id)
             now = datetime.datetime.utcnow()
             delete_orphan_volume_attachment_q = orphan_volume_attachment_t.update().\
                 where(orphan_volume_attachment_t.c.id == orphan_volume_attachment_id).values(updated_at=now, deleted_at=now, deleted=1)
@@ -115,7 +115,7 @@ def get_error_deleting_volumes(meta):
     error_deleting_volumes = []
 
     volumes_t = Table('volumes', meta, autoload=True)
-    error_deleting_volumes_q = select(columns=[volumes_t.c.id]).where(and_(volumes_t.c.status == "error_deleting",volumes_t.c.deleted == 0))
+    error_deleting_volumes_q = select(columns=[volumes_t.c.id]).where(and_(volumes_t.c.status == "error_deleting", volumes_t.c.deleted == 0))
 
     # convert the query result into a list
     for i in error_deleting_volumes_q.execute():
@@ -158,7 +158,7 @@ def get_error_deleting_snapshots(meta):
     error_deleting_snapshots = []
 
     snapshots_t = Table('snapshots', meta, autoload=True)
-    error_deleting_snapshots_q = select(columns=[snapshots_t.c.id]).where(and_(snapshots_t.c.status == "error_deleting",snapshots_t.c.deleted == 0))
+    error_deleting_snapshots_q = select(columns=[snapshots_t.c.id]).where(and_(snapshots_t.c.status == "error_deleting", snapshots_t.c.deleted == 0))
 
     # convert the query result into a list
     for i in error_deleting_snapshots_q.execute():
@@ -186,7 +186,7 @@ def get_wrong_volume_admin_metadata(meta):
     wrong_admin_metadata = {}
     volume_admin_metadata_t = Table('volume_admin_metadata', meta, autoload=True)
     volumes_t = Table('volumes', meta, autoload=True)
-    admin_metadata_join = volume_admin_metadata_t.join(volumes_t,volume_admin_metadata_t.c.volume_id == volumes_t.c.id)
+    admin_metadata_join = volume_admin_metadata_t.join(volumes_t, volume_admin_metadata_t.c.volume_id == volumes_t.c.id)
     columns = [volumes_t.c.id, volumes_t.c.deleted, volume_admin_metadata_t.c.id, volume_admin_metadata_t.c.deleted]
     wrong_volume_admin_metadata_q = select(columns=columns).select_from(admin_metadata_join).\
         where(and_(volumes_t.c.deleted == 1, volume_admin_metadata_t.c.deleted == 0))
@@ -216,7 +216,7 @@ def get_wrong_volume_glance_metadata_volumes(meta):
     wrong_glance_metadata = {}
     volume_glance_metadata_t = Table('volume_glance_metadata', meta, autoload=True)
     volumes_t = Table('volumes', meta, autoload=True)
-    glance_metadata_join = volume_glance_metadata_t.join(volumes_t,volume_glance_metadata_t.c.volume_id == volumes_t.c.id)
+    glance_metadata_join = volume_glance_metadata_t.join(volumes_t, volume_glance_metadata_t.c.volume_id == volumes_t.c.id)
     columns = [volumes_t.c.id, volumes_t.c.deleted, volume_glance_metadata_t.c.id, volume_glance_metadata_t.c.deleted]
     wrong_volume_glance_metadata_q = select(columns=columns).select_from(glance_metadata_join).\
         where(and_(volumes_t.c.deleted == 1, volume_glance_metadata_t.c.deleted == 0))
@@ -246,7 +246,7 @@ def get_wrong_volume_glance_metadata_snapshots(meta):
     wrong_glance_metadata = {}
     volume_glance_metadata_t = Table('volume_glance_metadata', meta, autoload=True)
     snapshots_t = Table('snapshots', meta, autoload=True)
-    glance_metadata_join = volume_glance_metadata_t.join(snapshots_t,volume_glance_metadata_t.c.snapshot_id == snapshots_t.c.id)
+    glance_metadata_join = volume_glance_metadata_t.join(snapshots_t, volume_glance_metadata_t.c.snapshot_id == snapshots_t.c.id)
     columns = [snapshots_t.c.id, snapshots_t.c.deleted, volume_glance_metadata_t.c.id, volume_glance_metadata_t.c.deleted]
     wrong_volume_glance_metadata_q = select(columns=columns).select_from(glance_metadata_join).\
         where(and_(snapshots_t.c.deleted == 1, volume_glance_metadata_t.c.deleted == 0))
@@ -276,7 +276,7 @@ def get_wrong_volume_metadata(meta):
     wrong_metadata = {}
     volume_metadata_t = Table('volume_metadata', meta, autoload=True)
     volumes_t = Table('volumes', meta, autoload=True)
-    metadata_join = volume_metadata_t.join(volumes_t,volume_metadata_t.c.volume_id == volumes_t.c.id)
+    metadata_join = volume_metadata_t.join(volumes_t, volume_metadata_t.c.volume_id == volumes_t.c.id)
     columns = [volumes_t.c.id, volumes_t.c.deleted, volume_metadata_t.c.id, volume_metadata_t.c.deleted]
     wrong_volume_metadata_q = select(columns=columns).select_from(metadata_join).\
         where(and_(volumes_t.c.deleted == 1, volume_metadata_t.c.deleted == 0))
@@ -306,7 +306,7 @@ def get_wrong_volume_attachments(meta):
     wrong_attachments = {}
     volume_attachment_t = Table('volume_attachment', meta, autoload=True)
     volumes_t = Table('volumes', meta, autoload=True)
-    attachment_join = volume_attachment_t.join(volumes_t,volume_attachment_t.c.volume_id == volumes_t.c.id)
+    attachment_join = volume_attachment_t.join(volumes_t, volume_attachment_t.c.volume_id == volumes_t.c.id)
     columns = [volumes_t.c.id, volumes_t.c.deleted, volume_attachment_t.c.id, volume_attachment_t.c.deleted]
     wrong_volume_attachment_q = select(columns=columns).select_from(attachment_join).\
         where(and_(volumes_t.c.deleted == 1, volume_attachment_t.c.deleted == 0))
@@ -335,13 +335,43 @@ def fix_wrong_volume_attachments(meta, wrong_attachments, fix_limit):
         log.warn("- PLEASE CHECK MANUALLY - too many (more than %s) wrong volume attachments - denying to fix them automatically", str(fix_limit))
 
 
+# get all the rows with a snapshot_metadata still defined where the corresponding snapshot is already deleted
+def get_wrong_snapshot_metadata(meta):
+
+    wrong_metadata = {}
+    snapshot_metadata_t = Table('snapshot_metadata', meta, autoload=True)
+    snapshots_t = Table('snapshots', meta, autoload=True)
+    metadata_join = snapshot_metadata_t.join(snapshots_t, snapshot_metadata_t.c.snapshot_id == snapshots_t.c.id)
+    columns = [snapshots_t.c.id, snapshots_t.c.deleted, snapshot_metadata_t.c.id, snapshot_metadata_t.c.deleted]
+    wrong_snapshot_metadata_q = select(columns=columns).select_from(metadata_join).\
+        where(and_(snapshots_t.c.deleted == 1, snapshot_metadata_t.c.deleted == 0))
+
+    # return a dict indexed by snapshot_metadata_id and with the value snapshot_id for non deleted snapshot_metadata
+    for (snapshot_id, snapshot_deleted, snapshot_metadata_id, snapshot_metadata_deleted) in wrong_snapshot_metadata_q.execute():
+        wrong_metadata[snapshot_metadata_id] = snapshot_id
+    return wrong_metadata
+
+
+# delete snapshot_metadata still defined where the corresponding snapshot is already deleted
+def fix_wrong_snapshot_metadata(meta, wrong_metadata):
+
+    snapshot_metadata_t = Table('snapshot_metadata', meta, autoload=True)
+
+    for snapshot_metadata_id in wrong_metadata:
+        log.info("-- action: deleting snapshot_metadata id: %s", snapshot_metadata_id)
+        now = datetime.datetime.utcnow()
+        delete_snapshot_metadata_q = snapshot_metadata_t.update().\
+            where(snapshot_metadata_t.c.id == snapshot_metadata_id).values(updated_at=now, deleted_at=now, deleted=1)
+        delete_snapshot_metadata_q.execute()
+
+
 # get all the rows with a group_volume_type_mapping still defined where the corresponding group_id is already deleted
 def get_wrong_group_volume_type_mappings(meta):
 
     wrong_group_volume_type_mappings = {}
     group_volume_type_mapping_t = Table('group_volume_type_mapping', meta, autoload=True)
     groups_t = Table('groups', meta, autoload=True)
-    group_volume_type_mapping_join = group_volume_type_mapping_t.join(groups_t,group_volume_type_mapping_t.c.group_id == groups_t.c.id)
+    group_volume_type_mapping_join = group_volume_type_mapping_t.join(groups_t, group_volume_type_mapping_t.c.group_id == groups_t.c.id)
     columns = [groups_t.c.id, groups_t.c.deleted, group_volume_type_mapping_t.c.id, group_volume_type_mapping_t.c.deleted]
     wrong_group_volume_type_mapping_q = select(columns=columns).select_from(group_volume_type_mapping_join).\
         where(and_(groups_t.c.deleted == 1, group_volume_type_mapping_t.c.deleted == 0))
@@ -377,7 +407,7 @@ def get_missing_deleted_at(meta, table_names):
     for t in table_names:
         a_table_t = Table(t, meta, autoload=True)
         a_table_select_deleted_at_q = a_table_t.select().where(
-            and_(a_table_t.c.deleted == 1, a_table_t.c.deleted_at == None))
+            and_(a_table_t.c.deleted == 1, a_table_t.c.deleted_at is None))
 
         for row in a_table_select_deleted_at_q.execute():
             missing_deleted_at[row.id] = t
@@ -392,7 +422,7 @@ def fix_missing_deleted_at(meta, table_names):
 
         log.info("- action: fixing columns with missing deleted_at times in the %s table", t)
         a_table_set_deleted_at_q = a_table_t.update().where(
-            and_(a_table_t.c.deleted == 1, a_table_t.c.deleted_at == None)).values(
+            and_(a_table_t.c.deleted == 1, a_table_t.c.deleted_at is None)).values(
             deleted_at=now)
         a_table_set_deleted_at_q.execute()
 
@@ -403,7 +433,7 @@ def get_deleted_services_still_used_in_volumes(meta):
     deleted_services_still_used_in_volumes = {}
     services_t = Table('services', meta, autoload=True)
     volumes_t = Table('volumes', meta, autoload=True)
-    services_volumes_join = services_t.join(volumes_t,services_t.c.uuid == volumes_t.c.service_uuid)
+    services_volumes_join = services_t.join(volumes_t, services_t.c.uuid == volumes_t.c.service_uuid)
     columns = [services_t.c.uuid, services_t.c.deleted, volumes_t.c.id, volumes_t.c.deleted]
     deleted_services_still_used_in_volumes_q = select(columns=columns).select_from(services_volumes_join).\
         where(and_(volumes_t.c.deleted == 0, services_t.c.deleted == 1))
@@ -436,8 +466,7 @@ def makeOsConnection():
                                      password=os.getenv('OS_PASSWORD'),
                                      identity_api_version="3")
     except Exception as e:
-        log.warn("- PLEASE CHECK MANUALLY - problems connecting to openstack: %s",
-                     str(e))
+        log.warn("- PLEASE CHECK MANUALLY - problems connecting to openstack: %s", str(e))
         sys.exit(1)
 
     return conn
@@ -461,8 +490,8 @@ def get_db_url(config_file):
     try:
         parser.read(config_file)
         db_url = parser.get('database', 'connection', raw=True)
-    except:
-        log.info("ERROR: Check Cinder configuration file.")
+    except Exception as e:
+        log.info("ERROR: Check Cinder configuration file - error %s", str(e))
         sys.exit(2)
     return db_url
 
@@ -473,12 +502,8 @@ def parse_cmdline_args():
     parser.add_argument("--config",
                         default='./cinder.conf',
                         help='configuration file')
-    parser.add_argument("--dry-run",
-                       action="store_true",
-                       help='print only what would be done without actually doing it')
-    parser.add_argument("--fix-limit",
-                       default=25,
-                       help='maximum number of inconsistencies to fix automatically - if there are more, automatic fixing is denied')
+    parser.add_argument("--dry-run", action="store_true", help='print only what would be done without actually doing it')
+    parser.add_argument("--fix-limit", default=25, help='maximum number of inconsistencies to fix automatically - if there are more, automatic fixing is denied')
     return parser.parse_args()
 
 
@@ -576,7 +601,7 @@ def main():
     else:
         log.info("- volume_glance_metadata entries for snapshots are consistent")
 
-    # fixing possible wrong metadata entries
+    # fixing possible wrong volume metadata entries
     wrong_metadata = get_wrong_volume_metadata(cinder_metadata)
     if len(wrong_metadata) != 0:
         log.info("- volume_metadata inconsistencies found")
@@ -602,6 +627,19 @@ def main():
     else:
         log.info("- volume attachments are consistent")
 
+    # fixing possible wrong snapshot metadata entries
+    wrong_metadata = get_wrong_snapshot_metadata(cinder_metadata)
+    if len(wrong_metadata) != 0:
+        log.info("- snapshot_metadata inconsistencies found")
+        # print out what we would delete
+        for snapshot_metadata_id in wrong_metadata:
+            log.info("-- snapshot_metadata id: %s - deleted snapshot id: %s", snapshot_metadata_id, wrong_metadata[snapshot_metadata_id])
+        if not args.dry_run:
+            log.info("- removing snapshot_metadata inconsistencies found")
+            fix_wrong_snapshot_metadata(cinder_metadata, wrong_metadata)
+    else:
+        log.info("- snapshot_metadata entries are consistent")
+
     # fixing possible wrong group_volume_type_mappings entries
     wrong_group_volume_type_mappings = get_wrong_group_volume_type_mappings(cinder_metadata)
     if len(wrong_group_volume_type_mappings) != 0:
@@ -617,7 +655,7 @@ def main():
 
     # fixing possible missing deleted_at timestamps in some tables
     # tables which sometimes have missing deleted_at values
-    table_names = [ 'snapshots', 'volume_attachment' ]
+    table_names = ['snapshots', 'volume_attachment']
 
     missing_deleted_at = get_missing_deleted_at(cinder_metadata, table_names)
     if len(missing_deleted_at) != 0:
