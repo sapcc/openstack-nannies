@@ -60,17 +60,20 @@ class MissingSnapshotNanny(ManilaNanny):
         # mapping of filer name and host
         # 'manila-share-netapp-ma01-st051': 'stnpca1-st051.cc.qa-de-1.cloud.sap'
         manila_filers = {
-            f'manila-share-netapp-{filer["name"]}': filer['host'] for filer in self.netapp_filers
+            f'manila-share-netapp-{filer["name"]}': filer['host']
+            for filer in self.netapp_filers
         }
 
         logging.info("fetching Manila Sanpshots...")
 
         for _snapshot in manila.share_snapshots.list(search_opts={'all_tenants': True}):
             try:
-                _snap_instances = manila.share_snapshot_instances.list(detailed=True,
-                                                                       snapshot=_snapshot)
+                # with detailed=True, next call may abort with an internal error
+                _snap_instances = manila.share_snapshot_instances.list(
+                    detailed=True, snapshot=_snapshot)
+                if not isinstance(_snap_instances, list):
+                    raise Exception("not a list")
             except manilaexceptions.InternalServerError as e:
-                # with detailed=True, above call may abort with an internal error
                 logging.error(e)
                 continue
 
@@ -119,12 +122,17 @@ class MissingSnapshotNanny(ManilaNanny):
                     logging.warning(f'Volume {vol_name} not found on {host}')
                     missing_snaps.extend(snapshots)
 
-        # check if the share instances are still available in the mean while
+        # double check the status of snapshot and share, because they can be changed in the mean while
         for snap in missing_snaps:
             try:
                 snap_instance = manila.share_snapshot_instances.get(snap['snapshot_instance_id'])
             except manilaexceptions.NotFound:
                 continue
+            # skip if share instance is not available
+            share_instance = manila.share_instances.get(snap_instance.share_instance_id)
+            if share_instance.status != 'available':
+                continue
+            # check if snapshot is available
             if snap_instance.status == 'available':
                 logging.warning(f'Snapshot not found: {snap}')
                 missing_snapshots.append(snap)
@@ -149,8 +157,7 @@ def list_share_snapshots(netappclient: NetAppRestHelper):
 
 def main():
     parser = base_command_parser()
-    parser.add_argument("--netapp-filers",
-                        default="/manila-etc/netapp-filers.yaml",
+    parser.add_argument("--netapp-filers", default="/manila-etc/netapp-filers.yaml",
                         help="Netapp filers list")
     args = parser.parse_args()
 
