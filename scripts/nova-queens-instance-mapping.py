@@ -108,9 +108,9 @@ for (instance_uuid,) in unmapped_instances:
 
   # Check which cell contains this instance
   for cell in CELLS:
-    cell['db'].cursor(buffered=True).execute("SELECT id FROM instances WHERE uuid = %s", (instance_uuid,))
-
-    if cell['db'].cursor(buffered=True).rowcount != 0:
+    cell_cur = cell['db'].cursor(buffered=True)
+    cell_cur.execute("SELECT id FROM instances WHERE uuid = %s", (instance_uuid,))
+    if cell_cur.rowcount != 0:
       instance_cell = cell
       break
 
