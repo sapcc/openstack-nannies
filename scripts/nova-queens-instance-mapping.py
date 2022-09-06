@@ -127,6 +127,7 @@ for (instance_uuid,) in unmapped_instances:
         log.info("unmapped instances - build requests existing for scheduled instance %s, deleting build-request to fix instance-list", instance_uuid)
         api_cur.execute("DELETE FROM build_requests WHERE instance_uuid = %s", (instance_uuid,))
         api_conn.commit()
+    continue
 
   # If we reach this point, it's not in any cell?!
   log.info("unmapped instances - instance %s not found in any cell", instance_uuid)
