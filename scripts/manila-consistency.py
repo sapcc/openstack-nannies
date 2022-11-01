@@ -219,6 +219,43 @@ def fix_wrong_share_instance_access_mapping(meta, wrong_share_instance_access_ma
             values(updated_at=now, deleted_at=now, deleted=share_instance_access_mapping_id)
         delete_share_instance_access_mapping_q.execute()
 
+# get all the rows with a share_instance_export_locations_metadata still defined where the corresponding share_instance_export_location is already deleted
+def get_wrong_si_el_metadata(meta):
+
+    wrong_si_el_metadata = {}
+    si_el_metadata_t = Table('share_instance_export_locations_metadata', meta, autoload=True)
+    si_el_t = Table('share_instance_export_locations', meta, autoload=True)
+    si_el_metadata_join = si_el_metadata_t.join(si_el_t,si_el_metadata_t.c.export_location_id == si_el_t.c.id)
+    wrong_si_el_metadata_q = select(
+        columns=[
+            si_el_t.c.id,
+            si_el_t.c.deleted,
+            si_el_metadata_t.c.id,
+            si_el_metadata_t.c.deleted
+        ]).select_from(si_el_metadata_join).where(
+            and_(
+                si_el_t.c.deleted != 0,
+                si_el_metadata_t.c.deleted == 0
+            )
+    )
+
+    # return a dict indexed by share_instance_export_locations_metadata id and with the value share_instance_export_location id for non deleted si_el_metadata
+    for (si_el_id, si_el_deleted, si_el_metadata_id, si_el_metadata_deleted) in wrong_si_el_metadata_q.execute():
+        wrong_si_el_metadata[si_el_metadata_id] = si_el_id
+    return wrong_si_el_metadata
+
+# delete share_instance_export_locations_metadata still defined where the corresponding share_instance_export_location is already deleted
+def fix_wrong_si_el_metadata(meta, wrong_si_el_metadata):
+    si_el_metadata_t = Table('share_instance_export_locations_metadata', meta, autoload=True)
+
+    now = datetime.datetime.utcnow()
+    for si_el_metadata_id in wrong_si_el_metadata:
+        log.info("-- action: deleting share instance export location metadata id: %s", si_el_metadata_id)
+        delete_si_el_metadata_q = si_el_metadata_t.update().\
+            where(si_el_metadata_t.c.id == si_el_metadata_id).\
+            values(updated_at=now, deleted_at=now, deleted=si_el_metadata_id)
+        delete_si_el_metadata_q.execute()
+
 # establish a database connection and return the handle
 def makeConnection(db_url):
 
@@ -329,6 +366,20 @@ def main():
             fix_wrong_share_instance_access_mapping(manila_metadata, wrong_share_instance_access_mapping)
     else:
         log.info("- share instance access mapping is consistent")
+
+    wrong_si_el_metadata = get_wrong_si_el_metadata(manila_metadata)
+    if len(wrong_si_el_metadata) != 0:
+        log.info("- share instance export location metadata inconsistencies found")
+        # print out what we would delete
+        for si_el_metadata_id, si_el_id in wrong_si_el_metadata.items():
+            log.info("-- share instance export location metadata id: %s - deleted share instance export location id: %s",
+                     si_el_metadata_id,
+                     si_el_id)
+        if not args.dry_run:
+            log.info("- deleting share instance export location metadata inconsistencies found")
+            fix_wrong_si_el_metadata(manila_metadata, wrong_si_el_metadata)
+    else:
+        log.info("- share instance export location metadata is consistent")
 
 
 if __name__ == "__main__":
