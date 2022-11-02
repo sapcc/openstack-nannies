@@ -95,6 +95,8 @@ class LabelGauge:
 
     def __init__(self, name, helper, labels):
         self._gauge = Gauge(name, helper, labels)
+        # init empty metric to distinguish from absent metric
+        self._gauge.labels(**{label: 'none' for label in labels}).set(0)
         self._labelkey_cache = {}
 
     def export(self, data):
