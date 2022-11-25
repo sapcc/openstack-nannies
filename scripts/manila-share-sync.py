@@ -150,7 +150,7 @@ class ManilaShareSyncNanny(ManilaNanny):
             self.process_offline_volumes(_offline_volume_list, dry_run)
 
         if self._tasks[TASK_SHARE_STATE]:
-            _shares = self._query_shares(only_active_instance=True)
+            _shares = self._query_shares()
             dry_run = self._dry_run_tasks[TASK_SHARE_STATE]
             self.sync_share_state(_shares, dry_run)
 
@@ -214,8 +214,10 @@ class ManilaShareSyncNanny(ManilaNanny):
                 continue
             elif len(instances) == 1:
                 instance = instances[0]
-                instance_updated_at = instance['updated_at']
-                if instance_updated_at is not None:
+                instance_updated_at = instance.get('updated_at')
+                if instance_updated_at is None:
+                    instance_updated_at = instance.get('created_at')
+                if instance_updated_at:
                     if is_utcts_recent(instance_updated_at, 900):
                         continue
                 else:
@@ -235,8 +237,10 @@ class ManilaShareSyncNanny(ManilaNanny):
                     self.share_delete(share_id)
             else:
                 for instance in instances:
-                    instance_updated_at = instance['updated_at']
-                    if instance_updated_at is not None:
+                    instance_updated_at = instance.get('updated_at')
+                    if instance_updated_at is None:
+                        instance_updated_at = instance.get('created_at')
+                    if instance_updated_at:
                         if is_utcts_recent(instance_updated_at, 900):
                             continue
                     else:
@@ -520,7 +524,7 @@ class ManilaShareSyncNanny(ManilaNanny):
         r = q.execute()
         return [dict(zip(r.keys(), x)) for x in r.fetchall()]
 
-    def _query_shares(self, only_active_instance=False):
+    def _query_shares(self):
         """ Get shares that are not deleted """
 
         shares = Table('shares', self.db_metadata, autoload=True)
@@ -541,19 +545,17 @@ class ManilaShareSyncNanny(ManilaNanny):
 
         shares = []
         for (sid, name, size, ctime, utime, siid, status, host, replica_state) in stmt.execute():
-            if (only_active_instance == False or
-               (only_active_instance == True and replica_state == 'active')):
-                shares.append({
-                    'id': sid,
-                    'name': name,
-                    'size': size,
-                    'created_at': ctime,
-                    'updated_at': utime,
-                    'instance_id': siid,
-                    'status': status,
-                    'host': host,
-                    'replica_state': replica_state,
-                })
+            shares.append({
+                'id': sid,
+                'name': name,
+                'size': size,
+                'created_at': ctime,
+                'updated_at': utime,
+                'instance_id': siid,
+                'status': status,
+                'host': host,
+                'replica_state': replica_state,
+            })
         return shares
 
     def _query_share_instances(self, share_id):
