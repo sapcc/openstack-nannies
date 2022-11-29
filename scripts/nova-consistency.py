@@ -272,7 +272,7 @@ def main():
     nova_session, nova_metadata, nova_Base = makeConnection(db_url)
 
     if args.older_than and not args.dry_run:
-        purge_block_device_mappings(nova_metadata, args.older_than)
+        # purge_block_device_mappings(nova_metadata, args.older_than)
         purge_reservations(nova_metadata, args.older_than)
         purge_instance_id_mappings(nova_metadata, args.older_than)
         # purge_instance_system_metadata(nova_metadata, args.older_than)
