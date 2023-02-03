@@ -622,8 +622,7 @@ class ManilaShareSyncNanny(ManilaNanny):
         update(shares_t) \
             .values(updated_at=now, size=share_size) \
             .where(shares_t.c.id == share_instances_t.c.share_id) \
-            .where(and_(shares_t.c.id == share_id,
-                        share_instances_t.c.status == 'available')) \
+            .where(shares_t.c.id == share_id) \
             .execute()
 
     def _reset_share_state(self, share_id, state):
