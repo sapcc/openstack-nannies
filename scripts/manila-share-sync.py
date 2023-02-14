@@ -177,6 +177,7 @@ class ManilaShareSyncNanny(ManilaNanny):
             # For example (1 == 1.0) is True.
 
             size = share['size']
+            status = share['status']
             vsize = share['volume']['size']
             snap_percent = share['volume']['snap_percent']
 
@@ -184,6 +185,7 @@ class ManilaShareSyncNanny(ManilaNanny):
             if snap_percent == self.net_capacity_snap_reserve:
                 correct_size = (vsize * (100 - self.net_capacity_snap_reserve) / 100)
                 if size != correct_size:
+                    self._reset_resize_error_state(dry_run, share_id, status)
                     if dry_run:
                         log.info(msg_dry_run, share_id, size, correct_size)
                     else:
@@ -192,6 +194,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                         self.MANILA_SYNC_SHARE_SIZE_COUNTER.inc()
             else:
                 if size != vsize:
+                    self._reset_resize_error_state(dry_run, share_id, status)
                     if dry_run:
                         log.info(msg_dry_run, share_id, size, vsize)
                     else:
@@ -624,6 +627,15 @@ class ManilaShareSyncNanny(ManilaNanny):
             .where(shares_t.c.id == share_instances_t.c.share_id) \
             .where(shares_t.c.id == share_id) \
             .execute()
+
+    def _reset_resize_error_state(self, dry_run, share_id, state):
+        if state in ['shrinking_error', 'extending_error']:
+            state_msg = f"share {share_id}: reset state from '{state}' to 'available'"
+            if not dry_run:
+                self._reset_share_state(share_id, 'available')
+            else:
+                state_msg = 'Dry run: ' + state_msg
+            log.info(state_msg)
 
     def _reset_share_state(self, share_id, state):
         try:
