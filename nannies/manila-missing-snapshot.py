@@ -79,7 +79,7 @@ class MissingSnapshotNanny(ManilaNanny):
             for filer in self.netapp_filers
         }
 
-        logging.info("fetching Manila Sanpshots...")
+        logging.info("fetching Manila Snapshots...")
 
         for _snapshot in manila.share_snapshots.list(search_opts={'all_tenants': True}):
             try:
@@ -94,7 +94,12 @@ class MissingSnapshotNanny(ManilaNanny):
 
             for _snap_instance in _snap_instances:
                 if _snap_instance.status == 'available':
-                    _share_instance = manila.share_instances.get(_snap_instance.share_instance_id)
+                    try:
+                        _share_instance = manila.share_instances.get(_snap_instance.share_instance_id)
+                    except manilaexceptions.NotFound:
+                        logging.warning(f'share instance {_snap_instance.share_instance_id} '
+                                        f'of snapshot instance {_snap_instance.id} not found')
+                        continue
                     # map Share Instance Host to NetApp Filer's fqdn, like
                     # 'manila-share-netapp-ma01-md004@ma01-md004#aggr_ssd_stnpa1_01_md004_1'
                     #   -> 'stnpca1-md004.cc.qa-de-1.cloud.sap'
