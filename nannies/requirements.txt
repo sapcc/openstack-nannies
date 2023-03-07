@@ -26,5 +26,5 @@ PyYAML==5.4
 requests==2.20.0
 requestsexceptions==1.4.0
 six==1.11.0
-pyOpenSSL==21.0.0
+pyOpenSSL==22.1.0
 prometheus-api-client==0.4.2
