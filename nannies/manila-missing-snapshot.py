@@ -15,12 +15,15 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 #
+import configparser
 import logging
+import sys
 
 import manilaclient.common.apiclient.exceptions as manilaexceptions
 import yaml
 from helper.manilananny import ManilaNanny, base_command_parser
 from helper.netapp_rest import NetAppRestHelper
+from helper.prometheus_connect import PrometheusInfraConnect
 from helper.prometheus_exporter import LabelGauge
 from netapp_ontap.error import NetAppRestError
 
@@ -36,7 +39,18 @@ class MissingSnapshotNanny(ManilaNanny):
         with open(netapp_filers, "r") as f:
             self.netapp_filers = yaml.safe_load(f)["filers"]
 
-        # intialize gauge
+        # parse manila config for region value
+        try:
+            parser = configparser.ConfigParser()
+            parser.read(self.config_file)
+            region = parser.get("keystone_authtoken", "region_name")
+        except Exception as e:
+            print(f"ERROR: Parse {self.config_file}: " + str(e))
+            sys.exit(2)
+
+        # initialize prom client
+        self.prom_client = PrometheusInfraConnect(region=region)
+        # initialize gauge
         self.missing_snapshot_gauge = LabelGauge(
             "manila_nanny_missing_snapshot_instance",
             "Missing Snapshot Instances on Netapp filers",
