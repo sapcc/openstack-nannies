@@ -71,10 +71,11 @@ class MissingSnapshotNanny(ManilaNanny):
         missing_snaps = []
         missing_snapshots = []
 
+        manila_host_prefix = 'manila-share-netapp-'
         # mapping of filer name and host
         # 'manila-share-netapp-ma01-st051': 'stnpca1-st051.cc.qa-de-1.cloud.sap'
         manila_filers = {
-            f'manila-share-netapp-{filer["name"]}': filer['host']
+            f'{manila_host_prefix}{filer["name"]}': filer['host']
             for filer in self.netapp_filers
         }
 
@@ -125,16 +126,7 @@ class MissingSnapshotNanny(ManilaNanny):
             logging.info(f"checking {snap_count} snapshots on filer {host}...")
 
             for vol_name, snapshots in volume_snaps.items():
-                vols = netapp.get_volumes(name=vol_name)
-                if len(vols) > 0:
-                    _snaps = netapp.get_snapshots(vols[0].uuid, name="share_snapshot_*")
-                    _snap_names = [_.name for _ in _snaps]
-                    for s in snapshots:
-                        if s['netapp_provider_location'] not in _snap_names:
-                            missing_snaps.append(s)
-                else:
-                    logging.warning(f'Volume {vol_name} not found on {host}')
-                    missing_snaps.extend(snapshots)
+                _check_provider_location_on_filer(host, netapp, vol_name, missing_snaps, snapshots)
 
         # double check the status of snapshot and share, because they can be changed in the mean while
         for snap in missing_snaps:
@@ -146,14 +138,48 @@ class MissingSnapshotNanny(ManilaNanny):
             share_instance = manila.share_instances.get(snap_instance.share_instance_id)
             if share_instance.status != 'available':
                 continue
-            # check if snapshot is available
-            if snap_instance.status == 'available':
-                logging.warning(f'Snapshot not found: {snap}')
-                missing_snapshots.append(snap)
+            # skip if snapshot instance is not available
+            if snap_instance.status != 'available':
+                continue
+
+            # double checking for SVM DR move to another filer
+            manila_filer_name = share_instance.host.split('@')[0]
+            manila_host = manila_filers.get(manila_filer_name)
+            prom_filer_name = self.prom_client.get_share_filer_name(share_instance.share_id)
+            prom_host = manila_filers.get(f'{manila_host_prefix}{prom_filer_name}')
+            if manila_host != prom_host:
+                prom_netapp = self.get_netapprestclient(prom_host)
+                 # map Share Instance Id to NetApp Volume name
+                volume_name = 'share_' + share_instance.id.replace('-', '_')
+                if _check_provider_location_on_filer(prom_host, prom_netapp, volume_name, missing_snapshots, [snap]):
+                    logging.warning(f'Parent volume {volume_name} of snapshot {snap} on wrong filer - '
+                                    f'expected on {manila_host}, found on {prom_host}')
+                    # wrong location, but not missing - moving on ..
+                    continue
+
+            logging.error(f'Snapshot not found: {snap}')
+            missing_snapshots.append(snap)
 
         logging.info(f'{len(missing_snapshots)} missing Snapshot Instances found')
         return missing_snapshots
 
+def _check_provider_location_on_filer(host, netapp_cli, vol_name,
+                                    missing_on_filer=[], snaps_to_check=[]):
+    snapshots_exist = True
+    vols = netapp_cli.get_volumes(name=vol_name)
+    if len(vols) > 0:
+        _snaps = netapp_cli.get_snapshots(vols[0].uuid, name="share_snapshot_*")
+        _snap_names = [_.name for _ in _snaps]
+        for s in snaps_to_check:
+            if s['netapp_provider_location'] not in _snap_names:
+                missing_on_filer.append(s)
+                snapshots_exist = False
+    else:
+        logging.warning(f'Volume {vol_name} not found on {host}')
+        missing_on_filer.extend(snaps_to_check)
+        snapshots_exist = False
+
+    return snapshots_exist
 
 def list_share_snapshots(netappclient: NetAppRestHelper):
     """ Get snapshots of all volumes on Netapp filer """
