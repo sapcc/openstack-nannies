@@ -4,6 +4,8 @@ import os
 import queue
 import logging
 from prometheus_api_client import PrometheusConnect
+from prometheus_api_client.exceptions import PrometheusApiClientException
+from requests.exceptions import RequestException
 
 log = logging.getLogger('prometheus_helper')
 
@@ -53,3 +55,20 @@ class PrometheusInfraConnect:
         except Exception as e:
             log.warn("problems connecting host %s in prometheus infra: %s", str(host),str(e))
             return "prom_issue"
+
+    def get_share_filer_name(self, share_id, volume_state='online', volume_type='rw'):
+        volume_label_config = {
+            'share_id':     share_id,
+            'volume_state': volume_state,
+            'volume_type':  volume_type,
+        }
+        try:
+            volume_metrics = self.api.get_current_metric_value(
+                metric_name='netapp_volume_snapshot_available_bytes',
+                label_config=volume_label_config)
+
+        except (RequestException, PrometheusApiClientException) as e:
+            log.warn(f"prometheus infra exception: {e}")
+            return None
+
+        return volume_metrics[0]['metric'].get('filer')
