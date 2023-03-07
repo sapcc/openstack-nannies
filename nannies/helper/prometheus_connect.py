@@ -10,16 +10,15 @@ log = logging.getLogger('prometheus_helper')
 
 class PrometheusInfraConnect:
 
-    def __init__(self, region, verify_ssl=False):
+    def __init__(self, region, prometheus_infra=None):
         self.api = None
         self.region = region
-        self.prometheus_infra = "https://prometheus-infra-collector." + self.region + ".cloud.sap"
+        self.prometheus_infra = prometheus_infra or f'http://prometheus-infra-collector.infra-monitoring.svc.kubernetes.{region}.cloud.sap:9090'
 
         self.login()
 
     def login(self):
-            self.api = PrometheusConnect(url=self.prometheus_infra, disable_ssl=False,retry = None)
-            self.api._session.cert = ('/etc/secret-volume/client_cert', '/etc/secret-volume/client_key')
+            self.api = PrometheusConnect(url=self.prometheus_infra)
 
     def find_vm_readiness(self,vcenter,vm):
 
