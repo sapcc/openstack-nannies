@@ -98,25 +98,25 @@ class ManilaNanny(http.server.HTTPServer):
             self.manilaclient.share_instances.reset_state(share_instance_id, state)
         except Exception as e:
             log.exception("share_instance_reset_state(share_instance_id=%s, state=%s): %s",
-                share_instance_id, state, e)
+                          share_instance_id, state, e)
 
     def share_snapshot_reset_state(self, snapshot_id, state):
         try:
             self.manilaclient.share_snapshots.reset_state(snapshot_id, state)
         except Exception as e:
             log.exception("share_snapshot_reset_state(snapshot_id=%s, state=%s): %s",
-                snapshot_id, state, e)
+                          snapshot_id, state, e)
 
     def share_snapshot_instance_reset_state(self, snapshot_instance_id, state):
         try:
             self.manilaclient.share_snapshot_instances.reset_state(snapshot_instance_id, state)
         except Exception as e:
             log.exception("share_snapshot_instance_reset_state(snapshot_instance_id=%s, state=%s): %s",
-                snapshot_instance_id, state, e)
+                          snapshot_instance_id, state, e)
 
     def list_shares(self, status=None):
         try:
-            search_opts={'all_tenants': 1}
+            search_opts = {'all_tenants': 1}
             if status:
                 search_opts.update({'status': status})
             return self.manilaclient.shares.list(search_opts=search_opts)
@@ -131,7 +131,7 @@ class ManilaNanny(http.server.HTTPServer):
 
     def list_share_snapshots(self, status=None):
         try:
-            search_opts={'all_tenants': 1}
+            search_opts = {'all_tenants': 1}
             if status:
                 search_opts.update({'status': status})
             return self.manilaclient.share_snapshots.list(search_opts=search_opts)
@@ -161,7 +161,7 @@ class ManilaNanny(http.server.HTTPServer):
             self.manilaclient.share_snapshots.delete(snapshot_id)
         except Exception as e:
             log.exception("share_snapshot_delete(snapshot_id=%s): %s",
-                snapshot_id, e)
+                          snapshot_id, e)
 
     def share_force_delete(self, share_id):
         try:
@@ -174,14 +174,14 @@ class ManilaNanny(http.server.HTTPServer):
             self.manilaclient.share_instances.force_delete(share_instance_id)
         except Exception as e:
             log.exception("share_instance_force_delete(share_instance_id=%s): %s",
-                share_instance_id, e)
+                          share_instance_id, e)
 
     def share_snapshot_force_delete(self, snapshot_id):
         try:
             self.manilaclient.share_snapshots.force_delete(snapshot_id)
         except Exception as e:
             log.exception("share_snapshots_force_delete(snapshot_id=%s): %s",
-                snapshot_id, e)
+                          snapshot_id, e)
 
 
 def create_manila_client(config_file, version="2.7"):
