@@ -115,8 +115,9 @@ class ManilaShareSyncNanny(ManilaNanny):
             return 50
 
     def _run(self):
+        # TODO: implement proper re-auth after token lifetime ended
         # Need to recreate manila client each run, because of session timeout
-        # self.renew_manila_client()
+        self.renew_manila_client()
 
         # fetch data
         try:
