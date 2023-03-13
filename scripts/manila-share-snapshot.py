@@ -181,7 +181,7 @@ class ManilaShareSnapshotNanny(ManilaNanny):
                     self.share_snapshot_force_delete(snapshot_id)
                     continue
                 self.share_snapshot_reset_state(snapshot_id, 'error')
-                if snapshot_status  == 'deleting':
+                if snapshot_status == 'deleting':
                     self.share_snapshot_delete(snapshot_id)
             else:
                 for instance in instances:

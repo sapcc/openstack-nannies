@@ -16,7 +16,6 @@
 from __future__ import absolute_import
 
 import argparse
-import datetime
 from http.server import BaseHTTPRequestHandler
 from threading import Lock
 from typing import Dict, List, Tuple
