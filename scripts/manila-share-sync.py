@@ -28,7 +28,7 @@ from threading import Lock
 
 import requests
 from prometheus_client import Counter, Gauge
-from sqlalchemy import Table, and_, select, update
+from sqlalchemy import Table, select, update
 
 from manilananny import ManilaNanny, is_utcts_recent, response, update_records
 
