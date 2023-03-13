@@ -89,7 +89,7 @@ class ManilaQuotaSyncNanny(ManilaNanny):
                           whereclause=and_(shares_t.c.deleted == "False",
                                            shares_t.c.project_id == project_id,
                                            share_instances_t.c.deleted == "False",
-                                           share_instances_t.c.replica_state != None)
+                                           share_instances_t.c.replica_state != None)   # noqa: E711
                           ).select_from(q)
         return shares_q.execute()
 
@@ -231,7 +231,7 @@ def get_db_url(config_file):
     try:
         parser.read(config_file)
         db_url = parser.get('database', 'connection', raw=True)
-    except:
+    except Exception:
         print("ERROR: Check Manila configuration file.")
         sys.exit(2)
     return db_url
