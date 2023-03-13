@@ -108,7 +108,7 @@ class ManilaShareSyncNanny(ManilaNanny):
             parser.read(config_file)
             snap_percent = parser.get('DEFAULT', 'netapp_volume_snapshot_reserve_percent')
             return int(snap_percent)
-        except:
+        except Exception:
             log.warning(
                 "WARN: Manila config file missing netapp_volume_snapshot_reserve_percent, setting to 50"
             )
@@ -483,7 +483,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                 'size': int(vol['value'][1]) / ONEGB,
                 'snap_percent': snap_percentage.get(vol['metric']['volume']),
             } for vol in vol_t_size
-                    if 'volume' in vol['metric'] and vol['metric']['volume'].startswith('share_')]
+                if 'volume' in vol['metric'] and vol['metric']['volume'].startswith('share_')]
 
         if status == 'offline':
             query = "netapp_volume_state{app='netapp-capacity-exporter-manila'}==3"
@@ -493,7 +493,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                 'vserver': vol['metric'].get('vserver', ''),
                 'filer': vol['metric'].get('filer'),
             } for vol in offline_vols
-                    if 'volume' in vol['metric'] and vol['metric']['volume'].startswith('share_')]
+                if 'volume' in vol['metric'] and vol['metric']['volume'].startswith('share_')]
 
     def _fetch_prom_metrics(self, query):
         try:
