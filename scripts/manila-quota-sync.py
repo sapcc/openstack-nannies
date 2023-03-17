@@ -227,7 +227,7 @@ class ManilaQuotaSyncNanny(ManilaNanny):
 
 def get_db_url(config_file):
     """Return the database connection string from the config file"""
-    parser = configparser.SafeConfigParser()
+    parser = configparser.ConfigParser()
     try:
         parser.read(config_file)
         db_url = parser.get('database', 'connection', raw=True)

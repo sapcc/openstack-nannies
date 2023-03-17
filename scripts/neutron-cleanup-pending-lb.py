@@ -102,7 +102,7 @@ class NeutronLbaasCleanupPending:
     # return the database connection string from the config file
     def get_db_url(self):
 
-        parser = ConfigParser.SafeConfigParser()
+        parser = ConfigParser.ConfigParser()
         try:
             parser.read(self.args.config)
             self.db_url = parser.get('database', 'connection', raw=True)
@@ -123,7 +123,7 @@ class NeutronLbaasCleanupPending:
             pending_lbaas_loadbalancers.append(i[0])
 
         return pending_lbaas_loadbalancers
-    
+
     # init dict of all vms or files we have seen already
     def init_seen_dict(self):
         for i in self.seen_dict:
