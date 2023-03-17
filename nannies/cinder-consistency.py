@@ -486,7 +486,7 @@ def makeConnection(db_url):
 
 # return the database connection string from the config file
 def get_db_url(config_file):
-    parser = configparser.SafeConfigParser()
+    parser = configparser.ConfigParser()
     try:
         parser.read(config_file)
         db_url = parser.get('database', 'connection', raw=True)

@@ -784,7 +784,7 @@ class ConsistencyCheck:
     # return the database connection string from the config file
     def get_db_url(self, config_file):
 
-        parser = configparser.SafeConfigParser()
+        parser = configparser.ConfigParser()
         try:
             parser.read(config_file)
             db_url = parser.get('database', 'connection', raw=True)
@@ -941,7 +941,7 @@ class ConsistencyCheck:
 
         try:
             db_url = self.get_db_url(self.novaconfig)
-            
+
             self.nova_engine = create_engine(db_url, pool_pre_ping=True)
             self.nova_connection = self.nova_engine.connect()
             Session = sessionmaker(bind=self.nova_engine)

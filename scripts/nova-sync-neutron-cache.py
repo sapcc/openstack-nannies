@@ -90,7 +90,7 @@ class NovaInstanceInfoCacheSync:
     # return the database connection string from the config file
     def get_db_url(self):
 
-        parser = ConfigParser.SafeConfigParser()
+        parser = ConfigParser.ConfigParser()
         try:
             parser.read(self.args.config)
             self.db_url = parser.get('database', 'connection', raw=True)

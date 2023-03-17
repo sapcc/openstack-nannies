@@ -49,7 +49,7 @@ def dsn_to_args(api_db_url):
 
 
 def get_api_db_url(config_file):
-  parser = ConfigParser.SafeConfigParser()
+  parser = ConfigParser.ConfigParser()
   try:
     parser.read(config_file)
     api_db_url = parser.get('api_database', 'connection', raw=True)
