@@ -146,10 +146,13 @@ class MissingSnapshotNanny(ManilaNanny):
             manila_filer_name = share_instance.host.split('@')[0]
             manila_host = manila_filers.get(manila_filer_name)
             prom_filer_name = self.prom_client.get_share_filer_name(share_instance.share_id)
+            if prom_filer_name is None:
+                logging.error(f'no snapshot metrics found on any filer for share {share_instance.share_id}')
+                continue
             prom_host = manila_filers.get(f'{manila_host_prefix}{prom_filer_name}')
             if manila_host != prom_host:
                 prom_netapp = self.get_netapprestclient(prom_host)
-                 # map Share Instance Id to NetApp Volume name
+                # map Share Instance Id to NetApp Volume name
                 volume_name = 'share_' + share_instance.id.replace('-', '_')
                 if _check_provider_location_on_filer(prom_host, prom_netapp, volume_name, missing_snapshots, [snap]):
                     logging.warning(f'Parent volume {volume_name} of snapshot {snap} on wrong filer - '
@@ -164,7 +167,7 @@ class MissingSnapshotNanny(ManilaNanny):
         return missing_snapshots
 
 def _check_provider_location_on_filer(host, netapp_cli, vol_name,
-                                    missing_on_filer=[], snaps_to_check=[]):
+                                      missing_on_filer=[], snaps_to_check=[]):
     snapshots_exist = True
     vols = netapp_cli.get_volumes(name=vol_name)
     if len(vols) > 0:

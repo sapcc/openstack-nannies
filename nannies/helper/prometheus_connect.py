@@ -71,4 +71,7 @@ class PrometheusInfraConnect:
             log.warn(f"prometheus infra exception: {e}")
             return None
 
+        if len(volume_metrics) == 0:
+            return None
+
         return volume_metrics[0]['metric'].get('filer')
