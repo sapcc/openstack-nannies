@@ -17,8 +17,9 @@ LABEL source_repository="https://github.com/sapcc/openstack-nannies"
 
 USER root
 
-ADD scripts/nova-* /scripts/
-ADD scripts/db-cleanup.py /scripts/
-ADD scripts/count-deleted.py /scripts/
+ADD nannies/nova-* nannies/db-cleanup.py nannies/count-deleted.py nannies/requirements-nova-nanny.txt /scripts/
 
-RUN /var/lib/kolla/venv/bin/pip install psycopg2-binary==2.8.6 click==6.7 python-openstackclient==3.12.0 openstacksdk==0.20.0 prometheus-client==0.1.1 os-client-config==1.30.0 requestsexceptions==1.2.0 keystoneauth1==3.11.2 osc-lib==1.11.0 oslo.db==4.42.0 mysql-connector-python==8.0.22
+RUN pip3 install -r /scripts/requirements-nova-nanny.txt
+
+# looks like uninstall of dogpile.core is required to avoid a conflict at runtime
+RUN /var/lib/openstack/bin/pip uninstall -y dogpile.core
