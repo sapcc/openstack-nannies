@@ -21,23 +21,28 @@ set -e
 unset http_proxy https_proxy all_proxy no_proxy
 
 echo "INFO: copying nova config files to /etc/nova"
-cp -v /nova-etc/* /etc/nova
+cp -vr /nova-etc/* /etc/nova
 # this is a temporary hack to avoid annoying raven warnings - we do not need sentry for this nanny for now
 sed -i 's,raven\.handlers\.logging\.SentryHandler,logging.NullHandler,g' /etc/nova/logging.ini
 
 # this is to handle the case of having a second cell db for nova
 if [ "$NOVA_CELL2_ENABLED" = "True" ] || [ "$NOVA_CELL2_ENABLED" = "true" ]; then
     if [ -f /etc/nova/nova-cell2.conf ]; then
-        # we append the cell2 config file to the regular one, so that the get_db_url function will find
-        # the cell2 db string as it uses the last string provided if multiple connection sections are
-        # given like in the resulting file, on the other side it still contains all the other config
-        # options from the original nova.conf file, which are partially needed for the sync as well
-        cat /etc/nova/nova-cell2.conf >> /etc/nova/nova.conf
+        # in the cell2 case we simply replace the db.conf file used explicitely by some of the
+        # scripts or implicitely by the nova-manage db purge_deleted_instances tool by the cell2
+        # config - it nearly only contains the db string and this is what we are interested in here
+        # this copying of a nova conf to a db.conf is done here as the nova-cell2.conf has not been
+        # converted to the new structure of having a separate config file for the db config
+        cp -f /etc/nova/nova-cell2.conf /etc/nova/nova.conf.d/db.conf
     else
         echo "ERROR: PLEASE CHECK MANUALLY - nova cell2 is enabled, but there is no /etc/nova/nova-cell2.conf file - giving up!"
         exit 1
     fi
 fi
+
+# nova is now using proxysql by default in its config - change that back to a normal
+# config for the nanny as we do not need it and do not have the proxy around by default
+sed -i 's,@/nova?unix_socket=/run/proxysql/mysql.sock&,@nova-mariadb/nova?,g' /etc/nova/nova.conf.d/db.conf
 
 # we run an endless loop to run the script periodically
 echo "INFO: starting a loop to periodically run the nanny job for the nova instance info cache sync from neutron"
@@ -52,11 +57,11 @@ while true; do
             fi
             echo -n "INFO: syncing nova instance info cache from neutron - "
             date
-            /var/lib/kolla/venv/bin/python /scripts/nova-sync-neutron-cache.py $SYNC_BAREMETAL --config /etc/nova/nova.conf
+            python3 /scripts/nova-sync-neutron-cache.py $SYNC_BAREMETAL --config /etc/nova/nova.conf.d/db.conf
         else
             echo -n "INFO: comparing nova instance info cache with neutron values - "
             date
-            /var/lib/kolla/venv/bin/python /scripts/nova-sync-neutron-cache.py --dry-run --config /etc/nova/nova.conf
+            python3 /scripts/nova-sync-neutron-cache.py --dry-run --config /etc/nova/nova.conf.d/db.conf
         fi
     fi
     echo -n "INFO: waiting $NOVA_SYNC_NEUTRON_CACHE_INTERVAL minutes before starting the next loop run - "

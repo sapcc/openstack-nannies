@@ -31,4 +31,4 @@ else
     DRY_RUN="--dry-run"
 fi
 
-/var/lib/kolla/venv/bin/python /scripts/db-cleanup.py $DRY_RUN --iterations $NOVA_DB_CLEANUP_ITERATIONS --interval $NOVA_DB_CLEANUP_INTERVAL --nova
+python3 /scripts/db-cleanup.py $DRY_RUN --iterations $NOVA_DB_CLEANUP_ITERATIONS --interval $NOVA_DB_CLEANUP_INTERVAL --nova
