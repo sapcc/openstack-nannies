@@ -21,7 +21,7 @@ set -e
 unset http_proxy https_proxy all_proxy no_proxy
 
 echo "INFO: copying nova config files to /etc/nova"
-cp -vrA /nova-etc/* /etc/nova
+cp -vrL /nova-etc/* /etc/nova
 # # this is a temporary hack to avoid annoying raven warnings - we do not need sentry for this nanny for now
 # sed -i 's,raven\.handlers\.logging\.SentryHandler,logging.NullHandler,g' /etc/nova/logging.ini
 
