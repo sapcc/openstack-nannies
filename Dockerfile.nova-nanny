@@ -21,5 +21,5 @@ ADD scripts/nova-* scripts/db-cleanup.py nannies/count-deleted.py nannies/requir
 
 RUN pip3 install -r /scripts/requirements-nova-nanny.txt
 
-# looks like uninstall of dogpile.core is required to avoid a conflict at runtime
-RUN /var/lib/openstack/bin/pip uninstall -y dogpile.core
+# # looks like uninstall of dogpile.core is required to avoid a conflict at runtime
+# RUN /var/lib/openstack/bin/pip uninstall -y dogpile.core
