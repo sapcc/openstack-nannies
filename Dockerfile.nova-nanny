@@ -17,7 +17,7 @@ LABEL source_repository="https://github.com/sapcc/openstack-nannies"
 
 USER root
 
-ADD nannies/nova-* nannies/db-cleanup.py nannies/count-deleted.py nannies/requirements-nova-nanny.txt /scripts/
+ADD scripts/nova-* scripts/db-cleanup.py nannies/count-deleted.py nannies/requirements-nova-nanny.txt /scripts/
 
 RUN pip3 install -r /scripts/requirements-nova-nanny.txt
 
