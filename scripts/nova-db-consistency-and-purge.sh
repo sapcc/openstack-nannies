@@ -93,15 +93,15 @@ while true; do
     if [ "$NOVA_DB_PURGE_ENABLED" = "True" ] || [ "$NOVA_DB_PURGE_ENABLED" = "true" ]; then
         # the purge_deleted_instances command meanwhile handles all cells so only required for the non cell2 case
         if [ "$NOVA_CELL2_ENABLED" = "False" ] || [ "$NOVA_CELL2_ENABLED" = "false" ]; then
-            echo -n "INFO: purge old deleted instances from the nova db via shadow tables - "
+            echo -n "INFO: archive old deleted instances from the nova db to shadow tables and later purge them - "
             date
             if [ "$NOVA_DB_PURGE_DRY_RUN" = "True" ] ||  [ "$NOVA_DB_PURGE_DRY_RUN" = "true" ]; then
                 echo "IMPORTANT: dry run mode no longer supported"
             fi
-            echo -n "INFO: moving at max $NOVA_DB_PURGE_MAX_NUMBER rows of deleted db entries older than $NOVA_DB_PURGE_OLDER_THAN days to shadow tables - "
+            echo -n "INFO: archiving at max $NOVA_DB_PURGE_MAX_NUMBER rows of deleted db entries older than $NOVA_DB_PURGE_OLDER_THAN days to shadow tables - "
             echo `date`
             nova-manage db archive_deleted_rows --until-complete --max_rows $NOVA_DB_PURGE_MAX_NUMBER --all-cells --verbose --before $(date -Id -d "now - $NOVA_DB_PURGE_OLDER_THAN days")
-            echo -n "INFO: deleted db entries older than $((2 * $NOVA_DB_PURGE_OLDER_THANi)) days from shadow tables - "
+            echo -n "INFO: purging db entries older than $((2 * $NOVA_DB_PURGE_OLDER_THAN)) days from shadow tables - "
             echo `date`
             nova-manage db purge --verbose --all-cells --before $(date -Id -d "now - $((2 * $NOVA_DB_PURGE_OLDER_THAN)) days")
         fi
