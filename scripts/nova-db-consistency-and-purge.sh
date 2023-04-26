@@ -103,7 +103,8 @@ while true; do
             nova-manage db archive_deleted_rows --until-complete --max_rows $NOVA_DB_PURGE_MAX_NUMBER --all-cells --verbose --before $(date -Id -d "now - $NOVA_DB_PURGE_OLDER_THAN days")
             echo -n "INFO: purging db entries older than $((2 * $NOVA_DB_PURGE_OLDER_THAN)) days from shadow tables - "
             echo `date`
-            nova-manage db purge --verbose --all-cells --before $(date -Id -d "now - $((2 * $NOVA_DB_PURGE_OLDER_THAN)) days")
+            # `nova-manage db purge` exits with return code 3 if nothing was deleted. Catch this specific value and only that one.
+            nova-manage db purge --verbose --all-cells --before $(date -Id -d "now - $((2 * $NOVA_DB_PURGE_OLDER_THAN)) days") || [[ "$?" == "3" ]]
         fi
     fi
     echo -n "INFO: waiting $NOVA_NANNY_INTERVAL minutes before starting the next loop run - "
