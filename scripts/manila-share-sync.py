@@ -121,7 +121,7 @@ class ManilaShareSyncNanny(ManilaNanny):
         # fetch data
         try:
             if self._tasks[TASK_SHARE_SIZE] or self._tasks[TASK_MISSING_VOLUME]\
-                    or self._tasks[TASK_ORPHAN_VOLUME] or self._tasks[TASK_SHARE_STATE]:
+                    or self._tasks[TASK_ORPHAN_VOLUME]:
                 _share_list = self._query_shares()
                 _volume_list = self._get_netapp_volumes()
                 _shares, _orphan_volumes = self._merge_share_and_volumes(_share_list, _volume_list)
