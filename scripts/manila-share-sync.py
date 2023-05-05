@@ -615,6 +615,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                        instances.c.share_id,
                        instances.c.status,
                        instances.c.updated_at,
+                       instances.c.created_at,
                        instances.c.host,
                        instances.c.replica_state,
                        ])\
@@ -622,12 +623,13 @@ class ManilaShareSyncNanny(ManilaNanny):
             .where(instances.c.deleted == 'False')
 
         share_instances = []
-        for (iid, sid, status, utime, host, replica_state) in stmt.execute():
+        for (iid, sid, status, utime, ctime, host, replica_state) in stmt.execute():
             share_instances.append({
                 'id': iid,
                 'share_id': sid,
                 'status': status,
                 'updated_at': utime,
+                'created_at': ctime,
                 'host': host,
                 'replica_state': replica_state,
             })
