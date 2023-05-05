@@ -33,7 +33,6 @@ from sqlalchemy import Table, select, update
 from manilananny import ManilaNanny, is_utcts_recent, response, update_records
 
 log = logging.getLogger('nanny-manila-share-sync')
-logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
 ONEGB = 1073741824
 
@@ -720,6 +719,8 @@ def parse_cmdline_args():
                         type=str2bool,
                         default=True,
                         help="dry run mode for share state task")
+    parser.add_argument("--debug", action="store_true",
+                        help="add additional debug output")
     return parser.parse_args()
 
 
@@ -739,6 +740,12 @@ def main():
         TASK_ORPHAN_VOLUME: args.task_orphan_volume_dry_run,
         TASK_SHARE_STATE: args.task_share_state_dry_run,
     }
+
+    log_level = logging.INFO
+    if args.debug:
+        log_level = logging.DEBUG
+
+    logging.basicConfig(level=log_level, format='%(asctime)-15s %(message)s')
 
     ManilaShareSyncNanny(args.config,
                          args.netapp_prom_host,
