@@ -192,7 +192,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                         log.info(msg, share_id, size, correct_size)
                         self.set_share_size(share_id, correct_size)
                         self.MANILA_SYNC_SHARE_SIZE_COUNTER.inc()
-            else:
+            elif snap_percent == 5:
                 if size != vsize:
                     self._reset_resize_error_state(dry_run, share_id, status)
                     if dry_run:
@@ -201,6 +201,12 @@ class ManilaShareSyncNanny(ManilaNanny):
                         log.info(msg, share_id, size, vsize)
                         self.set_share_size(share_id, vsize)
                         self.MANILA_SYNC_SHARE_SIZE_COUNTER.inc()
+            else:
+                log.warning(
+                    skip_msg,
+                    share_id,
+                    f"snap_percent {snap_percent} inconclusive")
+                continue
 
     def sync_share_state(self, shares, dry_run=True):
         """ Deal with share in stuck states for more than 15 minutes """
