@@ -158,18 +158,32 @@ class ManilaShareSyncNanny(ManilaNanny):
         """ Backend volume exists, but share size does not match """
         msg = "share %s: share size != netapp volume size (%d != %d)"
         msg_dry_run = "Dry run: " + msg
+        skip_msg = "skipping share size %s: %s"
         for (share_id, _), share in shares.items():
             if 'volume' not in share:
+                log.info(
+                    skip_msg,
+                    share_id,
+                    'volume not found on netapp')
                 continue
-            # volume size can not be zero, could be in offline state
             if share['volume']['size'] == 0:
+                log.info(
+                    skip_msg,
+                    share_id,
+                    'volume size is zero, probably offline')
                 continue
-            # skip volumes that are snapmirror targets
             if share['volume']['volume_type'] == 'dp':
+                log.debug(
+                    skip_msg,
+                    share_id,
+                    'volume type is dp, snapmirror target')
                 continue
-            # skip shars that are updated less than 1 hr
             if share['updated_at'] is not None:
                 if is_utcts_recent(share['updated_at'], 3600):
+                    log.debug(
+                        skip_msg,
+                        share_id,
+                        'updated less than 1 hour ago')
                     continue
 
             # Below, comparing share size (integer from Manila db) and volume
@@ -212,14 +226,20 @@ class ManilaShareSyncNanny(ManilaNanny):
         """ Deal with share in stuck states for more than 15 minutes """
         msg = "ManilaSyncShareState: share=%s, instance=%s status=%s"
         msg_dry_run = "Dry run: " + msg
+        skip_msg = "skipping share state %s: %s"
         for share in shares:
             share_status = share['status']
+            # TODO: move status filtering to db query
             if share_status not in ['creating', 'error_deleting', 'deleting']:
                 continue
 
             share_id = share['id']
             instances = self._query_share_instances(share_id)
             if len(instances) == 0:
+                log.info(
+                    skip_msg,
+                    share_id,
+                    'no share instances found')
                 continue
             elif len(instances) == 1:
                 instance = instances[0]
@@ -228,8 +248,16 @@ class ManilaShareSyncNanny(ManilaNanny):
                     instance_updated_at = instance.get('created_at')
                 if instance_updated_at:
                     if is_utcts_recent(instance_updated_at, 900):
+                        log.debug(
+                            skip_msg,
+                            share_id,
+                            'updated/created less than 15 minutes ago')
                         continue
                 else:
+                    log.info(
+                        skip_msg,
+                        share_id,
+                        'no timestamp found')
                     continue
 
                 instance_id = instance['id']
@@ -251,11 +279,23 @@ class ManilaShareSyncNanny(ManilaNanny):
                         instance_updated_at = instance.get('created_at')
                     if instance_updated_at:
                         if is_utcts_recent(instance_updated_at, 900):
+                            log.debug(
+                                skip_msg,
+                                share_id,
+                                'updated/created less than 15 minutes ago')
                             continue
                     else:
+                        log.info(
+                            skip_msg,
+                            share_id,
+                            'no timestamp found')
                         continue
 
                     if instance.get('replica_state', None) in ['active', None]:
+                        log.debug(
+                            skip_msg,
+                            share_id,
+                            'replica is "active" or not set')
                         continue
 
                     instance_id = instance['id']
