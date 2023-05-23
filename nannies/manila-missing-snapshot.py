@@ -80,8 +80,18 @@ class MissingSnapshotNanny(ManilaNanny):
         }
 
         logging.info("fetching Manila Snapshots...")
+        _, count = manila.share_snapshots.list(
+            search_opts={'all_tenants': True, 'with_count': True})
+        count = (count / 1000) + 1
 
-        for _snapshot in manila.share_snapshots.list(search_opts={'all_tenants': True}):
+        snapshots = []
+        offset = 0
+        for i in range(int(count)):
+            snapshots.append(manila.share_snapshots.list(
+                search_opts={'all_tenants': True, 'limit': 1000, 'offset': offset}))
+            offset = offset + 1000
+
+        for _snapshot in snapshots:
             try:
                 # with detailed=True, next call may abort with an internal error
                 _snap_instances = manila.share_snapshot_instances.list(

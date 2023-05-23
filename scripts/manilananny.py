@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 import argparse
 import configparser
+import copy
 import datetime
 import http.server
 import json
@@ -134,7 +135,19 @@ class ManilaNanny(http.server.HTTPServer):
             search_opts = {'all_tenants': 1}
             if status:
                 search_opts.update({'status': status})
-            return self.manilaclient.shares.list(search_opts=search_opts)
+
+            opts = copy.deepcopy(search_opts)
+            opts.update({'with_count': True})
+            _, count = self.manilaclient.shares.list(search_opts=opts)
+            count = (count / 1000) + 1
+
+            shares = []
+            offset = 0
+            for i in range(int(count)):
+                search_opts.update({'offset': offset, 'limit': 1000})
+                shares.append(self.manilaclient.shares.list(search_opts=search_opts))
+                offset = offset + 1000
+            return shares
         except Exception as e:
             log.exception("list_shares: %s", e)
 
@@ -149,7 +162,23 @@ class ManilaNanny(http.server.HTTPServer):
             search_opts = {'all_tenants': 1}
             if status:
                 search_opts.update({'status': status})
-            return self.manilaclient.share_snapshots.list(search_opts=search_opts)
+
+            opts = copy.deepcopy(search_opts)
+            opts.update({'with_count': True})
+            _, count = self.manilaclient.share_snapshots.list(search_opts=opts)
+            count = (count / 1000) + 1
+
+            share_snapshots = []
+            offset = 0
+            for i in range(int(count)):
+                search_opts.update({'offset': offset, 'limit': 1000})
+                snaps = self.manilaclient.share_snapshots.list(search_opts=search_opts)
+                if snaps:
+                    share_snapshots.append(snaps)
+                    offset = offset + 1000
+                else:
+                    break
+            return share_snapshots
         except Exception as e:
             log.exception("list_share_snapshots: %s", e)
 
