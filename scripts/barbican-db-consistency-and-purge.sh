@@ -25,7 +25,7 @@ cp -v /barbican-etc/* /etc/barbican
 
 # barbican is now using proxysql by default in its config - change that back to a normal
 # config for the nanny as we do not need it and do not have the proxy around by default
-sed -i 's,@/barbican?unix_socket=/run/proxysql/mysql.sock&,@barbican-mariadb/barbican-api?,g' /etc/barbican/barbican-api.conf
+sed -i 's,@/barbican?unix_socket=/run/proxysql/mysql.sock&,@barbican-mariadb/barbican-api?,g' /etc/barbican/barbican.conf
 
 # we run an endless loop to run the script periodically
 echo "INFO: starting a loop to periodically run the nanny job for the barbican db consistency check and purge"
