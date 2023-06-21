@@ -23,12 +23,13 @@ log = logging.getLogger(__name__)
 
 class ManilaNanny(http.server.HTTPServer):
     ''' Manila Nanny '''
-    def __init__(self, config_file, interval, dry_run=False, prom_port=0, address="", http_port=8000, handler=None):
+    def __init__(self, config_file, interval, dry_run=False, prom_port=0, address="", http_port=8000, handler=None, version="2.7"):
         self.config_file = config_file
         self.interval = interval
         self.dry_run = dry_run
+        self.microversion = version
         self.init_db_connection()
-        self.manilaclient = create_manila_client(config_file)
+        self.manilaclient = create_manila_client(config_file, self.microversion)
 
         if prom_port != 0:
             try:
@@ -76,7 +77,7 @@ class ManilaNanny(http.server.HTTPServer):
         return db_url
 
     def renew_manila_client(self):
-        self.manilaclient = create_manila_client(self.config_file, "2.7")
+        self.manilaclient = create_manila_client(self.config_file, self.microversion)
 
     def undefined_route(self, route):
         status_code = 500
@@ -184,7 +185,7 @@ class ManilaNanny(http.server.HTTPServer):
                           snapshot_id, e)
 
 
-def create_manila_client(config_file, version="2.7"):
+def create_manila_client(config_file, version):
     """  Parse config file and create manila client
 
         :param string config_file:
