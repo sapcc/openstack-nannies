@@ -52,7 +52,8 @@ class ManilaShareSnapshotNanny(ManilaNanny):
                                                        interval,
                                                        prom_port=prom_port,
                                                        http_port=http_port,
-                                                       handler=handler)
+                                                       handler=handler,
+                                                       version="2.19")
         self.orphan_snapshots_lock = Lock()
         self.orphan_snapshots: Dict[str, Dict[str, str]] = {}
         self.orphan_snapshots_gauge = Gauge('manila_nanny_orphan_share_snapshots',
