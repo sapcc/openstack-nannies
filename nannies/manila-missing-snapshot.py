@@ -88,6 +88,9 @@ class MissingSnapshotNanny(ManilaNanny):
                     detailed=True, snapshot=_snapshot)
                 if not isinstance(_snap_instances, list):
                     raise Exception("not a list")
+            except manilaexceptions.NotFound:
+                logging.warning(f'snapshot {_snapshot} not found')
+                continue
             except manilaexceptions.InternalServerError as e:
                 logging.error(e)
                 continue
