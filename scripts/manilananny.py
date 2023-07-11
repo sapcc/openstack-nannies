@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 
 class ManilaNanny(http.server.HTTPServer):
     ''' Manila Nanny '''
-    def __init__(self, config_file, interval, dry_run=False, prom_port=0, address="", http_port=8000, handler=None, version="2.7"):
+    def __init__(self, config_file, interval, dry_run=False, prom_port=0, address="", http_port=8000, handler=None, version="2.7", **extra_args):
         self.config_file = config_file
         self.interval = interval
         self.dry_run = dry_run
@@ -46,13 +46,19 @@ class ManilaNanny(http.server.HTTPServer):
             thread.setDaemon(True)
             thread.start()
 
+        if 'pdb_port' in extra_args and extra_args['pdb_port']:
+            import pdb_attach
+            pdb_attach.listen(extra_args['pdb_port'])
+
     def _run(self):
         raise Exception('not implemented')
 
     def run(self):
         while True:
             self._run()
-            time.sleep(self.interval)
+            # allow pdb_attach to work while waiting for the next run
+            for _ in range(self.interval):
+                time.sleep(1)
 
     def init_db_connection(self):
         """Establish a database connection"""
