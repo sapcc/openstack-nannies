@@ -17,6 +17,7 @@
 #
 import argparse
 import logging
+import os
 
 from helper.prometheus_exporter import LabelGauge
 from manilananny import ManilaNanny
@@ -106,11 +107,14 @@ class ManilaCheckAffinity(ManilaNanny):
 
 if __name__ == "__main__":
 
+    default_config_file = os.environ.get('MANILA_NANNY_CONFIG') or '/etc/manila/manila.conf'
+    default_interval = os.environ.get('MANILA_NANNY_INTERVAL') or 3600
+    default_prom_port = os.environ.get('MANILA_NANNY_PROMETHEUS_PORT') or 9000
+
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", dest="config_file", default='/etc/manila/manila.conf',
-                        help='configuration file')
-    parser.add_argument("--interval", type=float, default=86400, help="interval")
+    parser.add_argument("--config", dest="config_file", default=default_config_file, help="configuration file")
+    parser.add_argument("--interval", type=int, default=default_interval, help="interval")
     parser.add_argument("--pdb-port", type=int, default=50000, help="port for pdb_attach server")
-    parser.add_argument("--prom-port", type=int, default=9000, help="port for prometheus exporter")
+    parser.add_argument("--prom-port", type=int, default=default_prom_port, help="port for prometheus exporter")
 
     ManilaCheckAffinity(**vars(parser.parse_args())).run()
