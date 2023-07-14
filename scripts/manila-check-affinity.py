@@ -44,30 +44,31 @@ class ManilaCheckAffinity(ManilaNanny):
 
         self._update_anti_affinity_groups()
 
-        violated_rules = []
+        violated_anti_affinity_rules = []
         for grp in self.anti_affinity_groups:
             check, share_hosts = self._check_group(grp, attracting=False)
             if not check:
                 LOG.error("Anti-Affinity rule violated for Shares")
                 for s in share_hosts:
                     LOG.error("Share %s on host %s", s['share_id'], s['host'])
+                violated_anti_affinity_rules.append({'share_id': grp[0], 'rule': ','.join(grp[1:])})
 
-        self.antiAffinityGauge.export(violated_rules)
+        self.antiAffinityGauge.export(violated_anti_affinity_rules)
 
         LOG.info("Checking Affinity Rules")
 
         self._update_affinity_groups()
 
-        violated_rules = []
+        violated_affinity_rules = []
         for grp in self.affinity_groups:
             check, share_hosts = self._check_group(grp)
             if not check:
                 LOG.error("Affinity rule violated for Shares")
                 for s in share_hosts:
                     LOG.error("Share %s on host %s", s['share_id'], s['host'])
-                violated_rules.append({'share_id': grp[0], 'rule': ','.join(grp[1:])})
+                violated_affinity_rules.append({'share_id': grp[0], 'rule': ','.join(grp[1:])})
 
-        self.affinityGauge.export(violated_rules)
+        self.affinityGauge.export(violated_affinity_rules)
 
         LOG.info("Finished Checking")
 
@@ -75,6 +76,8 @@ class ManilaCheckAffinity(ManilaNanny):
         self.affinity_groups = []
         share_rules = self.query_shares_with_affinity_rules()
         for share, rule in share_rules:
+            # the rule is a comma separated list of share ids, e.g.
+            # 5c16a438-0879-4f2b-bfab-6b170c70f509,eda52baa-ec53-49c4-a5f2-5ca61e65d6b9
             shares = [share, *rule.split(',')]
             self.affinity_groups.append(shares)
 
