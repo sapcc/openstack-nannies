@@ -206,16 +206,24 @@ class ManilaNanny(http.server.HTTPServer):
 
     def query_shares_with_affinity_rules(self):
         with self.db_session as sess:
+            shares_t = self.db_table('shares')
             share_metadata_t = self.db_table('share_metadata')
             stmt = (select(share_metadata_t.c.share_id, share_metadata_t.c.value.label('rule'))
+                    .join(shares_t, shares_t.c.id == share_metadata_t.c.share_id)
+                    .where(shares_t.c.deleted == 'False')
+                    .where(share_metadata_t.c.deleted == 0)
                     .where(share_metadata_t.c.key == '__affinity_same_host'))  # yapf: disable
             shares = sess.execute(stmt).all()
             return shares
 
     def query_shares_with_anti_affinity_rules(self):
         with self.db_session as sess:
+            shares_t = self.db_table('shares')
             share_metadata_t = self.db_table('share_metadata')
             stmt = (select(share_metadata_t.c.share_id, share_metadata_t.c.value.label('rule'))
+                    .join(shares_t, shares_t.c.id == share_metadata_t.c.share_id)
+                    .where(shares_t.c.deleted == 'False')
+                    .where(share_metadata_t.c.deleted == 0)
                     .where(share_metadata_t.c.key == '__affinity_different_host'))  # yapf: disable
             shares = sess.execute(stmt).all()
             return shares
