@@ -98,7 +98,7 @@ while true; do
             if [ "$NOVA_DB_PURGE_DRY_RUN" = "True" ] ||  [ "$NOVA_DB_PURGE_DRY_RUN" = "true" ]; then
                 echo "IMPORTANT: dry run mode no longer supported"
             fi
-            echo -n "INFO: archiving at max $NOVA_DB_PURGE_MAX_NUMBER rows of deleted db entries older than $NOVA_DB_PURGE_OLDER_THAN days to shadow tables - "
+            echo -n "INFO: archiving deleted db entries older than $NOVA_DB_PURGE_OLDER_THAN days to shadow tables with a batch size of $NOVA_DB_PURGE_MAX_NUMBER - "
             echo `date`
             nova-manage db archive_deleted_rows --until-complete --max_rows $NOVA_DB_PURGE_MAX_NUMBER --all-cells --verbose --before $(date -Id -d "now - $NOVA_DB_PURGE_OLDER_THAN days")
             echo -n "INFO: purging db entries older than $((2 * $NOVA_DB_PURGE_OLDER_THAN)) days from shadow tables - "
