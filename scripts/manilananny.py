@@ -14,16 +14,17 @@ from keystoneauth1 import session
 from keystoneauth1.identity import v3
 from manilaclient import client
 from prometheus_client import start_http_server
-from sqlalchemy import MetaData, create_engine
+from sqlalchemy import MetaData, Table, create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.sql import select
 
 log = logging.getLogger(__name__)
 
 
 class ManilaNanny(http.server.HTTPServer):
     ''' Manila Nanny '''
-    def __init__(self, config_file, interval, dry_run=False, prom_port=0, address="", http_port=8000, handler=None, version="2.7"):
+    def __init__(self, config_file, interval, dry_run=False, prom_port=0, address="", http_port=8000, handler=None, version="2.7", **extra_args):
         self.config_file = config_file
         self.interval = interval
         self.dry_run = dry_run
@@ -46,13 +47,21 @@ class ManilaNanny(http.server.HTTPServer):
             thread.setDaemon(True)
             thread.start()
 
+        if 'pdb_port' in extra_args and extra_args['pdb_port']:
+            import pdb_attach
+            pdb_attach.listen(extra_args['pdb_port'])
+
     def _run(self):
         raise Exception('not implemented')
 
     def run(self):
         while True:
             self._run()
-            time.sleep(self.interval)
+            # allow pdb_attach to work while waiting for the next run
+            wait_interval = self.interval
+            while wait_interval > 0:
+                wait_interval -= 1
+                time.sleep(1)
 
     def init_db_connection(self):
         """Establish a database connection"""
@@ -75,6 +84,10 @@ class ManilaNanny(http.server.HTTPServer):
             print(f'ERROR: Parse {self.config_file}: ' + str(e))
             sys.exit(2)
         return db_url
+
+    def db_table(self, table_name):
+        """Return the database table"""
+        return Table(table_name, self.db_metadata, autoload=True)
 
     def renew_manila_client(self):
         self.manilaclient = create_manila_client(self.config_file, self.microversion)
@@ -183,6 +196,46 @@ class ManilaNanny(http.server.HTTPServer):
         except Exception as e:
             log.exception("share_snapshots_force_delete(snapshot_id=%s): %s",
                           snapshot_id, e)
+
+    def get_share_host(self, share_id):
+        try:
+            share = self.manilaclient.shares.get(share_id)
+            return share.host
+        except Exception as e:
+            log.exception("get_share_host(share_id=%s): %s", share_id, e)
+
+    def query_shares_with_affinity_rules(self):
+        with self.db_session as sess:
+            shares_t = self.db_table('shares')
+            share_metadata_t = self.db_table('share_metadata')
+            stmt = (select(share_metadata_t.c.share_id, share_metadata_t.c.value.label('rule'))
+                    .join(shares_t, shares_t.c.id == share_metadata_t.c.share_id)
+                    .where(shares_t.c.deleted == 'False')
+                    .where(share_metadata_t.c.deleted == 0)
+                    .where(share_metadata_t.c.key == '__affinity_same_host'))  # yapf: disable
+            shares = sess.execute(stmt).all()
+            return shares
+
+    def query_shares_with_anti_affinity_rules(self):
+        with self.db_session as sess:
+            shares_t = self.db_table('shares')
+            share_metadata_t = self.db_table('share_metadata')
+            stmt = (select(share_metadata_t.c.share_id, share_metadata_t.c.value.label('rule'))
+                    .join(shares_t, shares_t.c.id == share_metadata_t.c.share_id)
+                    .where(shares_t.c.deleted == 'False')
+                    .where(share_metadata_t.c.deleted == 0)
+                    .where(share_metadata_t.c.key == '__affinity_different_host'))  # yapf: disable
+            shares = sess.execute(stmt).all()
+            return shares
+
+    def query_share_hosts(self, share_list):
+        with self.db_session as sess:
+            share_instances_t = self.db_table('share_instances')
+            stmt = (select(share_instances_t.c.share_id, share_instances_t.c.host)
+                    .where(share_instances_t.c.share_id.in_(share_list))
+                    .where(share_instances_t.c.replica_state == 'active'))  # yapf: disable
+            shares = sess.execute(stmt).mappings().all()
+            return shares
 
 
 def create_manila_client(config_file, version):

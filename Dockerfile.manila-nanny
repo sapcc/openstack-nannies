@@ -19,8 +19,13 @@ USER root
 
 RUN /var/lib/openstack/bin/pip uninstall -y psycopg2
 RUN /var/lib/openstack/bin/pip install -q --no-cache-dir \
-  psycopg2-binary==2.8.4 prometheus-client==0.7.1  python-manilaclient==2.0.0 \
-  netapp-lib==2020.3.12 netapp-ontap~=9.10 prometheus-api-client==0.4.2
+  netapp-lib==2020.3.12 \
+  netapp-ontap~=9.10 \
+  pdb-attach>=3.0,<4.0 \
+  prometheus-api-client==0.4.2 \
+  prometheus-client==0.7.1  \
+  psycopg2-binary==2.8.4 \
+  python-manilaclient==2.0.0
 
 ADD scripts/manila* /scripts/
 ADD scripts/db-cleanup.py /scripts/
