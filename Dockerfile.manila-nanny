@@ -25,6 +25,7 @@ RUN /var/lib/openstack/bin/pip install -q --no-cache-dir \
   prometheus-api-client==0.4.2 \
   prometheus-client==0.7.1  \
   psycopg2-binary==2.8.4 \
+  pyreloader~=0.1 \
   python-manilaclient==2.0.0
 
 ADD scripts/manila* /scripts/
