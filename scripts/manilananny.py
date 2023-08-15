@@ -229,6 +229,11 @@ class ManilaNanny(http.server.HTTPServer):
             return shares
 
     def query_share_hosts(self, share_list):
+        """ Query share host by share id
+
+            :param list share_list: share id list
+            :return list shares: list of dict {'share_id': *, 'host': *}
+        """
         with self.db_session as sess:
             share_instances_t = self.db_table('share_instances')
             stmt = (select(share_instances_t.c.share_id, share_instances_t.c.host)
