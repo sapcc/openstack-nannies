@@ -228,19 +228,20 @@ class ManilaNanny(http.server.HTTPServer):
             shares = sess.execute(stmt).all()
             return shares
 
-    def query_share_hosts(self, share_list):
+    def query_share_host(self, share_id):
         """ Query share host by share id
 
-            :param list share_list: share id list
-            :return list shares: list of dict {'share_id': *, 'host': *}
+            :param string share_id: share id
+            :return dict share: {'share_id': *, 'host': *}
         """
         with self.db_session as sess:
             share_instances_t = self.db_table('share_instances')
-            stmt = (select(share_instances_t.c.share_id, share_instances_t.c.host)
-                    .where(share_instances_t.c.share_id.in_(share_list))
+            stmt = (select(share_instances_t.c.host)
+                    .where(share_instances_t.c.share_id == share_id)
+                    .where(share_instances_t.c.deleted == 'False')
                     .where(share_instances_t.c.replica_state == 'active'))  # yapf: disable
-            shares = sess.execute(stmt).mappings().all()
-            return shares
+            result = sess.execute(stmt).first()
+            return {'share_id': share_id, 'host': result[0]} if result else {'share_id': share_id}
 
 
 def create_manila_client(config_file, version):

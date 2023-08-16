@@ -81,14 +81,16 @@ class ManilaCheckAffinity(ManilaNanny):
         # 5c16a438-0879-4f2b-bfab-6b170c70f509,eda52baa-ec53-49c4-a5f2-5ca61e65d6b9
         affinity_shares = [*affinity_shares.split(',')]
 
-        host = self.query_share_hosts([share])[0].get('host', '')
-        if host == '':
+        host = self.query_share_host(share).get('host')
+        if host is None:
             LOG.warning("Host for Share %s is unknown", share)
 
-        affinity_hosts = [h.get('host', '') for h in self.query_share_hosts(affinity_shares)]
-        for _share, _host in zip(affinity_shares, affinity_hosts):
-            if _host == '':
-                LOG.warning("Host for Share %s is unknown", _share)
+        affinity_hosts = []
+        for s in affinity_shares:
+            h = self.query_share_host(s).get('host')
+            if h is None:
+                LOG.warning("Host for Share %s is unknown", s)
+            affinity_hosts.append(h)
 
         host = host.split('#')[0]
         affinity_hosts = [h.split('#')[0] for h in affinity_hosts]
