@@ -65,6 +65,10 @@ class ManilaShareSnapshotNanny(ManilaNanny):
             raise Exception('All tasks are disabled')
 
     def _run(self):
+        # TODO: implement proper re-auth after token lifetime ended
+        # Need to recreate manila client each run, because of session timeout
+        self.renew_manila_client()
+
         s = self.query_orphan_snapshots()
         orphan_snapshots = {
             snapshot_id: {'snapshot_id': snapshot_id, 'share_id': share_id}
