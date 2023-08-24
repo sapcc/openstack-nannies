@@ -16,7 +16,7 @@ from manilaclient import client
 from prometheus_client import start_http_server
 from sqlalchemy import MetaData, Table, create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import select
 
 log = logging.getLogger(__name__)
