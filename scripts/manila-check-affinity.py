@@ -114,6 +114,7 @@ class ManilaCheckAffinity(ManilaNanny):
 
         return check
 
+
 if __name__ == "__main__":
 
     default_config_file = os.environ.get('MANILA_NANNY_CONFIG') or '/etc/manila/manila.conf'
