@@ -30,11 +30,11 @@ while true; do
         if [ "$MANILA_CONSISTENCY_DRY_RUN" = "False" ] || [ "$MANILA_CONSISTENCY_DRY_RUN" = "false" ]; then
             echo -n "INFO: checking and fixing manila db consistency - "
             date
-            /var/lib/openstack/bin/python /scripts/manila-consistency.py --config /etc/manila/manila.conf
+            /var/lib/openstack/bin/python /scripts/manila-consistency.py --config /etc/manila/manila.conf --older-than ${MANILA_CONSISTENCY_OLDER_THAN:-2}
         else
             echo -n "INFO: checking manila db consistency - "
             date
-            /var/lib/openstack/bin/python /scripts/manila-consistency.py --config /etc/manila/manila.conf --dry-run
+            /var/lib/openstack/bin/python /scripts/manila-consistency.py --config /etc/manila/manila.conf --older-than ${MANILA_CONSISTENCY_OLDER_THAN:-2} --dry-run
         fi
     fi
     if [ "$MANILA_DB_PURGE_ENABLED" = "True" ] || [ "$MANILA_DB_PURGE_ENABLED" = "true" ]; then
