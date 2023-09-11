@@ -71,8 +71,9 @@ def fix_wrong_share_network_ssas(meta, wrong_share_network_ssas):
         delete_share_network_ssa_q.execute()
 
 # get all the rows with a network_allocations still defined where the corresponding share_server is already deleted
-def get_wrong_network_allocations(meta):
+def get_wrong_network_allocations(meta, older_than):
 
+    older_than_date = datetime.datetime.utcnow() - datetime.timedelta(hours=older_than)
     wrong_network_allocations = {}
     network_allocations_t = Table('network_allocations', meta, autoload=True)
     share_servers_t = Table('share_servers', meta, autoload=True)
@@ -86,6 +87,7 @@ def get_wrong_network_allocations(meta):
         ]).select_from(network_allocations_join).where(
             and_(
                 share_servers_t.c.deleted != "False",
+                share_servers_t.c.deleted_at < older_than_date,
                 network_allocations_t.c.deleted == "False"
             )
     )
@@ -289,6 +291,10 @@ def parse_cmdline_args():
     parser.add_argument("--dry-run",
                         action="store_true",
                         help='print only what would be done without actually doing it')
+    parser.add_argument("--older-than",
+                        type=int,
+                        default=2,
+                        help="how many hours of marked as deleted entries to keep")
     return parser.parse_args()
 
 def main():
@@ -314,7 +320,7 @@ def main():
         log.info("- share network security service associations are consistent")
 
 
-    wrong_network_allocations = get_wrong_network_allocations(manila_metadata)
+    wrong_network_allocations = get_wrong_network_allocations(manila_metadata, args.older_than)
     if len(wrong_network_allocations) != 0:
         log.info("- network allocation inconsistencies found")
         # print out what we would delete
