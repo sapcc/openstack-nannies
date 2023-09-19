@@ -23,6 +23,7 @@ import datetime
 import logging
 import sys
 
+from openstack import connection, exceptions
 from sqlalchemy import (MetaData, Table, and_, create_engine, select, update)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -97,7 +98,7 @@ def get_wrong_network_allocations(meta, older_than):
         wrong_network_allocations[network_allocations_id] = share_server_id
     return wrong_network_allocations
 
-# delete network_allocations still defined where the corresponding share_server is already deleted
+# soft delete network_allocations still defined where the corresponding share_server is already deleted
 def fix_wrong_network_allocations(meta, wrong_network_allocations):
     network_allocations_t = Table('network_allocations', meta, autoload=True)
 
@@ -282,6 +283,31 @@ def get_db_url(config_file):
         sys.exit(2)
     return db_url
 
+def get_neutronclient(config_file):
+    os = _get_openstack_client(config_file)
+    return os.network
+
+def _get_openstack_client(config_file):
+    parser = configparser.ConfigParser()
+    parser.read(config_file)
+    auth_url = parser.get("neutron", "auth_url")
+    username = parser.get("neutron", "username")
+    password = parser.get("neutron", "password")
+    user_domain = parser.get("neutron", "user_domain_name")
+    prj_domain = parser.get("neutron", "project_domain_name")
+    prj_name = parser.get("neutron", "project_name")
+    region_name = parser.get("neutron", "region_name")
+
+    return connection.Connection(auth_url=auth_url,
+                                 project_name=prj_name,
+                                 project_domain_name=prj_domain,
+                                 username=username,
+                                 user_domain_name=user_domain,
+                                 password=password,
+                                 endpoint_type='internal',
+                                 region_name=region_name,
+                                 identity_api_version="3")
+
 # cmdline handling
 def parse_cmdline_args():
     parser = argparse.ArgumentParser()
@@ -306,6 +332,8 @@ def main():
     # connect to the DB
     db_url = get_db_url(args.config)
     _, manila_metadata, _ = makeConnection(db_url)
+    # build neutron client
+    neutron = get_neutronclient(args.config)
 
     wrong_share_network_ssas = get_wrong_share_network_ssas(manila_metadata)
     if len(wrong_share_network_ssas) != 0:
@@ -326,6 +354,19 @@ def main():
         # print out what we would delete
         for network_allocation_id in wrong_network_allocations:
             log.info("-- network allocation id: %s - deleted share server id: %s", network_allocation_id, wrong_network_allocations[network_allocation_id])
+            try:
+                port = neutron.get_port(network_allocation_id)
+            except exceptions.ResourceNotFound:
+                pass
+            else:
+                log.warning("-- network allocation id: %s - orphan neutron port will be deleted for share server id: %s",
+                            network_allocation_id, wrong_network_allocations[network_allocation_id])
+                if port.device_id == wrong_network_allocations[network_allocation_id]:
+                    if not args.dry_run:
+                        neutron.delete_port(network_allocation_id)
+                else:
+                    log.warning("-- network allocation id: %s - orphan neutron port device id: %s not matching share server id: %",
+                                network_allocation_id, port.device_id, wrong_network_allocations[network_allocation_id])
         if not args.dry_run:
             log.info("- deleting network allocation inconsistencies found")
             fix_wrong_network_allocations(manila_metadata, wrong_network_allocations)
