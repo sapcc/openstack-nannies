@@ -59,7 +59,7 @@ class ManilaQuotaSyncNanny(ManilaNanny):
                              whereclause=and_(snapshots_t.c.deleted == "False",
                                               snapshots_t.c.project_id == project_id,
                                               share_instances_t.c.deleted == "False")
-                             ).select_from(q)
+                             ).select_from(q).group_by(snapshots_t.c.id)
         return snapshots_q.execute()
 
     def get_share_usages_project(self, project_id):
