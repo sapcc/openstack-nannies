@@ -16,7 +16,7 @@ from manilaclient import client
 from prometheus_client import start_http_server
 from sqlalchemy import MetaData, Table, create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import select
 
 log = logging.getLogger(__name__)
@@ -73,6 +73,7 @@ class ManilaNanny(http.server.HTTPServer):
         self.db_metadata = MetaData()
         self.db_metadata.bind = engine
         self.db_base = declarative_base()
+        self.engine = engine
 
     def get_db_url(self):
         """Return the database connection string from the config file"""
