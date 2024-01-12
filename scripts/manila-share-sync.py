@@ -23,7 +23,6 @@ import logging
 import re
 import time
 from datetime import datetime
-from http.server import BaseHTTPRequestHandler
 from threading import Lock
 
 import requests
@@ -43,33 +42,12 @@ TASK_ORPHAN_VOLUME = '4'
 TASK_SHARE_STATE = '5'
 
 
-class MyHandler(BaseHTTPRequestHandler):
-    ''' http server handler '''
-
-    def do_GET(self):
-        if self.path == '/orphan_volumes':
-            status_code, header, data = self.server.get_orphan_volumes()
-        elif self.path == '/offline_volumes':
-            status_code, header, data = self.server.get_offline_volumes()
-        elif self.path == '/missing_volume_shares':
-            status_code, header, data = self.server.get_missing_volume_shares()
-        else:
-            status_code, header, data = self.server.undefined_route(self.path)
-        self.send_response(status_code)
-        self.send_header(*header)
-        self.end_headers()
-        self.wfile.write(data.encode('utf-8'))
-
-
 class ManilaShareSyncNanny(ManilaNanny):
 
-    def __init__(self, config_file, prom_host, interval, tasks, dry_run_tasks, prom_port, http_port,
-                 handler):
+    def __init__(self, config_file, prom_host, interval, tasks, dry_run_tasks, prom_port):
         super(ManilaShareSyncNanny, self).__init__(config_file,
                                                    interval,
-                                                   prom_port=prom_port,
-                                                   http_port=http_port,
-                                                   handler=handler)
+                                                   prom_port=prom_port)
         self.prom_host = prom_host + "/api/v1/query"
 
         self.MANILA_NANNY_SHARE_SYNC_FAILURE = Counter('manila_nanny_share_sync_failure', '')
@@ -127,7 +105,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                 _shares, _orphan_volumes = self._merge_share_and_volumes(_share_list, _volume_list)
 
             if self._tasks[TASK_OFFLINE_VOLUME]:
-                _offline_volume_list = self._get_netapp_volumes('offline')
+                _offline_volume_list = self._get_netapp_volumes_offline()
         except Exception as e:
             log.warning(e)
             self.MANILA_NANNY_SHARE_SYNC_FAILURE.inc()
@@ -150,8 +128,9 @@ class ManilaShareSyncNanny(ManilaNanny):
             self.process_offline_volumes(_offline_volume_list, dry_run)
 
         if self._tasks[TASK_SHARE_STATE]:
-            _shares = self._query_shares()
             dry_run = self._dry_run_tasks[TASK_SHARE_STATE]
+            self.reset_share_replica_state(_shares, dry_run)
+            _shares = self._query_shares()
             self.sync_share_state(_shares, dry_run)
 
     def sync_share_size(self, shares, dry_run=True):
@@ -311,6 +290,49 @@ class ManilaShareSyncNanny(ManilaNanny):
                     if instance_status == 'deleting':
                         self.share_replica_delete(instance_id)
 
+    def reset_share_replica_state(self, _share, dry_run=True):
+        """ Reset share replica (secondary) state to available when backend
+        volume is online and its type is DP. Ignore shares that are
+        created/updated within 6 hours.
+
+        We do not reset the state of primary replica, because it is not
+        guaranteed that the primary replica is of type "rw".
+
+        """
+        for (share_id, replica_id) in _share:
+            share = _share[(share_id, replica_id)]
+            if share['status'] != 'error':
+                continue
+            if share['replica_state'] != 'in-sync':
+                # only secondary replica that is in-sync
+                continue
+            if is_utcts_recent(share['updated_at'] or share['created_at'], 6 * 3600):
+                # only updated or created more than 6 hours ago
+                continue
+            if 'volume' not in share:
+                continue
+            if share['volume']['volume_type'] != 'dp':
+                continue
+            if share['volume']['state'] != 'online':
+                continue
+            if share['volume']['size'] == 0:
+                continue
+            if dry_run:
+                log.info(
+                    "Dry run: reset replica status from error to available: share=%s, replica_id=%s",
+                    share_id, replica_id
+                )
+                continue
+            try:
+                self.manilaclient.share_replicas.reset_state(replica_id, "available")
+                log.debug(
+                    "reset replica status from error to available successfully: share_id=%s, replica_id=%s"
+                )
+            except Exception as e:
+                log.exception(
+                    "reset replica status from error to available failed: share_id=%s, replica_id=%s, %s",
+                    share_id, replica_id, e
+                )
 
     def process_missing_volume(self, shares, dry_run=True):
         """ Set share state to error when backend volume is missing
@@ -506,40 +528,43 @@ class ManilaShareSyncNanny(ManilaNanny):
         with self.orphan_volumes_lock:
             self.orphan_volumes = update_records(self.orphan_volumes, orphan_volumes)
 
-    def _get_netapp_volumes(self, status='online'):
-        """ get netapp volumes from prometheus metrics
+    def _get_netapp_volumes(self):
+        """ get netapp volumes from prometheus metrics, including both online
+        and offline volumes.
+
         return [<vol>, <vol>, ...]
         """
-        if status == 'online':
-            query = "netapp_volume_total_bytes{app='netapp-capacity-exporter-manila'} + "\
-                    "netapp_volume_snapshot_reserved_bytes"
-            vol_t_size = self._fetch_prom_metrics(query) or []
-            query = "netapp_volume_percentage_snapshot_reserve{app='netapp-capacity-exporter-manila'}"
-            snap_percentage = self._fetch_prom_metrics(query) or []
-            snap_percentage = {
-                vol['metric']['volume']: int(vol['value'][1])
-                for vol in snap_percentage if 'volume' in vol['metric']
-            }
+        query = (
+            "netapp_volume_total_bytes{app='netapp-capacity-exporter-manila', volume=~'share.*'} "
+            "+ netapp_volume_snapshot_reserved_bytes"
+        )
+        vol_t_size = self._fetch_prom_metrics(query) or []
+        query = "netapp_volume_percentage_snapshot_reserve{app='netapp-capacity-exporter-manila'}"
+        snap_percentage = self._fetch_prom_metrics(query) or []
+        snap_percentage = {
+            vol['metric']['volume']: int(vol['value'][1])
+            for vol in snap_percentage if 'volume' in vol['metric']
+        }
 
-            return [{
-                'volume': vol['metric']['volume'],
-                'volume_type': vol['metric'].get('volume_type'),
-                'vserver': vol['metric'].get('vserver', ''),
-                'filer': vol['metric'].get('filer'),
-                'size': int(vol['value'][1]) / ONEGB,
-                'snap_percent': snap_percentage.get(vol['metric']['volume']),
-            } for vol in vol_t_size
-                if 'volume' in vol['metric'] and vol['metric']['volume'].startswith('share_')]
+        return [{
+            'volume': vol['metric']['volume'],
+            'volume_type': vol['metric'].get('volume_type'),
+            'vserver': vol['metric'].get('vserver', ''),
+            'filer': vol['metric'].get('filer'),
+            'size': int(vol['value'][1]) / ONEGB,
+            'snap_percent': snap_percentage.get(vol['metric']['volume']),
+        } for vol in vol_t_size]
 
-        if status == 'offline':
-            query = "netapp_volume_state{app='netapp-capacity-exporter-manila'}==3"
-            offline_vols = self._fetch_prom_metrics(query) or []
-            return [{
-                'volume': vol['metric']['volume'],
-                'vserver': vol['metric'].get('vserver', ''),
-                'filer': vol['metric'].get('filer'),
-            } for vol in offline_vols
-                if 'volume' in vol['metric'] and vol['metric']['volume'].startswith('share_')]
+    def _get_netapp_volumes_offline(self):
+        """ like _get_netapp_volumes, but only return offline volumes """
+        query = "netapp_volume_state{app='netapp-capacity-exporter-manila'}==3"
+        offline_vols = self._fetch_prom_metrics(query) or []
+        return [{
+            'volume': vol['metric']['volume'],
+            'vserver': vol['metric'].get('vserver', ''),
+            'filer': vol['metric'].get('filer'),
+        } for vol in offline_vols
+            if 'volume' in vol['metric'] and vol['metric']['volume'].startswith('share_')]
 
     def _fetch_prom_metrics(self, query):
         try:
@@ -723,10 +748,11 @@ def str2bool(val):
 def parse_cmdline_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default='/manila-etc/manila.conf', help='configuration file')
-    parser.add_argument("--netapp-prom-host", help="never sync resources (no interactive check)")
     parser.add_argument("--interval", type=float, default=600, help="interval")
     parser.add_argument("--prom-port", type=int, default=9000, help="prometheus port")
-    parser.add_argument("--http-port", type=int, default=8000, help="http server port")
+    parser.add_argument("--netapp-prom-host",
+                        default='http://prometheus-storage.infra-monitoring.svc:9090',
+                        help="prometheus host for netapp metrics")
     parser.add_argument("--task-share-size",
                         type=str2bool,
                         default=False,
@@ -793,18 +819,18 @@ def main():
     if args.debug:
         log_level = logging.DEBUG
 
-    logging.basicConfig(level=log_level, format='%(asctime)-15s %(message)s')
+    logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s')
+    log.setLevel(log_level)
 
-    ManilaShareSyncNanny(args.config,
-                         args.netapp_prom_host,
-                         args.interval,
-                         tasks,
-                         dry_run_tasks,
-                         prom_port=args.prom_port,
-                         http_port=args.http_port,
-                         handler=MyHandler).run()
+    ManilaShareSyncNanny(
+        args.config,
+        args.netapp_prom_host,
+        args.interval,
+        tasks,
+        dry_run_tasks,
+        prom_port=args.prom_port
+    ).run()
 
 
 if __name__ == "__main__":
-    # test_resize()
     main()

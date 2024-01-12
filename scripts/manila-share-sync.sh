@@ -29,7 +29,6 @@ echo "INFO: syncing between manila share and backend"
     --config /etc/manila/manila.conf \
     --netapp-prom-host $PROMETHEUS_HOST \
     --prom-port $MANILA_NANNY_PROMETHEUS_PORT \
-    --http-port $MANILA_NANNY_HTTP_PORT \
     --interval $MANILA_NANNY_INTERVAL \
     --task-share-size $TASK_SHARE_SIZE \
     --task-share-size-dry-run $TASK_SHARE_SIZE_DRY_RUN \
@@ -43,4 +42,4 @@ echo "INFO: syncing between manila share and backend"
     --task-share-state-dry-run $TASK_SHARE_STATE_DRY_RUN \
 
 # start a test command
-# /var/lib/openstack/bin/python /scripts/manila-share-sync.py --netapp-prom-host http://prometheus-infra-collector.infra-monitoring.svc:9090 --prom-port 9602 --http-port 9003 --task-share-size true  --task-share-size-dry-run true
+# /var/lib/openstack/bin/python /scripts/manila-share-sync.py --netapp-prom-host http://prometheus-infra-collector.infra-monitoring.svc:9090 --prom-port 9602 --task-share-size true  --task-share-size-dry-run true
