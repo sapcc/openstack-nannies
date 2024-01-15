@@ -26,9 +26,16 @@ import sys
 import sqlalchemy
 from prettytable import PrettyTable
 from prometheus_client import Counter, start_http_server
-from sqlalchemy import Table, and_, func, select
+from sqlalchemy import Table, and_, func, select, update
 
 from manilananny import ManilaNanny
+
+logHandler = logging.StreamHandler()
+logHandler.setFormatter(logging.Formatter('%(asctime)s - %(filename)s - %(nanny)s - %(levelname)s - %(message)s'))
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.addHandler(logHandler)
 
 
 class ManilaQuotaSyncNanny(ManilaNanny):
@@ -223,6 +230,179 @@ class ManilaQuotaSyncNanny(ManilaNanny):
         # format output
         print(ptable_user)
         print(ptable_type)
+
+        self.reset_share_reserved_quota()
+        self.reset_snapshot_reserved_quota()
+
+    def reset_share_reserved_quota(self):
+        Shares = Table("shares", self.db_metadata, autoload=True)
+        ShareInstances = Table("share_instances", self.db_metadata, autoload=True)
+        QuotaUsages = Table("quota_usages", self.db_metadata, autoload=True)
+
+        log = logging.LoggerAdapter(logger, {"nanny": "share-reserved-quota"})
+
+        # Select all disctinct project_ids from quota_usages where reserved col is > 0
+        # We will iterate over the project ids and lock the quota_usages table for each
+        stmt_p = (
+            select(QuotaUsages.c.project_id)
+            .where(
+                and_(
+                    QuotaUsages.c.deleted == 0,
+                    QuotaUsages.c.reserved > 0,
+                    QuotaUsages.c.resource.in_(
+                        ["shares", "gigabytes", "share_replicas", "replica_gigabytes"]
+                    ),
+                )
+            )
+            .distinct()
+        )
+
+        for (project_id,) in stmt_p.execute():
+
+            # Start a transaction for each project_id and do the following:
+            #
+            # 1. Lock the quota_usages table for update. This will prevent other transactions from modifying the rows.
+            # 2. Then check if any shares in the project are in -ing state.
+            # 3. If no, update the quota_usages table and set the reserved quota to 0.
+
+            with self.engine.begin() as conn:
+                # lock the quota_usages table for update
+                stmt_l = (
+                    select(func.count()).select_from(QuotaUsages).where(
+                        and_(
+                            QuotaUsages.c.project_id == project_id,
+                            QuotaUsages.c.deleted == 0,
+                            QuotaUsages.c.reserved > 0,
+                            QuotaUsages.c.resource.in_([
+                                "shares", "gigabytes", "share_replicas", "replica_gigabytes"
+                            ]),
+                        )
+                    ).with_for_update()
+                )
+
+                if conn.execute(stmt_l).scalar() == 0:
+                    log.info("project: %s - has no reserved quota", project_id)
+                    continue
+
+                # select share instances with -ing state
+                stmt_c = (
+                    select(func.count()).select_from(
+                        ShareInstances.join(
+                            Shares,
+                            Shares.c.id == ShareInstances.c.share_id,
+                        )
+                    ).where(
+                        and_(
+                            Shares.c.deleted == "False",
+                            ShareInstances.c.deleted == "False",
+                            Shares.c.project_id == project_id,
+                            ShareInstances.c.status.in_([
+                                "creating", "deleting", "extending", "shrinking",
+                                "manage_starting", "unmanage_starting"
+                            ]),
+                        )
+                    )
+                )
+
+                if conn.execute(stmt_c).scalar() > 0:
+                    log.info("project: %s - has shares in -ing state", project_id)
+                    continue
+
+                if self.dry_run:
+                    log.info("project: %s - would reset reserved quota (dry-run)", project_id)
+                    continue
+
+                stmt_u = (
+                    update(QuotaUsages).where(
+                        and_(
+                            QuotaUsages.c.project_id == project_id,
+                            QuotaUsages.c.deleted == 0,
+                            QuotaUsages.c.reserved > 0,
+                            QuotaUsages.c.resource.in_([
+                                "shares", "gigabytes", "share_replicas", "replica_gigabytes"
+                            ]),
+                        )
+                    ).values(reserved=0, updated_at=datetime.datetime.utcnow())
+                )
+
+                log.info("project: %s - reset reserved quota", project_id)
+                conn.execute(stmt_u)
+
+    def reset_snapshot_reserved_quota(self):
+        Snapshots = Table("share_snapshots", self.db_metadata, autoload=True)
+        SnapshotInstances = Table("share_snapshot_instances", self.db_metadata, autoload=True)
+        QuotaUsages = Table("quota_usages", self.db_metadata, autoload=True)
+
+        log = logging.LoggerAdapter(logger, {"nanny": "snapshot-reserved-quota"})
+
+        # Select all disctinct project_ids from quota_usages where reserved col is > 0
+        stmt_p = select(QuotaUsages.c.project_id).where(
+            and_(
+                QuotaUsages.c.deleted == 0,
+                QuotaUsages.c.reserved > 0,
+                QuotaUsages.c.resource.in_([
+                    "snapshots",
+                    "snapshot_gigabytes",
+                ]),
+            )
+        ).distinct()
+
+        for (project_id,) in stmt_p.execute():
+            with self.engine.begin() as conn:
+                # lock the quota_usages table for update
+                stmt_l = (
+                    select(func.count()).select_from(QuotaUsages).where(
+                        and_(
+                            QuotaUsages.c.project_id == project_id,
+                            QuotaUsages.c.deleted == 0,
+                            QuotaUsages.c.reserved > 0,
+                            QuotaUsages.c.resource.in_(["snapshots", "snapshot_gigabytes"]),
+                        )
+                    ).with_for_update()
+                )
+
+                if conn.execute(stmt_l).scalar() == 0:
+                    log.info("project: %s - has no reserved quota", project_id)
+                    continue
+
+                # select snapshot instances with -ing state
+                stmt_c = (
+                    select(func.count()).select_from(
+                        SnapshotInstances.join(
+                            Snapshots,
+                            Snapshots.c.id == SnapshotInstances.c.snapshot_id,
+                        )
+                    ).where(
+                        and_(
+                            Snapshots.c.deleted == "False",
+                            SnapshotInstances.c.deleted == "False",
+                            Snapshots.c.project_id == project_id,
+                            SnapshotInstances.c.status.in_(["creating", "deleting"]),
+                        )
+                    )
+                )
+
+                if conn.execute(stmt_c).scalar() > 0:
+                    log.info("project: %s - has snapshots in -ing state", project_id)
+                    continue
+
+                if self.dry_run:
+                    log.info("project: %s - would reset reserved quota (dry-run)", project_id)
+                    continue
+
+                stmt_u = (
+                    update(QuotaUsages).where(
+                        and_(
+                            QuotaUsages.c.project_id == project_id,
+                            QuotaUsages.c.deleted == 0,
+                            QuotaUsages.c.reserved > 0,
+                            QuotaUsages.c.resource.in_(["snapshots", "snapshot_gigabytes"]),
+                        )
+                    ).values(reserved=0, updated_at=datetime.datetime.utcnow())
+                )
+
+                log.info("project: %s - reset reserved quota", project_id)
+                conn.execute(stmt_u)
 
 
 def get_db_url(config_file):

@@ -73,6 +73,7 @@ class ManilaNanny(http.server.HTTPServer):
         self.db_metadata = MetaData()
         self.db_metadata.bind = engine
         self.db_base = declarative_base()
+        self.engine = engine
 
     def get_db_url(self):
         """Return the database connection string from the config file"""
