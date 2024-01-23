@@ -98,11 +98,9 @@ class ManilaShareSyncNanny(ManilaNanny):
 
         # fetch data
         try:
-            if self._tasks[TASK_SHARE_SIZE] or self._tasks[TASK_MISSING_VOLUME]\
-                    or self._tasks[TASK_ORPHAN_VOLUME]:
-                _share_list = self._query_shares()
-                _volume_list = self._get_netapp_volumes()
-                _shares, _orphan_volumes = self._merge_share_and_volumes(_share_list, _volume_list)
+            _share_list = self._query_shares()
+            _volume_list = self._get_netapp_volumes()
+            _shares, _orphan_volumes = self._merge_share_and_volumes(_share_list, _volume_list)
 
             if self._tasks[TASK_OFFLINE_VOLUME]:
                 _offline_volume_list = self._get_netapp_volumes_offline()
@@ -303,8 +301,8 @@ class ManilaShareSyncNanny(ManilaNanny):
             share = _share[(share_id, replica_id)]
             if share['status'] != 'error':
                 continue
-            if share['replica_state'] != 'in-sync':
-                # only secondary replica that is in-sync
+            if share['replica_state'] != 'in_sync':
+                # only secondary replica that is in_sync
                 continue
             if is_utcts_recent(share['updated_at'] or share['created_at'], 6 * 3600):
                 # only updated or created more than 6 hours ago
@@ -313,7 +311,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                 continue
             if share['volume']['volume_type'] != 'dp':
                 continue
-            if share['volume']['state'] != 'online':
+            if share['volume']['volume_state'] != 'online':
                 continue
             if share['volume']['size'] == 0:
                 continue
@@ -549,6 +547,7 @@ class ManilaShareSyncNanny(ManilaNanny):
         return [{
             'volume': vol['metric']['volume'],
             'volume_type': vol['metric'].get('volume_type'),
+            'volume_state': vol['metric'].get('volume_state'),
             'vserver': vol['metric'].get('vserver', ''),
             'filer': vol['metric'].get('filer'),
             'size': int(vol['value'][1]) / ONEGB,
@@ -674,19 +673,16 @@ class ManilaShareSyncNanny(ManilaNanny):
             (shares, volumes): merged shares and unmerged volumes
 
             shares: Dict[(ShareId, InstanceId): Share]
-            volumes: Dict[VolumeName: Volume]
+            volumes: Dict[(host, VolumeName): Volume]
         """
-        r = re.compile('^manila-share-netapp-(?P<filer>.+)@(?P=filer)#.*')
         _shares = {(s['id'], s['instance_id']): s for s in shares}
         _volumes = {(vol['filer'], vol['volume'][6:].replace('_', '-')): vol
                     for vol in volumes if vol['volume'].startswith('share_')}
         for (share_id, instance_id), share in _shares.items():
-            m = r.match(share['host'])
-            if m:
-                filer = m.group('filer')
-                vol = _volumes.pop((filer, instance_id), None)
-            else:
-                continue
+            # complete share host should be like "manila-share-netapp-stnpca4-st061@stnpca4-st061#aggr_ssd_stnpa4_01_st061_1"
+            # but it can also be imcomplete, e.g. "manila-share-netapp-stnpca4-st061@stnpca4-st061"
+            filer = share['host'].replace('#', '@').split('@')[1]
+            vol = _volumes.pop((filer, instance_id), None)
             if vol:
                 _shares[(share_id, instance_id)].update({'volume': vol})
         return _shares, _volumes
