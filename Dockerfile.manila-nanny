@@ -29,6 +29,9 @@ RUN /var/lib/openstack/bin/pip install -q --no-cache-dir \
   pyreloader~=0.1 \
   python-manilaclient==2.0.0
 
+ADD . /var/lib/openstack/openstack-nannies
+RUN /var/lib/openstack/bin/pip install -e /var/lib/openstack/openstack-nannies
+
 ADD scripts/manila* /scripts/
 ADD scripts/db-cleanup.py /scripts/
 ADD scripts/count-deleted.py /scripts/
