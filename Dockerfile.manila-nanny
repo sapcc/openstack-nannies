@@ -27,7 +27,7 @@ RUN /var/lib/openstack/bin/pip install -q --no-cache-dir \
   prometheus-client==0.7.1  \
   psycopg2-binary==2.8.4 \
   pyreloader~=0.1 \
-  python-manilaclient==2.0.0
+  python-manilaclient==3.1.0
 
 ADD . /var/lib/openstack/openstack-nannies
 RUN /var/lib/openstack/bin/pip install -e /var/lib/openstack/openstack-nannies
