@@ -330,3 +330,15 @@ def is_utcts_recent(ts: datetime.datetime, seconds):
     if delta.total_seconds() < seconds:
         return True
     return False
+
+class CustomAdapter(logging.LoggerAdapter):
+    def process(self, msg, kwargs):
+        task = kwargs.pop('task', self.extra.get('task', None))
+        if task:
+            msg = f'{task}: {msg}'
+        dry_run = kwargs.pop('dry_run', self.extra.get('dry_run', False))
+        if dry_run:
+            msg = f'[DRY-RUN] {msg}'
+        for k, v in kwargs.items():
+            msg += f' {k}={v}'
+        return msg, {}

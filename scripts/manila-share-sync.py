@@ -29,9 +29,10 @@ import requests
 from prometheus_client import Counter, Gauge
 from sqlalchemy import Table, select, update
 
-from manilananny import ManilaNanny, is_utcts_recent, response, update_records
+from manilananny import CustomAdapter, ManilaNanny, is_utcts_recent, response, update_records
 
 log = logging.getLogger('nanny-manila-share-sync')
+logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s %(message)s')
 
 ONEGB = 1073741824
 
@@ -101,9 +102,6 @@ class ManilaShareSyncNanny(ManilaNanny):
             _share_list = self._query_shares()
             _volume_list = self._get_netapp_volumes()
             _shares, _orphan_volumes = self._merge_share_and_volumes(_share_list, _volume_list)
-
-            if self._tasks[TASK_OFFLINE_VOLUME]:
-                _offline_volume_list = self._get_netapp_volumes_offline()
         except Exception as e:
             log.warning(e)
             self.MANILA_NANNY_SHARE_SYNC_FAILURE.inc()
@@ -123,7 +121,11 @@ class ManilaShareSyncNanny(ManilaNanny):
 
         if self._tasks[TASK_OFFLINE_VOLUME]:
             dry_run = self._dry_run_tasks[TASK_OFFLINE_VOLUME]
-            self.process_offline_volumes(_offline_volume_list, dry_run)
+            try:
+                _offline_volume_list = self._get_netapp_volumes_offline()
+                self.process_offline_volumes(_offline_volume_list, dry_run)
+            except Exception as e:
+                log.warning(e)
 
         if self._tasks[TASK_SHARE_STATE]:
             dry_run = self._dry_run_tasks[TASK_SHARE_STATE]
@@ -133,35 +135,21 @@ class ManilaShareSyncNanny(ManilaNanny):
 
     def sync_share_size(self, shares, dry_run=True):
         """ Backend volume exists, but share size does not match """
-        msg = "share %s: share size != netapp volume size (%d != %d)"
-        msg_dry_run = "Dry run: " + msg
-        skip_msg = "skipping share size %s: %s"
+        logger = CustomAdapter(log, {'task': 'sync_share_size', 'dry_run': dry_run})
         for (share_id, _), share in shares.items():
             if 'volume' not in share:
-                log.info(
-                    skip_msg,
-                    share_id,
-                    'volume not found on netapp')
+                logger.info('skip share: no volume found', share_id=share_id)
                 continue
             if share['volume']['size'] == 0:
-                log.info(
-                    skip_msg,
-                    share_id,
-                    'volume size is zero, probably offline')
+                logger.info('skip share: volume size is zero', share_id=share_id)
                 continue
             if share['volume']['volume_type'] == 'dp':
-                log.debug(
-                    skip_msg,
-                    share_id,
-                    'volume type is dp, snapmirror target')
+                logger.info('skip share: volume type is dp', share_id=share_id)
                 continue
-            if share['updated_at'] is not None:
-                if is_utcts_recent(share['updated_at'], 3600):
-                    log.debug(
-                        skip_msg,
-                        share_id,
-                        'updated less than 1 hour ago')
-                    continue
+            if is_utcts_recent(share['updated_at'] or share['created_at'], 6 * 3600):
+                logger.info(
+                    'skip share: updated/created less than 6 hours ago', share_id=share_id)
+                continue
 
             # Below, comparing share size (integer from Manila db) and volume
             # size (float) is correct because python can compare int and float.
@@ -177,26 +165,22 @@ class ManilaShareSyncNanny(ManilaNanny):
                 correct_size = (vsize * (100 - self.net_capacity_snap_reserve) / 100)
                 if size != correct_size:
                     self._reset_resize_error_state(dry_run, share_id, status)
-                    if dry_run:
-                        log.info(msg_dry_run, share_id, size, correct_size)
-                    else:
-                        log.info(msg, share_id, size, correct_size)
+                    logger.info("share size != netapp volume size (%d != %d)", size, correct_size,
+                                share_id=share_id, snap_reserve=snap_percent)
+                    if not dry_run:
                         self.set_share_size(share_id, correct_size)
                         self.MANILA_SYNC_SHARE_SIZE_COUNTER.inc()
             elif snap_percent == 5:
                 if size != vsize:
                     self._reset_resize_error_state(dry_run, share_id, status)
-                    if dry_run:
-                        log.info(msg_dry_run, share_id, size, vsize)
-                    else:
-                        log.info(msg, share_id, size, vsize)
+                    logger.info("share size != netapp volume size (%d != %d)", size, vsize,
+                                share_id=share_id, snap_reserve=snap_percent)
+                    if not dry_run:
                         self.set_share_size(share_id, vsize)
                         self.MANILA_SYNC_SHARE_SIZE_COUNTER.inc()
             else:
-                log.warning(
-                    skip_msg,
-                    share_id,
-                    f"snap_percent {snap_percent} inconclusive")
+                logger.warning("skip share: snap reserve percentage inconclusive",
+                               share_id=share_id, snap_reserve=snap_percent)
                 continue
 
     def sync_share_state(self, shares, dry_run=True):
@@ -297,6 +281,8 @@ class ManilaShareSyncNanny(ManilaNanny):
         guaranteed that the primary replica is of type "rw".
 
         """
+        logger = CustomAdapter(log, {'task': 'reset_share_replica_state', 'dry_run': dry_run})
+
         for (share_id, replica_id) in _share:
             share = _share[(share_id, replica_id)]
             if share['status'] != 'error':
@@ -315,22 +301,16 @@ class ManilaShareSyncNanny(ManilaNanny):
                 continue
             if share['volume']['size'] == 0:
                 continue
-            if dry_run:
-                log.info(
-                    "Dry run: reset replica status from error to available: share=%s, replica_id=%s",
-                    share_id, replica_id
-                )
-                continue
-            try:
-                self.manilaclient.share_replicas.reset_state(replica_id, "available")
-                log.debug(
-                    "reset replica status from error to available successfully: share_id=%s, replica_id=%s"
-                )
-            except Exception as e:
-                log.exception(
-                    "reset replica status from error to available failed: share_id=%s, replica_id=%s, %s",
-                    share_id, replica_id, e
-                )
+            logger.info(
+                "set replica status to available", share_id=share_id, replica_id=replica_id,
+                old_status='error')
+            if not dry_run:
+                try:
+                    self.manilaclient.share_replicas.reset_state(replica_id, "available")
+                except Exception as e:
+                    logger.exception(
+                        "failed to set replica status to available: %s", e, share_id=share_id,
+                        replica_id=replica_id)
 
     def process_missing_volume(self, shares, dry_run=True):
         """ Set share state to error when backend volume is missing
@@ -371,7 +351,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                     'share_id': share_id,
                     'instance_id': instance_id,
                     'share_name': share_name,
-                    'share_status': share_status,
+                    'share_status': share_status
                 }
 
         # remove outdated record from gauge
@@ -811,12 +791,8 @@ def main():
         TASK_SHARE_STATE: args.task_share_state_dry_run,
     }
 
-    log_level = logging.INFO
     if args.debug:
-        log_level = logging.DEBUG
-
-    logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s')
-    log.setLevel(log_level)
+        log.setLevel(logging.DEBUG)
 
     ManilaShareSyncNanny(
         args.config,
