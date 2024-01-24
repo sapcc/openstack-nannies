@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 
 class ManilaNanny(http.server.HTTPServer):
     ''' Manila Nanny '''
-    def __init__(self, config_file, interval, dry_run=False, prom_port=0, address="", http_port=8000, handler=None, version="2.7", **extra_args):
+    def __init__(self, config_file, interval, dry_run=False, prom_port=0, address="", http_port=8000, handler=None, version="2.65", **extra_args):
         self.config_file = config_file
         self.interval = interval
         self.dry_run = dry_run
