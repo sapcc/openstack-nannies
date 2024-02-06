@@ -22,6 +22,7 @@ import configparser
 import logging
 import re
 import time
+import traceback
 from datetime import datetime
 from threading import Lock
 
@@ -32,7 +33,7 @@ from sqlalchemy import Table, select, update
 from manilananny import CustomAdapter, ManilaNanny, is_utcts_recent, response, update_records
 
 log = logging.getLogger('nanny-manila-share-sync')
-logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s %(message)s')
+logging.basicConfig(format='%(asctime)s %(name)s %(levelname)s [%(filename)s:%(lineno)d] %(message)s')
 
 ONEGB = 1073741824
 
@@ -103,7 +104,7 @@ class ManilaShareSyncNanny(ManilaNanny):
             _volume_list = self._get_netapp_volumes()
             _shares, _orphan_volumes = self._merge_share_and_volumes(_share_list, _volume_list)
         except Exception as e:
-            log.warning(e)
+            log.warning(''.join(traceback.format_exception(None, e, e.__traceback__)))
             self.MANILA_NANNY_SHARE_SYNC_FAILURE.inc()
             return
 
@@ -661,7 +662,11 @@ class ManilaShareSyncNanny(ManilaNanny):
         for (share_id, instance_id), share in _shares.items():
             # complete share host should be like "manila-share-netapp-stnpca4-st061@stnpca4-st061#aggr_ssd_stnpa4_01_st061_1"
             # but it can also be imcomplete, e.g. "manila-share-netapp-stnpca4-st061@stnpca4-st061"
-            filer = share['host'].replace('#', '@').split('@')[1]
+            try:
+                filer = share['host'].replace('#', '@').split('@')[1]
+            except IndexError:
+                log.warning("share %s: invalid host %s", share_id, share['host'])
+                continue
             vol = _volumes.pop((filer, instance_id), None)
             if vol:
                 _shares[(share_id, instance_id)].update({'volume': vol})
