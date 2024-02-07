@@ -145,7 +145,7 @@ class ManilaNanny(http.server.HTTPServer):
             offset = 0
             for i in range(int(count)):
                 search_opts.update({'offset': offset, 'limit': 1000})
-                shares.append(self.manilaclient.shares.list(search_opts=search_opts))
+                shares.extend(self.manilaclient.shares.list(search_opts=search_opts))
                 offset = offset + 1000
             return shares
         except Exception as e:
@@ -174,7 +174,7 @@ class ManilaNanny(http.server.HTTPServer):
                 search_opts.update({'offset': offset, 'limit': 1000})
                 snaps = self.manilaclient.share_snapshots.list(search_opts=search_opts)
                 if snaps:
-                    share_snapshots.append(snaps)
+                    share_snapshots.extend(snaps)
                     offset = offset + 1000
                 else:
                     break

@@ -87,7 +87,7 @@ class MissingSnapshotNanny(ManilaNanny):
         snapshots = []
         offset = 0
         for i in range(int(count)):
-            snapshots.append(manila.share_snapshots.list(
+            snapshots.extend(manila.share_snapshots.list(
                 search_opts={'all_tenants': True, 'limit': 1000, 'offset': offset}))
             offset = offset + 1000
 
@@ -95,7 +95,7 @@ class MissingSnapshotNanny(ManilaNanny):
             try:
                 # with detailed=True, next call may abort with an internal error
                 _snap_instances = manila.share_snapshot_instances.list(
-                    detailed=True, snapshot=_snapshot)
+                    detailed=True, snapshot=_snapshot.id)
                 if not isinstance(_snap_instances, list):
                     raise Exception("not a list")
             except manilaexceptions.InternalServerError as e:
