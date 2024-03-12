@@ -139,17 +139,16 @@ class ManilaShareSyncNanny(ManilaNanny):
         logger = CustomAdapter(log, {'task': 'sync_share_size', 'dry_run': dry_run})
         for (share_id, _), share in shares.items():
             if 'volume' not in share:
-                logger.info('skip share: no volume found', share_id=share_id)
+                logger.warn('skip share: no volume found', share_id=share_id)
                 continue
             if share['volume']['size'] == 0:
-                logger.info('skip share: volume size is zero', share_id=share_id)
+                logger.warn('skip share: volume size is zero', share_id=share_id)
                 continue
             if share['volume']['volume_type'] == 'dp':
-                logger.info('skip share: volume type is dp', share_id=share_id)
+                logger.warn('skip share: volume type is dp', share_id=share_id)
                 continue
-            if is_utcts_recent(share['updated_at'] or share['created_at'], 6 * 3600):
-                logger.info(
-                    'skip share: updated/created less than 6 hours ago', share_id=share_id)
+            if is_utcts_recent(share['updated_at'] or share['created_at'], 3600):
+                logger.warn('skip share: updated/created less than one hour ago', share_id=share_id)
                 continue
 
             # Below, comparing share size (integer from Manila db) and volume
@@ -166,7 +165,7 @@ class ManilaShareSyncNanny(ManilaNanny):
                 correct_size = (vsize * (100 - self.net_capacity_snap_reserve) / 100)
                 if size != correct_size:
                     self._reset_resize_error_state(dry_run, share_id, status)
-                    logger.info("share size != netapp volume size (%d != %d)", size, correct_size,
+                    logger.warn("share size != netapp volume size (%d != %d)", size, correct_size,
                                 share_id=share_id, snap_reserve=snap_percent)
                     if not dry_run:
                         self.set_share_size(share_id, correct_size)
@@ -174,7 +173,7 @@ class ManilaShareSyncNanny(ManilaNanny):
             elif snap_percent == 5:
                 if size != vsize:
                     self._reset_resize_error_state(dry_run, share_id, status)
-                    logger.info("share size != netapp volume size (%d != %d)", size, vsize,
+                    logger.warn("share size != netapp volume size (%d != %d)", size, vsize,
                                 share_id=share_id, snap_reserve=snap_percent)
                     if not dry_run:
                         self.set_share_size(share_id, vsize)
@@ -798,6 +797,8 @@ def main():
 
     if args.debug:
         log.setLevel(logging.DEBUG)
+    else:
+        log.setLevel(logging.INFO)
 
     ManilaShareSyncNanny(
         args.config,
