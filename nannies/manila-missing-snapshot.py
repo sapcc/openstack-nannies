@@ -17,6 +17,7 @@
 #
 import configparser
 import logging
+import os
 import sys
 
 import manilaclient.common.apiclient.exceptions as manilaexceptions
@@ -215,7 +216,8 @@ def list_share_snapshots(netappclient: NetAppRestHelper):
 
 def main():
     parser = base_command_parser()
-    parser.add_argument("--netapp-filers", default="/manila-etc/netapp-filers.yaml",
+    default_netapp_filers = os.environ.get('MANILA_NANNY_NETAPP_FILERS') or "/etc/manila/netapp-filers.yaml"
+    parser.add_argument("--netapp-filers", default=default_netapp_filers,
                         help="Netapp filers list")
     args = parser.parse_args()
 

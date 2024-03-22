@@ -17,7 +17,6 @@
 #
 # this script checks for inconsistencies in the manila db
 
-import argparse
 import configparser
 import datetime
 import logging
@@ -27,6 +26,8 @@ from openstack import connection, exceptions
 from sqlalchemy import (MetaData, Table, and_, create_engine, select, update)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+
+from helper.manilananny import base_command_parser
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
@@ -310,10 +311,7 @@ def _get_openstack_client(config_file):
 
 # cmdline handling
 def parse_cmdline_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config",
-                        default='./manila.conf',
-                        help='configuration file')
+    parser = base_command_parser()
     parser.add_argument("--dry-run",
                         action="store_true",
                         help='print only what would be done without actually doing it')

@@ -105,8 +105,12 @@ def base_command_parser():
 
     The returned parser can be extended by its add_argument() method.
     """
+    default_config_files = os.environ.get('MANILA_NANNY_CONFIG') or ["/etc/manila/manila.conf", "/etc/manila/secrets.conf"]
+    default_interval = os.environ.get('MANILA_NANNY_INTERVAL') or 3600
+    default_prom_port = os.environ.get('MANILA_NANNY_PROMETHEUS_PORT') or 9000
+
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="/manila-etc/manila.conf", help="configuration file")
-    parser.add_argument("--interval", type=float, default=600, help="interval in seconds")
-    parser.add_argument("--prom-port", type=int, default=9000, help="prometheus exporter port")
+    parser.add_argument("--config", action="append", default=default_config_files, help="configuration file(s)")
+    parser.add_argument("--interval", type=float, default=default_interval, help="interval in seconds")
+    parser.add_argument("--prom-port", type=int, default=default_prom_port, help="prometheus exporter port")
     return parser

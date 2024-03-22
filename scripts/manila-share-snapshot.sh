@@ -14,21 +14,15 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
-# 
+#
 
 set -e
 set -u
 
 unset http_proxy https_proxy all_proxy no_proxy
 
-echo "INFO: copying manila config files to /etc/manila"
-cp -v /manila-etc/* /etc/manila
-
 echo "INFO: working on manila share snapshot"
 /var/lib/openstack/bin/python /scripts/manila-share-snapshot.py \
-    --config /etc/manila/manila.conf \
-    --interval $MANILA_NANNY_INTERVAL \
-    --prom-port $MANILA_NANNY_PROMETHEUS_PORT \
     --listen-port $MANILA_NANNY_LISTEN_PORT \
     --task-share-snapshot-state $TASK_SHARE_SNAPSHOT_STATE \
     --task-share-snapshot-state-dry-run $TASK_SHARE_SNAPSHOT_STATE_DRY_RUN

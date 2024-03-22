@@ -17,7 +17,6 @@
 #
 # based on https://github.com/cernops/cinder-quota-sync
 
-import argparse
 import configparser
 import datetime
 import logging
@@ -28,6 +27,7 @@ from prettytable import PrettyTable
 from prometheus_client import Counter, start_http_server
 from sqlalchemy import Table, and_, func, select, update
 
+from helper.manilananny import base_command_parser
 from manilananny import ManilaNanny
 
 logHandler = logging.StreamHandler()
@@ -419,21 +419,10 @@ def get_db_url(config_file):
 
 def main():
     try:
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--config",
-                            default='./manila.conf',
-                            help='configuration file')
+        parser = base_command_parser()
         parser.add_argument("--dry-run",
                             action="store_true",
                             help="never sync resources (no interactive check)")
-        parser.add_argument("--interval",
-                            default=600,
-                            type=float,
-                            help="interval")
-        parser.add_argument("--promport",
-                            default=9456,
-                            type=int,
-                            help="prometheus port")
         args = parser.parse_args()
     except Exception as e:
         sys.stdout.write("Check command line arguments (%s)" % e)
@@ -441,7 +430,7 @@ def main():
     print(args)
 
     try:
-        start_http_server(args.promport)
+        start_http_server(args.prom_port)
     except Exception as e:
         logging.fatal("start_http_server: %s", e)
         sys.exit(-1)
