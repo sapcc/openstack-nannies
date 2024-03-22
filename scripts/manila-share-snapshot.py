@@ -21,6 +21,7 @@ from http.server import BaseHTTPRequestHandler
 from threading import Lock
 from typing import Dict
 
+from helper.manilananny import base_command_parser
 from manilananny import ManilaNanny, is_utcts_recent, response, update_records
 from prometheus_client import Gauge
 from sqlalchemy import Table, select
@@ -218,11 +219,8 @@ def str2bool(val):
 
 
 def parse_cmdline_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default='/etc/manila/manila.conf', help='configuration file')
-    parser.add_argument("--interval", type=float, default=3600, help="interval")
+    parser = base_command_parser()
     parser.add_argument("--listen-port", type=int, default=8000, help="http server listen port")
-    parser.add_argument("--prom-port", type=int, default=9000, help="http server listen port")
     parser.add_argument("--task-share-snapshot-state", type=str2bool, default=False,
                         help="enable share snapshot state task")
     parser.add_argument("--task-share-snapshot-state-dry-run", type=str2bool, default=False,

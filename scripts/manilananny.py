@@ -25,13 +25,13 @@ log = logging.getLogger(__name__)
 
 class ManilaNanny(http.server.HTTPServer):
     ''' Manila Nanny '''
-    def __init__(self, config_file, interval, dry_run=False, prom_port=0, address="", http_port=8000, handler=None, version="2.65", **extra_args):
-        self.config_file = config_file
+    def __init__(self, config, interval, dry_run=False, prom_port=0, address="", http_port=8000, handler=None, version="2.65", **extra_args):
+        self.config_file = config
         self.interval = interval
         self.dry_run = dry_run
         self.microversion = version
         self.init_db_connection()
-        self.manilaclient = create_manila_client(config_file, self.microversion)
+        self.manilaclient = create_manila_client(config, self.microversion)
 
         if prom_port != 0:
             try:

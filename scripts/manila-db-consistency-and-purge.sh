@@ -20,9 +20,6 @@ set -e
 
 unset http_proxy https_proxy all_proxy no_proxy
 
-echo "INFO: copying manila config files to /etc/manila"
-cp -v /manila-etc/* /etc/manila
-
 # we run an endless loop to run the script periodically
 echo "INFO: starting a loop to periodically run the nanny job for the manila db consistency check and purge"
 while true; do
@@ -30,11 +27,11 @@ while true; do
         if [ "$MANILA_CONSISTENCY_DRY_RUN" = "False" ] || [ "$MANILA_CONSISTENCY_DRY_RUN" = "false" ]; then
             echo -n "INFO: checking and fixing manila db consistency - "
             date
-            /var/lib/openstack/bin/python /scripts/manila-consistency.py --config /etc/manila/manila.conf --older-than ${MANILA_CONSISTENCY_OLDER_THAN:-2}
+            /var/lib/openstack/bin/python /scripts/manila-consistency.py --older-than ${MANILA_CONSISTENCY_OLDER_THAN:-2}
         else
             echo -n "INFO: checking manila db consistency - "
             date
-            /var/lib/openstack/bin/python /scripts/manila-consistency.py --config /etc/manila/manila.conf --older-than ${MANILA_CONSISTENCY_OLDER_THAN:-2} --dry-run
+            /var/lib/openstack/bin/python /scripts/manila-consistency.py --older-than ${MANILA_CONSISTENCY_OLDER_THAN:-2} --dry-run
         fi
     fi
     if [ "$MANILA_DB_PURGE_ENABLED" = "True" ] || [ "$MANILA_DB_PURGE_ENABLED" = "true" ]; then

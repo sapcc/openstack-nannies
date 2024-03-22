@@ -30,6 +30,7 @@ import requests
 from prometheus_client import Counter, Gauge
 from sqlalchemy import Table, select, update
 
+from helper.manilananny import base_command_parser
 from manilananny import CustomAdapter, ManilaNanny, is_utcts_recent, response, update_records
 
 log = logging.getLogger('nanny-manila-share-sync')
@@ -726,10 +727,7 @@ def str2bool(val):
 
 
 def parse_cmdline_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default='/manila-etc/manila.conf', help='configuration file')
-    parser.add_argument("--interval", type=float, default=600, help="interval")
-    parser.add_argument("--prom-port", type=int, default=9000, help="prometheus port")
+    parser = base_command_parser()
     parser.add_argument("--netapp-prom-host",
                         default='http://prometheus-storage.infra-monitoring.svc:9090',
                         help="prometheus host for netapp metrics")

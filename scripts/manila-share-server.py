@@ -15,7 +15,6 @@
 #
 from __future__ import absolute_import
 
-import argparse
 from http.server import BaseHTTPRequestHandler
 from threading import Lock
 from typing import Dict, List, Tuple
@@ -23,6 +22,7 @@ from typing import Dict, List, Tuple
 from prometheus_client import Gauge
 from sqlalchemy import Table, and_, func, select
 
+from helper.manilananny import base_command_parser
 from manilananny import ManilaNanny, response, update_records
 
 
@@ -93,11 +93,8 @@ class ManilaShareServerNanny(ManilaNanny):
 
 
 def parse_cmdline_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default='/etc/manila/manila.conf', help='configuration file')
-    parser.add_argument("--interval", type=float, default=3600, help="interval")
+    parser = base_command_parser()
     parser.add_argument("--listen-port", type=int, default=8000, help="http server listen port")
-    parser.add_argument("--prom-port", type=int, default=9000, help="http server listen port")
     return parser.parse_args()
 
 
