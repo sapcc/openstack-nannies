@@ -1,9 +1,0 @@
-attrs
-git+https://github.com/sapcc/dnspython.git@ccloud#egg=dnspython
-scrypt==0.8.6
-pyvmomi
-jinja2
-jsonpatch
-kubernetes>=12,<13
-keystoneauth1
-dumb-init
