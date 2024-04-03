@@ -32,7 +32,7 @@ export NOVA_DB_PURGE_OLDER_THAN
 
 # nova is now using proxysql by default in its config - change that back to a normal
 # config for the nanny as we do not need it and do not have the proxy around by default
-sed -i 's,@/nova?unix_socket=/run/proxysql/mysql.sock&,@nova-mariadb/nova?,g' /etc/nova/nova.conf.d/db.conf
+sed -i 's,@/nova?unix_socket=/run/proxysql/mysql.sock&,@nova-mariadb/nova?,g' /etc/nova/nova.conf.d/api-db.conf
 
 # we run an endless loop to run the script periodically
 echo "INFO: starting a loop to periodically run the nanny job for the nova quota sync"
@@ -46,7 +46,7 @@ while true; do
             SYNC_MODE="--no_sync"
             echo "INFO: running in dry-run mode only!"
         fi
-        python3 /scripts/nova-quota-sync.py --config /etc/nova/nova.conf.d/db.conf --all $SYNC_MODE
+        python3 /scripts/nova-quota-sync.py --config /etc/nova/nova.conf.d/api-db.conf --all $SYNC_MODE
     fi
     echo -n "INFO: waiting $NOVA_NANNY_INTERVAL minutes before starting the next loop run - "
     date

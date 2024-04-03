@@ -32,22 +32,22 @@ export NOVA_DB_PURGE_OLDER_THAN
 
 # this is to handle the case of having a second cell db for nova
 if [ "$NOVA_CELL2_ENABLED" = "True" ] || [ "$NOVA_CELL2_ENABLED" = "true" ]; then
-    if [ -f /etc/nova/nova-cell2.conf ]; then
-        # in the cell2 case we simply replace the db.conf file used explicitely by some of the
+    if [ -f /etc/nova/nova.d/cell2.conf ]; then
+        # in the cell2 case we simply replace the api-db.conf file used explicitely by some of the
         # scripts or implicitely by the nova-manage db purge_deleted_instances tool by the cell2
         # config - it nearly only contains the db string and this is what we are interested in here
-        # this copying of a nova conf to a db.conf is done here as the nova-cell2.conf has not been
-        # converted to the new structure of having a separate config file for the db config
-        cp -f /etc/nova/nova-cell2.conf /etc/nova/nova.conf.d/db.conf
+        # this copying of a nova conf to a api-db.conf is done here as the nova cell2.conf has not been
+        # converted to the new structure of having a separate config file for the api-db config
+        cp -f /etc/nova/nova.d/cell2.conf /etc/nova/nova.conf.d/api-db.conf
     else
-        echo "ERROR: PLEASE CHECK MANUALLY - nova cell2 is enabled, but there is no /etc/nova/nova-cell2.conf file - giving up!"
+        echo "ERROR: PLEASE CHECK MANUALLY - nova cell2 is enabled, but there is no /etc/nova/nova.d/cell2.conf file - giving up!"
         exit 1
     fi
 fi
 
 # nova is now using proxysql by default in its config - change that back to a normal
 # config for the nanny as we do not need it and do not have the proxy around by default
-sed -i 's,@/nova?unix_socket=/run/proxysql/mysql.sock&,@nova-mariadb/nova?,g' /etc/nova/nova.conf.d/db.conf
+sed -i 's,@/nova?unix_socket=/run/proxysql/mysql.sock&,@nova-mariadb/nova?,g' /etc/nova/nova.conf.d/api-db.conf
 
 # we run an endless loop to run the script periodically
 echo "INFO: starting a loop to periodically run the nanny job for the nova db concistency check and purge"
@@ -71,11 +71,11 @@ while true; do
             fi
             echo -n "INFO: checking and fixing nova db consistency - "
             date
-            python3 /scripts/nova-consistency.py --config /etc/nova/nova.conf.d/db.conf $OLDER_THAN $MAX_INSTANCE_FAULTS $FIX_LIMIT
+            python3 /scripts/nova-consistency.py --config /etc/nova/nova.conf.d/api-db.conf $OLDER_THAN $MAX_INSTANCE_FAULTS $FIX_LIMIT
         else
             echo -n "INFO: checking nova db consistency - "
             date
-            python3 /scripts/nova-consistency.py --config /etc/nova/nova.conf.d/db.conf --dry-run
+            python3 /scripts/nova-consistency.py --config /etc/nova/nova.conf.d/api-db.conf --dry-run
         fi
     fi
     if [ "$NOVA_QUEENS_INSTANCE_MAPPING_ENABLED" = "True" ] || [ "$NOVA_QUEENS_INSTANCE_MAPPING_ENABLED" = "true" ]; then
@@ -88,7 +88,7 @@ while true; do
         fi
         echo -n "Searching for inconsistent instance mappings and deleting duplicates - "
         date
-        python3 /scripts/nova-queens-instance-mapping.py --config /etc/nova/nova.conf.d/db.conf $DRY_RUN
+        python3 /scripts/nova-queens-instance-mapping.py --config /etc/nova/nova.conf.d/api-db.conf $DRY_RUN
     fi
     if [ "$NOVA_DB_PURGE_ENABLED" = "True" ] || [ "$NOVA_DB_PURGE_ENABLED" = "true" ]; then
         # the purge_deleted_instances command meanwhile handles all cells so only required for the non cell2 case
