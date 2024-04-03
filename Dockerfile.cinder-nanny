@@ -20,6 +20,3 @@ USER root
 ADD nannies/cinder-* nannies/db-cleanup.py nannies/count-deleted.py nannies/requirements-cinder-nanny.txt /scripts/
 
 RUN pip3 install -r /scripts/requirements-cinder-nanny.txt
-
-# looks like uninstall of dogpile.core is required to avoid a conflict at runtime
-RUN /var/lib/openstack/bin/pip uninstall -y dogpile.core
