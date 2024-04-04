@@ -32,15 +32,15 @@ export NOVA_DB_PURGE_OLDER_THAN
 
 # this is to handle the case of having a second cell db for nova
 if [ "$NOVA_CELL2_ENABLED" = "True" ] || [ "$NOVA_CELL2_ENABLED" = "true" ]; then
-    if [ -f /etc/nova/nova.d/cell2.conf ]; then
+    if [ -f /etc/nova/nova.conf.d/cell2.conf ]; then
         # in the cell2 case we simply replace the api-db.conf file used explicitely by some of the
         # scripts or implicitely by the nova-manage db purge_deleted_instances tool by the cell2
         # config - it nearly only contains the db string and this is what we are interested in here
         # this copying of a nova conf to a api-db.conf is done here as the nova cell2.conf has not been
         # converted to the new structure of having a separate config file for the api-db config
-        cp -f /etc/nova/nova.d/cell2.conf /etc/nova/nova.conf.d/api-db.conf
+        cp -f /etc/nova/nova.conf.d/cell2.conf /etc/nova/nova.conf.d/api-db.conf
     else
-        echo "ERROR: PLEASE CHECK MANUALLY - nova cell2 is enabled, but there is no /etc/nova/nova.d/cell2.conf file - giving up!"
+        echo "ERROR: PLEASE CHECK MANUALLY - nova cell2 is enabled, but there is no /etc/nova/nova.conf.d/cell2.conf file - giving up!"
         exit 1
     fi
 fi
