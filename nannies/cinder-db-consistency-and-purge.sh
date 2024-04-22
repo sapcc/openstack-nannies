@@ -21,13 +21,15 @@ set -e
 unset http_proxy https_proxy all_proxy no_proxy
 
 echo "INFO: copying cinder config files to /etc/cinder"
-cp -v /cinder-etc/* /etc/cinder
+cp -vrL /cinder-etc/* /etc/cinder
 # this is a temporary hack to avoid annoying raven warnings - we do not need sentry for this nanny for now
 sed -i 's,raven\.handlers\.logging\.SentryHandler,logging.NullHandler,g' /etc/cinder/logging.ini
 
+DB_CONFIG="/etc/cinder/cinder.conf.d/secrets.conf"
+
 # cinder is now using proxysql by default in its config - change that back to a normal
 # config for the nanny as we do not need it and do not have the proxy around by default
-sed -i 's,@/cinder?unix_socket=/run/proxysql/mysql.sock&,@cinder-mariadb/cinder?,g' /etc/cinder/cinder.conf
+sed -i 's,@/cinder?unix_socket=/run/proxysql/mysql.sock&,@cinder-mariadb/cinder?,g' "${DB_CONFIG}"
 
 # we run an endless loop to run the script periodically
 echo "INFO: starting a loop to periodically run the nanny job for the cinder db consistency check and purge"
@@ -41,11 +43,11 @@ while true; do
             fi
             echo -n "INFO: checking and fixing cinder db consistency - "
             date
-            /var/lib/openstack/bin/python /scripts/cinder-consistency.py --config /etc/cinder/cinder.conf $FIX_LIMIT
+            /var/lib/openstack/bin/python /scripts/cinder-consistency.py --config "${DB_CONFIG}" $FIX_LIMIT
         else
             echo -n "INFO: checking cinder db consistency - "
             date
-            /var/lib/openstack/bin/python /scripts/cinder-consistency.py --config /etc/cinder/cinder.conf --dry-run
+            /var/lib/openstack/bin/python /scripts/cinder-consistency.py --config "${DB_CONFIG}" --dry-run
         fi
     fi
     if [ "$CINDER_DB_PURGE_ENABLED" = "True" ] || [ "$CINDER_DB_PURGE_ENABLED" = "true" ]; then
