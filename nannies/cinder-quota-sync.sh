@@ -21,13 +21,15 @@ set -e
 unset http_proxy https_proxy all_proxy no_proxy
 
 echo "INFO: copying cinder config files to /etc/cinder"
-cp -v /cinder-etc/* /etc/cinder
+cp -vrL /cinder-etc/* /etc/cinder
 # this is a temporary hack to avoid annoying raven warnings - we do not need sentry for this nanny for now
 sed -i 's,raven\.handlers\.logging\.SentryHandler,logging.NullHandler,g' /etc/cinder/logging.ini
 
+DB_CONFIG="/etc/cinder/cinder.conf.d/secrets.conf"
+
 # cinder is now using proxysql by default in its config - change that back to a normal
 # config for the nanny as we do not need it and do not have the proxy around by default
-sed -i 's,@/cinder?unix_socket=/run/proxysql/mysql.sock&,@cinder-mariadb/cinder?,g' /etc/cinder/cinder.conf
+sed -i 's,@/cinder?unix_socket=/run/proxysql/mysql.sock&,@cinder-mariadb/cinder?,g' "${DB_CONFIG}"
 
 # we run an endless loop to run the script periodically
 echo "INFO: starting a loop to periodically run the nanny jobs for the cinder db"
@@ -41,9 +43,9 @@ while true; do
             SYNC_MODE="--nosync"
             echo "INFO: running in dry-run mode only!"
         fi
-        for i in `/var/lib/openstack/bin/python /scripts/cinder-quota-sync.py --config /etc/cinder/cinder.conf --list_projects`; do
+        for i in `/var/lib/openstack/bin/python /scripts/cinder-quota-sync.py --config "${DB_CONFIG}" --list_projects`; do
             echo project: $i
-            /var/lib/openstack/bin/python /scripts/cinder-quota-sync.py --config /etc/cinder/cinder.conf $SYNC_MODE --project_id $i
+            /var/lib/openstack/bin/python /scripts/cinder-quota-sync.py --config "${DB_CONFIG}" $SYNC_MODE --project_id $i
         done
     fi
     echo -n "INFO: waiting $CINDER_NANNY_INTERVAL minutes before starting the next loop run - "
