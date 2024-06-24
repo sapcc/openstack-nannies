@@ -33,8 +33,6 @@ ADD . /var/lib/openstack/openstack-nannies
 RUN /var/lib/openstack/bin/pip install -e /var/lib/openstack/openstack-nannies
 
 ADD scripts/manila* /scripts/
-ADD scripts/db-cleanup.py /scripts/
-ADD scripts/count-deleted.py /scripts/
 ADD nannies/manila* /scripts/
 ADD nannies/helper/__init__.py /scripts/helper/
 ADD nannies/helper/manilananny.py /scripts/helper/
