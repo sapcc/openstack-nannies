@@ -17,6 +17,6 @@ LABEL source_repository="https://github.com/sapcc/openstack-nannies"
 
 USER root
 
-ADD nannies/cinder-* nannies/requirements-cinder-nanny.txt /scripts/
+ADD scripts/cinder-* scripts/requirements-cinder-nanny.txt /scripts/
 
 RUN pip3 install -r /scripts/requirements-cinder-nanny.txt
