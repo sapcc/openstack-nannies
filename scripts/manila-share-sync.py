@@ -192,7 +192,8 @@ class ManilaShareSyncNanny(ManilaNanny):
         for share in shares:
             share_status = share['status']
             # TODO: move status filtering to db query
-            if share_status not in ['creating', 'error_deleting', 'deleting']:
+            if share_status not in ['creating', 'error_deleting', 'deleting',
+                                    'extending', 'shrinking']:
                 continue
 
             share_id = share['id']
@@ -231,9 +232,15 @@ class ManilaShareSyncNanny(ManilaNanny):
                 if share_status == 'error_deleting':
                     self.share_force_delete(share_id)
                     continue
-                self.share_reset_state(share_id, 'error')
-                if share_status == 'deleting':
-                    self.share_delete(share_id)
+
+                if share_status == 'extending':
+                    self.share_reset_state(share_id, 'extending_error')
+                elif share_status == 'shrinking':
+                    self.share_reset_state(share_id, 'shrinking_error')
+                elif share_status in ['creating', 'deleting']:
+                    self.share_reset_state(share_id, 'error')
+                    if share_status == 'deleting':
+                        self.share_delete(share_id)
             else:
                 for instance in instances:
                     instance_updated_at = instance.get('updated_at')
