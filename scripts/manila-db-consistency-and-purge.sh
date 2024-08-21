@@ -37,7 +37,7 @@ while true; do
     if [ "$MANILA_DB_PURGE_ENABLED" = "True" ] || [ "$MANILA_DB_PURGE_ENABLED" = "true" ]; then
         echo -n "INFO: purging deleted manila entities older than $MANILA_DB_PURGE_OLDER_THAN days from the manila db - "
         date
-        /var/lib/openstack/bin/manila-manage db purge $MANILA_DB_PURGE_OLDER_THAN
+        /var/lib/openstack/bin/manila-manage --config-dir ${MANILA_NANNY_CONFIG_DIR:-"/etc/manila/"} db purge $MANILA_DB_PURGE_OLDER_THAN
     fi
     echo -n "INFO: waiting $MANILA_NANNY_INTERVAL seconds before starting the next loop run - "
     date
