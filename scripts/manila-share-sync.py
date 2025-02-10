@@ -233,10 +233,8 @@ class ManilaShareSyncNanny(ManilaNanny):
                     self.share_force_delete(share_id)
                     continue
 
-                if share_status == 'extending':
-                    self.share_reset_state(share_id, 'extending_error')
-                elif share_status == 'shrinking':
-                    self.share_reset_state(share_id, 'shrinking_error')
+                if share_status in ['extending', 'shrinking']:
+                    self.share_reset_state(share_id, 'available')
                 elif share_status in ['creating', 'deleting']:
                     self.share_reset_state(share_id, 'error')
                     if share_status == 'deleting':
