@@ -27,7 +27,6 @@ from keystoneauth1.identity import v3
 from manilaclient.client import Client as ManilaClient
 from manilaclient.v2.client import Client as ManilaClientV2
 
-from .netapp import NetAppHelper
 from .netapp_rest import NetAppRestHelper
 from .prometheus_exporter import prometheus_http_start
 
@@ -87,12 +86,6 @@ class ManilaNanny(Nanny):
         sess = session.Session(auth=auth)
         manila = ManilaClient(version, session=sess)
         return manila
-
-    def get_netappclient(self, host):
-        # all manila netapp filers get same user and password for api access
-        username = os.getenv("MANILA_NANNY_NETAPP_API_USERNAME")
-        password = os.getenv("MANILA_NANNY_NETAPP_API_PASSWORD")
-        return NetAppHelper(host, username, password)
 
     def get_netapprestclient(self, host):
         username = os.getenv("MANILA_NANNY_NETAPP_API_USERNAME")
