@@ -600,7 +600,8 @@ class ManilaShareSyncNanny(ManilaNanny):
                        ])\
             .select_from(
                 shares.join(instances, shares.c.id == instances.c.share_id))\
-            .where(shares.c.deleted == 'False')
+            .where(shares.c.deleted == 'False')\
+            .where(instances.c.deleted == 'False')
 
         shares = []
         for (sid, name, size, ctime, utime, siid, status, host, replica_state) in stmt.execute():
