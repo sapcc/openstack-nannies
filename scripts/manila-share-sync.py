@@ -519,11 +519,11 @@ class ManilaShareSyncNanny(ManilaNanny):
         return [<vol>, <vol>, ...]
         """
         query = (
-            "netapp_volume_total_bytes{app='netapp-capacity-exporter-manila', volume=~'share.*'} "
-            "+ netapp_volume_snapshot_reserved_bytes"
+            "(netapp_volume_size_total{app='netapp-harvest-exporter-manila', volume=~'share.*'} + netapp_volume_snapshot_reserve_size)"
+            " * on (app, filer, svm, volume) group_left(state) netapp_volume_labels"
         )
         vol_t_size = self._fetch_prom_metrics(query) or []
-        query = "netapp_volume_percentage_snapshot_reserve{app='netapp-capacity-exporter-manila'}"
+        query = "netapp_volume_snapshot_reserve_percent{app='netapp-harvest-exporter-manila'}"
         snap_percentage = self._fetch_prom_metrics(query) or []
         snap_percentage = {
             vol['metric']['volume']: int(vol['value'][1])
@@ -533,8 +533,8 @@ class ManilaShareSyncNanny(ManilaNanny):
         return [{
             'volume': vol['metric']['volume'],
             'volume_type': vol['metric'].get('volume_type'),
-            'volume_state': vol['metric'].get('volume_state'),
-            'vserver': vol['metric'].get('vserver', ''),
+            'volume_state': vol['metric'].get('state'),
+            'vserver': vol['metric'].get('svm', ''),
             'filer': vol['metric'].get('filer'),
             'size': int(vol['value'][1]) / ONEGB,
             'snap_percent': snap_percentage.get(vol['metric']['volume']),
@@ -542,11 +542,11 @@ class ManilaShareSyncNanny(ManilaNanny):
 
     def _get_netapp_volumes_offline(self):
         """ like _get_netapp_volumes, but only return offline volumes """
-        query = "netapp_volume_state{app='netapp-capacity-exporter-manila'}==3"
+        query = 'netapp_volume_labels{app="netapp-harvest-exporter-manila", state="offline"}'
         offline_vols = self._fetch_prom_metrics(query) or []
         return [{
             'volume': vol['metric']['volume'],
-            'vserver': vol['metric'].get('vserver', ''),
+            'vserver': vol['metric'].get('svm', ''),
             'filer': vol['metric'].get('filer'),
         } for vol in offline_vols
             if 'volume' in vol['metric'] and vol['metric']['volume'].startswith('share_')]
