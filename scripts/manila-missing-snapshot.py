@@ -67,7 +67,7 @@ class MissingSnapshotNanny(ManilaNanny):
 
     def _get_missing_snapshots(self):
         """get list of snapshots that are not found on netapp filer"""
-        manila = self.get_manilaclient("2.19")
+        manila = self.get_manilaclient("2.79")
         manila_snaps = {}
         missing_snaps = []
         missing_snapshots = []
