@@ -25,7 +25,7 @@ RUN /var/lib/openstack/bin/pip install -q --no-cache-dir \
   pdb-attach~=3.0 \
   prometheus-api-client==0.4.2 \
   prometheus-client==0.7.1  \
-  psycopg2-binary==2.8.4 \
+  psycopg2-binary~=2.9.0 \
   pyreloader~=0.1 \
   python-manilaclient==3.1.0
 
