@@ -1,0 +1,8 @@
+netapp-lib==2020.3.12
+netapp-ontap~=9.10
+pdb-attach~=3.0
+prometheus-api-client==0.4.2
+prometheus-client==0.7.1
+psycopg2-binary~=2.9.0
+pyreloader~=0.1
+python-manilaclient@git+https://github.com/sapcc/python-manilaclient@stable/2023.1-m3
