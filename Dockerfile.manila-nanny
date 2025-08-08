@@ -18,18 +18,10 @@ LABEL source_repository="https://github.com/sapcc/openstack-nannies"
 
 USER root
 
-RUN /var/lib/openstack/bin/pip uninstall -y psycopg2
-RUN /var/lib/openstack/bin/pip install -q --no-cache-dir \
-  netapp-lib==2020.3.12 \
-  netapp-ontap~=9.10 \
-  pdb-attach~=3.0 \
-  prometheus-api-client==0.4.2 \
-  prometheus-client==0.7.1  \
-  psycopg2-binary~=2.9.0 \
-  pyreloader~=0.1 \
-  python-manilaclient==3.1.0
-
 ADD . /var/lib/openstack/openstack-nannies
+
+RUN /var/lib/openstack/bin/pip uninstall -y psycopg2
+RUN /var/lib/openstack/bin/pip install -q --no-cache-dir -r /var/lib/openstack/openstack-nannies/scripts/requirements-manila-nanny.txt
 RUN /var/lib/openstack/bin/pip install -e /var/lib/openstack/openstack-nannies
 
 ADD scripts/manila* /scripts/
