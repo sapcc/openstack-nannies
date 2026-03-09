@@ -95,8 +95,7 @@ class ManilaQuotaSyncNanny(ManilaNanny):
                                    share_instances_t.c.share_type_id],
                           whereclause=and_(shares_t.c.deleted == "False",
                                            shares_t.c.project_id == project_id,
-                                           share_instances_t.c.deleted == "False",
-                                           share_instances_t.c.replica_state != None)   # noqa: E711
+                                           share_instances_t.c.deleted == "False")
                           ).select_from(q)
         return shares_q.execute()
 
