@@ -260,6 +260,44 @@ def fix_wrong_si_el_metadata(meta, wrong_si_el_metadata):
             values(updated_at=now, deleted_at=now, deleted=si_el_metadata_id)
         delete_si_el_metadata_q.execute()
 
+# get all the rows with a share_instance_metadata still defined where the corresponding share_instance is already deleted
+def get_wrong_share_instance_metadata(meta):
+    wrong_share_instance_metadata = {}
+    share_instance_metadata_t = Table('share_instance_metadata', meta, autoload=True)
+    share_instances_t = Table('share_instances', meta, autoload=True)
+    share_instance_metadata_join = share_instance_metadata_t.join(
+        share_instances_t,
+        share_instance_metadata_t.c.share_instance_id == share_instances_t.c.id)
+    wrong_share_instance_metadata_q = select(
+        columns=[
+            share_instances_t.c.id,
+            share_instances_t.c.deleted,
+            share_instance_metadata_t.c.id,
+            share_instance_metadata_t.c.deleted
+        ]).select_from(share_instance_metadata_join).where(
+            and_(
+                share_instances_t.c.deleted != "False",
+                share_instance_metadata_t.c.deleted == "False"
+            )
+    )
+
+    # return a dict indexed by share_instance_metadata id and with the value share_instance_id for non deleted metadata
+    for (share_instance_id, _, share_instance_metadata_id, _) in wrong_share_instance_metadata_q.execute():
+        wrong_share_instance_metadata[share_instance_metadata_id] = share_instance_id
+    return wrong_share_instance_metadata
+
+# delete share_instance_metadata still defined where the corresponding share_instance is already deleted
+def fix_wrong_share_instance_metadata(meta, wrong_share_instance_metadata):
+    share_instance_metadata_t = Table('share_instance_metadata', meta, autoload=True)
+
+    now = datetime.datetime.utcnow()
+    for share_instance_metadata_id in wrong_share_instance_metadata:
+        log.info("-- action: deleting share instance metadata id: %s", share_instance_metadata_id)
+        delete_share_instance_metadata_q = share_instance_metadata_t.update().\
+            where(share_instance_metadata_t.c.id == share_instance_metadata_id).\
+            values(updated_at=now, deleted_at=now, deleted=share_instance_metadata_id)
+        delete_share_instance_metadata_q.execute()
+
 # establish a database connection and return the handle
 def makeConnection(db_url):
 
@@ -425,6 +463,20 @@ def main():
             fix_wrong_si_el_metadata(manila_metadata, wrong_si_el_metadata)
     else:
         log.info("- share instance export location metadata is consistent")
+
+    wrong_share_instance_metadata = get_wrong_share_instance_metadata(manila_metadata)
+    if len(wrong_share_instance_metadata) != 0:
+        log.info("- share instance metadata inconsistencies found")
+        # print out what we would delete
+        for share_instance_metadata_id, share_instance_id in wrong_share_instance_metadata.items():
+            log.info("-- share instance metadata id: %s - deleted share instance id: %s",
+                     share_instance_metadata_id,
+                     share_instance_id)
+        if not args.dry_run:
+            log.info("- deleting share instance metadata inconsistencies found")
+            fix_wrong_share_instance_metadata(manila_metadata, wrong_share_instance_metadata)
+    else:
+        log.info("- share instance metadata is consistent")
 
 
 if __name__ == "__main__":
