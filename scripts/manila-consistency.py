@@ -272,6 +272,7 @@ def get_wrong_share_instance_metadata(meta):
         columns=[
             share_instances_t.c.id,
             share_instances_t.c.deleted,
+            share_instances_t.c.deleted_at,
             share_instance_metadata_t.c.id,
             share_instance_metadata_t.c.deleted
         ]).select_from(share_instance_metadata_join).where(
@@ -281,9 +282,13 @@ def get_wrong_share_instance_metadata(meta):
             )
     )
 
-    # return a dict indexed by share_instance_metadata id and with the value share_instance_id for non deleted metadata
-    for (share_instance_id, _, share_instance_metadata_id, _) in wrong_share_instance_metadata_q.execute():
-        wrong_share_instance_metadata[share_instance_metadata_id] = share_instance_id
+    # Preserve the parent's deletion time so its metadata becomes
+    # purge-eligible with it.
+    for row in wrong_share_instance_metadata_q.execute():
+        (share_instance_id, _, share_instance_deleted_at,
+         share_instance_metadata_id, _) = row
+        wrong_share_instance_metadata[share_instance_metadata_id] = (
+            share_instance_id, share_instance_deleted_at)
     return wrong_share_instance_metadata
 
 # delete share_instance_metadata still defined where the corresponding share_instance is already deleted
@@ -291,11 +296,13 @@ def fix_wrong_share_instance_metadata(meta, wrong_share_instance_metadata):
     share_instance_metadata_t = Table('share_instance_metadata', meta, autoload=True)
 
     now = datetime.datetime.utcnow()
-    for share_instance_metadata_id in wrong_share_instance_metadata:
+    for share_instance_metadata_id, metadata in wrong_share_instance_metadata.items():
+        _, share_instance_deleted_at = metadata
         log.info("-- action: deleting share instance metadata id: %s", share_instance_metadata_id)
         delete_share_instance_metadata_q = share_instance_metadata_t.update().\
             where(share_instance_metadata_t.c.id == share_instance_metadata_id).\
-            values(updated_at=now, deleted_at=now, deleted=share_instance_metadata_id)
+            values(updated_at=now, deleted_at=share_instance_deleted_at,
+                   deleted=share_instance_metadata_id)
         delete_share_instance_metadata_q.execute()
 
 # establish a database connection and return the handle
@@ -468,7 +475,8 @@ def main():
     if len(wrong_share_instance_metadata) != 0:
         log.info("- share instance metadata inconsistencies found")
         # print out what we would delete
-        for share_instance_metadata_id, share_instance_id in wrong_share_instance_metadata.items():
+        for share_instance_metadata_id, metadata in wrong_share_instance_metadata.items():
+            share_instance_id, _ = metadata
             log.info("-- share instance metadata id: %s - deleted share instance id: %s",
                      share_instance_metadata_id,
                      share_instance_id)
