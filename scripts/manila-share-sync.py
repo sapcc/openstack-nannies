@@ -20,6 +20,7 @@ from __future__ import absolute_import
 import argparse
 import configparser
 import logging
+import os
 import re
 import time
 import traceback
@@ -27,6 +28,7 @@ from datetime import datetime
 from threading import Lock
 
 import requests
+import yaml
 from prometheus_client import Counter, Gauge
 from sqlalchemy import Table, select, update
 
@@ -47,11 +49,31 @@ TASK_SHARE_STATE = '5'
 
 class ManilaShareSyncNanny(ManilaNanny):
 
-    def __init__(self, config_file, prom_host, interval, tasks, dry_run_tasks, prom_port):
+    def __init__(self, config_file, prom_host, interval, tasks, dry_run_tasks, prom_port,
+                 netapp_filers=None):
         super(ManilaShareSyncNanny, self).__init__(config_file,
                                                    interval,
                                                    prom_port=prom_port)
         self.prom_host = prom_host + "/api/v1/query"
+
+        self.filer_mapping = {}
+        if netapp_filers:
+            try:
+                with open(netapp_filers, "r") as f:
+                    filers = yaml.safe_load(f).get("filers", [])
+                self.filer_mapping = {
+                    filer["name"]: filer["host"].split(".")[0]
+                    for filer in filers
+                    if "name" in filer and "host" in filer
+                }
+                log.info("loaded filer_mapping with %d entries from %s",
+                         len(self.filer_mapping), netapp_filers)
+            except FileNotFoundError:
+                log.warning("netapp-filers file not found: %s — filer name mapping disabled",
+                            netapp_filers)
+            except Exception as e:
+                log.warning("failed to load netapp-filers file %s: %s — filer name mapping disabled",
+                            netapp_filers, e)
 
         self.MANILA_NANNY_SHARE_SYNC_FAILURE = Counter('manila_nanny_share_sync_failure', '')
         self.MANILA_SYNC_SHARE_SIZE_COUNTER = Counter('manila_nanny_sync_share_size',
@@ -673,6 +695,7 @@ class ManilaShareSyncNanny(ManilaNanny):
             except IndexError:
                 log.warning("share %s: invalid host %s", share_id, share['host'])
                 continue
+            filer = self.filer_mapping.get(filer, filer)
             vol = _volumes.pop((filer, instance_id), None)
             if vol:
                 _shares[(share_id, instance_id)].update({'volume': vol})
@@ -734,6 +757,10 @@ def str2bool(val):
 
 def parse_cmdline_args():
     parser = base_command_parser()
+    default_netapp_filers = os.environ.get('MANILA_NANNY_NETAPP_FILERS') or "/etc/manila/netapp-filers.yaml"
+    parser.add_argument("--netapp-filers",
+                        default=default_netapp_filers,
+                        help="Netapp filers list for filer name mapping")
     parser.add_argument("--netapp-prom-host",
                         default='http://prometheus-storage.infra-monitoring.svc:9090',
                         help="prometheus host for netapp metrics")
@@ -810,7 +837,8 @@ def main():
         args.interval,
         tasks,
         dry_run_tasks,
-        prom_port=args.prom_port
+        prom_port=args.prom_port,
+        netapp_filers=args.netapp_filers
     ).run()
 
 
