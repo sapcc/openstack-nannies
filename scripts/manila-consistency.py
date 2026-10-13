@@ -306,6 +306,7 @@ def makeConnection(db_url):
     Session = sessionmaker(bind=engine)
     thisSession = Session()
     metadata = MetaData()
+    metadata.bind = engine
     Base = declarative_base()
     return thisSession, metadata, engine, Base
 
