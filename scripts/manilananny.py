@@ -72,6 +72,7 @@ class ManilaNanny(http.server.HTTPServer):
         Session = sessionmaker(bind=engine)
         self.db_session = Session()
         self.db_metadata = MetaData()
+        self.db_metadata.bind = engine
         self.db_base = declarative_base()
         self.engine = engine
 
