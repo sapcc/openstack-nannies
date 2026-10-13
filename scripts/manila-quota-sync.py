@@ -46,7 +46,7 @@ class ManilaQuotaSyncNanny(ManilaNanny):
 
     def get_share_networks_usages_project(self, project_id):
         """Return the share_networks resource usages of a project"""
-        networks_t = Table('share_networks', self.db_metadata, autoload=True)
+        networks_t = Table('share_networks', self.db_metadata, autoload_with=self.engine)
         networks_q = select(columns=[networks_t.c.id,
                                      networks_t.c.user_id],
                             whereclause=and_(networks_t.c.deleted == "False",
@@ -55,8 +55,8 @@ class ManilaQuotaSyncNanny(ManilaNanny):
 
     def get_snapshot_usages_project(self, project_id):
         """Return the snapshots resource usages of a project"""
-        snapshots_t = Table('share_snapshots', self.db_metadata, autoload=True)
-        share_instances_t = Table('share_instances', self.db_metadata, autoload=True)
+        snapshots_t = Table('share_snapshots', self.db_metadata, autoload_with=self.engine)
+        share_instances_t = Table('share_instances', self.db_metadata, autoload_with=self.engine)
         q = snapshots_t.join(share_instances_t,
                              snapshots_t.c.share_id == share_instances_t.c.share_id)
         snapshots_q = select(columns=[snapshots_t.c.id,
@@ -71,8 +71,8 @@ class ManilaQuotaSyncNanny(ManilaNanny):
 
     def get_share_usages_project(self, project_id):
         """Return the share resource usages of a project"""
-        shares_t = Table('shares', self.db_metadata, autoload=True)
-        share_instances_t = Table('share_instances', self.db_metadata, autoload=True)
+        shares_t = Table('shares', self.db_metadata, autoload_with=self.engine)
+        share_instances_t = Table('share_instances', self.db_metadata, autoload_with=self.engine)
         q = shares_t.join(share_instances_t, shares_t.c.id == share_instances_t.c.share_id)
         shares_q = select(columns=[shares_t.c.id,
                                    shares_t.c.user_id,
@@ -86,8 +86,8 @@ class ManilaQuotaSyncNanny(ManilaNanny):
 
     def get_project_replica_usages(self, project_id):
         """ Return the replica usage of a project """
-        shares_t = Table('shares', self.db_metadata, autoload=True)
-        share_instances_t = Table('share_instances', self.db_metadata, autoload=True)
+        shares_t = Table('shares', self.db_metadata, autoload_with=self.engine)
+        share_instances_t = Table('share_instances', self.db_metadata, autoload_with=self.engine)
         q = shares_t.join(share_instances_t, shares_t.c.id == share_instances_t.c.share_id)
         shares_q = select(columns=[shares_t.c.id,
                                    shares_t.c.user_id,
@@ -101,7 +101,7 @@ class ManilaQuotaSyncNanny(ManilaNanny):
 
     def get_quota_usages_project(self, project_id):
         """Return the quota usages of a project"""
-        quota_usages_t = Table('quota_usages', self.db_metadata, autoload=True)
+        quota_usages_t = Table('quota_usages', self.db_metadata, autoload_with=self.engine)
         quota_usages_q = select(columns=[quota_usages_t.c.resource,
                                          quota_usages_t.c.user_id,
                                          quota_usages_t.c.share_type_id,
@@ -112,7 +112,7 @@ class ManilaQuotaSyncNanny(ManilaNanny):
 
     def get_resource_types(self, project_id):
         """Return a list of all resource types"""
-        quota_usages_t = Table('quota_usages', self.db_metadata, autoload=True)
+        quota_usages_t = Table('quota_usages', self.db_metadata, autoload_with=self.engine)
         resource_types_q = select(columns=[quota_usages_t.c.resource,
                                            func.count()],
                                   whereclause=quota_usages_t.c.deleted == 0,
@@ -121,7 +121,7 @@ class ManilaQuotaSyncNanny(ManilaNanny):
 
     def get_projects(self):
         """Return a list of all projects in the database"""
-        quota_usages_t = Table('quota_usages', self.db_metadata, autoload=True)
+        quota_usages_t = Table('quota_usages', self.db_metadata, autoload_with=self.engine)
         quota_usages_q = select(columns=[quota_usages_t.c.project_id]).group_by(quota_usages_t.c.project_id)
         return [project[0] for project in quota_usages_q.execute()]
 
@@ -129,7 +129,7 @@ class ManilaQuotaSyncNanny(ManilaNanny):
         """Sync the quota usages of a project from real usages"""
         print("Syncing %s" % (project_id))
         now = datetime.datetime.utcnow()
-        quota_usages_t = Table('quota_usages', self.db_metadata, autoload=True)
+        quota_usages_t = Table('quota_usages', self.db_metadata, autoload_with=self.engine)
         # a tuple is used here to have a dict value per project and user
         for resource_tuple, quota in quota_to_sync_by_user.items():
             quota_usages_t.update().values(updated_at=now, in_use=quota).where(and_(
@@ -146,7 +146,7 @@ class ManilaQuotaSyncNanny(ManilaNanny):
     def sync_quota_usages_by_type(self, project_id, quota_to_sync):
         # print("Syncing %s" % (project_id))
         # now = datetime.datetime.utcnow()
-        # quota_usages_t = Table('quota_usages', self.db_metadata, autoload=True)
+        # quota_usages_t = Table('quota_usages', self.db_metadata, autoload_with=self.engine)
         pass
 
     def _run(self):
@@ -234,9 +234,9 @@ class ManilaQuotaSyncNanny(ManilaNanny):
         self.reset_snapshot_reserved_quota()
 
     def reset_share_reserved_quota(self):
-        Shares = Table("shares", self.db_metadata, autoload=True)
-        ShareInstances = Table("share_instances", self.db_metadata, autoload=True)
-        QuotaUsages = Table("quota_usages", self.db_metadata, autoload=True)
+        Shares = Table("shares", self.db_metadata, autoload_with=self.engine)
+        ShareInstances = Table("share_instances", self.db_metadata, autoload_with=self.engine)
+        QuotaUsages = Table("quota_usages", self.db_metadata, autoload_with=self.engine)
 
         log = logging.LoggerAdapter(logger, {"nanny": "share-reserved-quota"})
 
@@ -328,9 +328,9 @@ class ManilaQuotaSyncNanny(ManilaNanny):
                 conn.execute(stmt_u)
 
     def reset_snapshot_reserved_quota(self):
-        Snapshots = Table("share_snapshots", self.db_metadata, autoload=True)
-        SnapshotInstances = Table("share_snapshot_instances", self.db_metadata, autoload=True)
-        QuotaUsages = Table("quota_usages", self.db_metadata, autoload=True)
+        Snapshots = Table("share_snapshots", self.db_metadata, autoload_with=self.engine)
+        SnapshotInstances = Table("share_snapshot_instances", self.db_metadata, autoload_with=self.engine)
+        QuotaUsages = Table("quota_usages", self.db_metadata, autoload_with=self.engine)
 
         log = logging.LoggerAdapter(logger, {"nanny": "snapshot-reserved-quota"})
 

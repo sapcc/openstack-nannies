@@ -71,8 +71,8 @@ class ManilaShareServerNanny(ManilaNanny):
 
     def query_share_server_count_share_instance(self) -> List[Tuple[str, int]]:
         """ share servers and count of undeleted share instances """
-        instances_t = Table('share_instances', self.db_metadata, autoload=True)
-        s_servers_t = Table('share_servers', self.db_metadata, autoload=True)
+        instances_t = Table('share_instances', self.db_metadata, autoload_with=self.engine)
+        s_servers_t = Table('share_servers', self.db_metadata, autoload_with=self.engine)
 
         q = select([s_servers_t.c.id.label('ssid'),
                     func.count(instances_t.c.id)])\

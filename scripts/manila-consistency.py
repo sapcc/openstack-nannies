@@ -35,11 +35,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(message)s')
 
 # get all the rows with a share_network_security_service_association still defined where the
 # corresponding share_network is already deleted
-def get_wrong_share_network_ssas(meta):
+def get_wrong_share_network_ssas(meta, engine):
 
     wrong_share_network_ssas = {}
-    share_network_ssa_t = Table('share_network_security_service_association', meta, autoload=True)
-    share_networks_t = Table('share_networks', meta, autoload=True)
+    share_network_ssa_t = Table('share_network_security_service_association', meta, autoload_with=engine)
+    share_networks_t = Table('share_networks', meta, autoload_with=engine)
     share_network_ssa_join = share_network_ssa_t.join(share_networks_t,share_network_ssa_t.c.share_network_id == share_networks_t.c.id)
     wrong_share_network_ssa_q = select(
         columns=[
@@ -60,9 +60,9 @@ def get_wrong_share_network_ssas(meta):
     return wrong_share_network_ssas
 
 # delete share_network_security_service_association still defined where the corresponding share_network is already deleted
-def fix_wrong_share_network_ssas(meta, wrong_share_network_ssas):
+def fix_wrong_share_network_ssas(meta, engine, wrong_share_network_ssas):
 
-    share_network_ssa_t = Table('share_network_security_service_association', meta, autoload=True)
+    share_network_ssa_t = Table('share_network_security_service_association', meta, autoload_with=engine)
 
     now = datetime.datetime.utcnow()
     for share_network_ssa_id in wrong_share_network_ssas:
@@ -73,12 +73,12 @@ def fix_wrong_share_network_ssas(meta, wrong_share_network_ssas):
         delete_share_network_ssa_q.execute()
 
 # get all the rows with a network_allocations still defined where the corresponding share_server is already deleted
-def get_wrong_network_allocations(meta, older_than):
+def get_wrong_network_allocations(meta, engine, older_than):
 
     older_than_date = datetime.datetime.utcnow() - datetime.timedelta(hours=older_than)
     wrong_network_allocations = {}
-    network_allocations_t = Table('network_allocations', meta, autoload=True)
-    share_servers_t = Table('share_servers', meta, autoload=True)
+    network_allocations_t = Table('network_allocations', meta, autoload_with=engine)
+    share_servers_t = Table('share_servers', meta, autoload_with=engine)
     network_allocations_join = network_allocations_t.join(share_servers_t,network_allocations_t.c.share_server_id == share_servers_t.c.id)
     wrong_network_allocations_q = select(
         columns=[
@@ -100,8 +100,8 @@ def get_wrong_network_allocations(meta, older_than):
     return wrong_network_allocations
 
 # soft delete network_allocations still defined where the corresponding share_server is already deleted
-def fix_wrong_network_allocations(meta, wrong_network_allocations):
-    network_allocations_t = Table('network_allocations', meta, autoload=True)
+def fix_wrong_network_allocations(meta, engine, wrong_network_allocations):
+    network_allocations_t = Table('network_allocations', meta, autoload_with=engine)
 
     now = datetime.datetime.utcnow()
     for network_allocations_id in wrong_network_allocations:
@@ -112,11 +112,11 @@ def fix_wrong_network_allocations(meta, wrong_network_allocations):
         delete_network_allocations_q.execute()
 
 # get all the rows with a share_metadata still defined where the corresponding share is already deleted
-def get_wrong_share_metadata(meta):
+def get_wrong_share_metadata(meta, engine):
 
     wrong_share_metadata = {}
-    share_metadata_t = Table('share_metadata', meta, autoload=True)
-    shares_t = Table('shares', meta, autoload=True)
+    share_metadata_t = Table('share_metadata', meta, autoload_with=engine)
+    shares_t = Table('shares', meta, autoload_with=engine)
     share_metadata_join = share_metadata_t.join(shares_t,share_metadata_t.c.share_id == shares_t.c.id)
     wrong_share_metadata_q = select(
         columns=[
@@ -137,8 +137,8 @@ def get_wrong_share_metadata(meta):
     return wrong_share_metadata
 
 # delete share_metadata still defined where the corresponding share is already deleted
-def fix_wrong_share_metadata(meta, wrong_share_metadata):
-    share_metadata_t = Table('share_metadata', meta, autoload=True)
+def fix_wrong_share_metadata(meta, engine, wrong_share_metadata):
+    share_metadata_t = Table('share_metadata', meta, autoload_with=engine)
 
     now = datetime.datetime.utcnow()
     for share_metadata_id in wrong_share_metadata:
@@ -149,11 +149,11 @@ def fix_wrong_share_metadata(meta, wrong_share_metadata):
         delete_share_metadata_q.execute()
 
 # get all the rows with a share_group_type_share_type_mapping still defined where the corresponding share_group_type is already deleted
-def get_wrong_share_gtstm(meta):
+def get_wrong_share_gtstm(meta, engine):
 
     wrong_share_gtstm = {}
-    share_gtstm_t = Table('share_group_type_share_type_mappings', meta, autoload=True)
-    share_group_types_t = Table('share_group_types', meta, autoload=True)
+    share_gtstm_t = Table('share_group_type_share_type_mappings', meta, autoload_with=engine)
+    share_group_types_t = Table('share_group_types', meta, autoload_with=engine)
     share_gtstm_join = share_gtstm_t.join(share_group_types_t,share_gtstm_t.c.share_group_type_id == share_group_types_t.c.id)
     wrong_share_gtstm_q = select(
         columns=[
@@ -174,8 +174,8 @@ def get_wrong_share_gtstm(meta):
     return wrong_share_gtstm
 
 # delete share_group_type_share_type_mapping still defined where the corresponding share_group_type is already deleted
-def fix_wrong_share_gtstm(meta, wrong_share_gtstm):
-    share_gtstm_t = Table('share_group_type_share_type_mappings', meta, autoload=True)
+def fix_wrong_share_gtstm(meta, engine, wrong_share_gtstm):
+    share_gtstm_t = Table('share_group_type_share_type_mappings', meta, autoload_with=engine)
 
     now = datetime.datetime.utcnow()
     for share_gtstm_id in wrong_share_gtstm:
@@ -186,10 +186,10 @@ def fix_wrong_share_gtstm(meta, wrong_share_gtstm):
         delete_share_gtstm_q.execute()
 
 # get all the rows with a share_instance_access_map still defined where the corresponding share_instance is already deleted
-def get_wrong_share_instance_access_mapping(meta):
+def get_wrong_share_instance_access_mapping(meta, engine):
     wrong_share_instance_access_mapping = {}
-    share_instance_access_mapping_t = Table('share_instance_access_map', meta, autoload=True)
-    share_instances_t = Table('share_instances', meta, autoload=True)
+    share_instance_access_mapping_t = Table('share_instance_access_map', meta, autoload_with=engine)
+    share_instances_t = Table('share_instances', meta, autoload_with=engine)
     share_instance_access_mapping_join = share_instance_access_mapping_t.join(
         share_instances_t,
         share_instance_access_mapping_t.c.share_instance_id == share_instances_t.c.id)
@@ -212,8 +212,8 @@ def get_wrong_share_instance_access_mapping(meta):
     return wrong_share_instance_access_mapping
 
 # delete share_instance_access_mapping still defined where the corresponding share_instance is already deleted
-def fix_wrong_share_instance_access_mapping(meta, wrong_share_instance_access_mapping):
-    share_instance_access_mapping_t = Table('share_instance_access_map', meta, autoload=True)
+def fix_wrong_share_instance_access_mapping(meta, engine, wrong_share_instance_access_mapping):
+    share_instance_access_mapping_t = Table('share_instance_access_map', meta, autoload_with=engine)
 
     now = datetime.datetime.utcnow()
     for share_instance_access_mapping_id in wrong_share_instance_access_mapping:
@@ -224,11 +224,11 @@ def fix_wrong_share_instance_access_mapping(meta, wrong_share_instance_access_ma
         delete_share_instance_access_mapping_q.execute()
 
 # get all the rows with a share_instance_export_locations_metadata still defined where the corresponding share_instance_export_location is already deleted
-def get_wrong_si_el_metadata(meta):
+def get_wrong_si_el_metadata(meta, engine):
 
     wrong_si_el_metadata = {}
-    si_el_metadata_t = Table('share_instance_export_locations_metadata', meta, autoload=True)
-    si_el_t = Table('share_instance_export_locations', meta, autoload=True)
+    si_el_metadata_t = Table('share_instance_export_locations_metadata', meta, autoload_with=engine)
+    si_el_t = Table('share_instance_export_locations', meta, autoload_with=engine)
     si_el_metadata_join = si_el_metadata_t.join(si_el_t,si_el_metadata_t.c.export_location_id == si_el_t.c.id)
     wrong_si_el_metadata_q = select(
         columns=[
@@ -249,8 +249,8 @@ def get_wrong_si_el_metadata(meta):
     return wrong_si_el_metadata
 
 # delete share_instance_export_locations_metadata still defined where the corresponding share_instance_export_location is already deleted
-def fix_wrong_si_el_metadata(meta, wrong_si_el_metadata):
-    si_el_metadata_t = Table('share_instance_export_locations_metadata', meta, autoload=True)
+def fix_wrong_si_el_metadata(meta, engine, wrong_si_el_metadata):
+    si_el_metadata_t = Table('share_instance_export_locations_metadata', meta, autoload_with=engine)
 
     now = datetime.datetime.utcnow()
     for si_el_metadata_id in wrong_si_el_metadata:
@@ -261,10 +261,10 @@ def fix_wrong_si_el_metadata(meta, wrong_si_el_metadata):
         delete_si_el_metadata_q.execute()
 
 # get all the rows with a share_instance_metadata still defined where the corresponding share_instance is already deleted
-def get_wrong_share_instance_metadata(meta):
+def get_wrong_share_instance_metadata(meta, engine):
     wrong_share_instance_metadata = {}
-    share_instance_metadata_t = Table('share_instance_metadata', meta, autoload=True)
-    share_instances_t = Table('share_instances', meta, autoload=True)
+    share_instance_metadata_t = Table('share_instance_metadata', meta, autoload_with=engine)
+    share_instances_t = Table('share_instances', meta, autoload_with=engine)
     share_instance_metadata_join = share_instance_metadata_t.join(
         share_instances_t,
         share_instance_metadata_t.c.share_instance_id == share_instances_t.c.id)
@@ -287,8 +287,8 @@ def get_wrong_share_instance_metadata(meta):
     return wrong_share_instance_metadata
 
 # delete share_instance_metadata still defined where the corresponding share_instance is already deleted
-def fix_wrong_share_instance_metadata(meta, wrong_share_instance_metadata):
-    share_instance_metadata_t = Table('share_instance_metadata', meta, autoload=True)
+def fix_wrong_share_instance_metadata(meta, engine, wrong_share_instance_metadata):
+    share_instance_metadata_t = Table('share_instance_metadata', meta, autoload_with=engine)
 
     now = datetime.datetime.utcnow()
     for share_instance_metadata_id in wrong_share_instance_metadata:
@@ -306,9 +306,8 @@ def makeConnection(db_url):
     Session = sessionmaker(bind=engine)
     thisSession = Session()
     metadata = MetaData()
-    metadata.bind = engine
     Base = declarative_base()
-    return thisSession, metadata, Base
+    return thisSession, metadata, engine, Base
 
 # return the database connection string from the config file
 def get_db_url(config_file):
@@ -367,11 +366,11 @@ def main():
 
     # connect to the DB
     db_url = get_db_url(args.config)
-    _, manila_metadata, _ = makeConnection(db_url)
+    _, manila_metadata, manila_engine, _ = makeConnection(db_url)
     # build neutron client
     neutron = get_neutronclient(args.config)
 
-    wrong_share_network_ssas = get_wrong_share_network_ssas(manila_metadata)
+    wrong_share_network_ssas = get_wrong_share_network_ssas(manila_metadata, manila_engine)
     if len(wrong_share_network_ssas) != 0:
         log.info("- share network security service association inconsistencies found")
         # print out what we would delete
@@ -379,12 +378,12 @@ def main():
             log.info("-- share network security service association id: %s - deleted share network id: %s", share_network_ssa_id, wrong_share_network_ssas[share_network_ssa_id])
         if not args.dry_run:
             log.info("- deleting share network security service association inconsistencies found")
-            fix_wrong_share_network_ssas(manila_metadata, wrong_share_network_ssas)
+            fix_wrong_share_network_ssas(manila_metadata, manila_engine, wrong_share_network_ssas)
     else:
         log.info("- share network security service associations are consistent")
 
 
-    wrong_network_allocations = get_wrong_network_allocations(manila_metadata, args.older_than)
+    wrong_network_allocations = get_wrong_network_allocations(manila_metadata, manila_engine, args.older_than)
     if len(wrong_network_allocations) != 0:
         log.info("- network allocation inconsistencies found")
         # print out what we would delete
@@ -405,12 +404,12 @@ def main():
                                 network_allocation_id, port.device_id, wrong_network_allocations[network_allocation_id])
         if not args.dry_run:
             log.info("- deleting network allocation inconsistencies found")
-            fix_wrong_network_allocations(manila_metadata, wrong_network_allocations)
+            fix_wrong_network_allocations(manila_metadata, manila_engine, wrong_network_allocations)
     else:
         log.info("- network allocations are consistent")
 
 
-    wrong_share_metadata = get_wrong_share_metadata(manila_metadata)
+    wrong_share_metadata = get_wrong_share_metadata(manila_metadata, manila_engine)
     if len(wrong_share_metadata) != 0:
         log.info("- share metadata inconsistencies found")
         # print out what we would delete
@@ -418,12 +417,12 @@ def main():
             log.info("-- share metadata id: %s - deleted share id: %s", share_metadata_id, wrong_share_metadata[share_metadata_id])
         if not args.dry_run:
             log.info("- deleting share metadata inconsistencies found")
-            fix_wrong_share_metadata(manila_metadata, wrong_share_metadata)
+            fix_wrong_share_metadata(manila_metadata, manila_engine, wrong_share_metadata)
     else:
         log.info("- share metadata is consistent")
 
 
-    wrong_share_gtstm = get_wrong_share_gtstm(manila_metadata)
+    wrong_share_gtstm = get_wrong_share_gtstm(manila_metadata, manila_engine)
     if len(wrong_share_gtstm) != 0:
         log.info("- share group type share type mapping inconsistencies found")
         # print out what we would delete
@@ -431,12 +430,12 @@ def main():
             log.info("-- share group type share type mapping id: %s - deleted share group type id: %s", share_gtstm_id, wrong_share_gtstm[share_gtstm_id])
         if not args.dry_run:
             log.info("- deleting share group type share type mapping inconsistencies found")
-            fix_wrong_share_gtstm(manila_metadata, wrong_share_gtstm)
+            fix_wrong_share_gtstm(manila_metadata, manila_engine, wrong_share_gtstm)
     else:
         log.info("- share group type share type mapping is consistent")
 
 
-    wrong_share_instance_access_mapping = get_wrong_share_instance_access_mapping(manila_metadata)
+    wrong_share_instance_access_mapping = get_wrong_share_instance_access_mapping(manila_metadata, manila_engine)
     if len(wrong_share_instance_access_mapping) != 0:
         log.info("- share instance access mapping inconsistencies found")
         # print out what we would delete
@@ -446,11 +445,11 @@ def main():
                      share_instance_id)
         if not args.dry_run:
             log.info("- deleting share group type share type mapping inconsistencies found")
-            fix_wrong_share_instance_access_mapping(manila_metadata, wrong_share_instance_access_mapping)
+            fix_wrong_share_instance_access_mapping(manila_metadata, manila_engine, wrong_share_instance_access_mapping)
     else:
         log.info("- share instance access mapping is consistent")
 
-    wrong_si_el_metadata = get_wrong_si_el_metadata(manila_metadata)
+    wrong_si_el_metadata = get_wrong_si_el_metadata(manila_metadata, manila_engine)
     if len(wrong_si_el_metadata) != 0:
         log.info("- share instance export location metadata inconsistencies found")
         # print out what we would delete
@@ -460,11 +459,11 @@ def main():
                      si_el_id)
         if not args.dry_run:
             log.info("- deleting share instance export location metadata inconsistencies found")
-            fix_wrong_si_el_metadata(manila_metadata, wrong_si_el_metadata)
+            fix_wrong_si_el_metadata(manila_metadata, manila_engine, wrong_si_el_metadata)
     else:
         log.info("- share instance export location metadata is consistent")
 
-    wrong_share_instance_metadata = get_wrong_share_instance_metadata(manila_metadata)
+    wrong_share_instance_metadata = get_wrong_share_instance_metadata(manila_metadata, manila_engine)
     if len(wrong_share_instance_metadata) != 0:
         log.info("- share instance metadata inconsistencies found")
         # print out what we would delete
@@ -474,7 +473,7 @@ def main():
                      share_instance_id)
         if not args.dry_run:
             log.info("- deleting share instance metadata inconsistencies found")
-            fix_wrong_share_instance_metadata(manila_metadata, wrong_share_instance_metadata)
+            fix_wrong_share_instance_metadata(manila_metadata, manila_engine, wrong_share_instance_metadata)
     else:
         log.info("- share instance metadata is consistent")
 
