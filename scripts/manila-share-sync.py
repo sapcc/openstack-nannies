@@ -589,8 +589,8 @@ class ManilaShareSyncNanny(ManilaNanny):
         Share: Dict[Keys['share_id', 'instance_id', 'created_at', 'updated_at', 'deleted_at',
                          'deleted', 'status', 'host'], Any]
         """
-        shares_t = Table('shares', self.db_metadata, autoload=True)
-        instances_t = Table('share_instances', self.db_metadata, autoload=True)
+        shares_t = Table('shares', self.db_metadata, autoload_with=self.engine)
+        instances_t = Table('share_instances', self.db_metadata, autoload_with=self.engine)
         q = select([shares_t.c.id.label('share_id'),
                     shares_t.c.created_at,
                     shares_t.c.updated_at,
@@ -608,8 +608,8 @@ class ManilaShareSyncNanny(ManilaNanny):
     def _query_shares(self):
         """ Get shares that are not deleted """
 
-        shares = Table('shares', self.db_metadata, autoload=True)
-        instances = Table('share_instances', self.db_metadata, autoload=True)
+        shares = Table('shares', self.db_metadata, autoload_with=self.engine)
+        instances = Table('share_instances', self.db_metadata, autoload_with=self.engine)
         stmt = select([shares.c.id,
                        shares.c.display_name,
                        shares.c.size,
@@ -643,7 +643,7 @@ class ManilaShareSyncNanny(ManilaNanny):
     def _query_share_instances(self, share_id):
         """ Get share instances for given share and that are not deleted """
 
-        instances = Table('share_instances', self.db_metadata, autoload=True)
+        instances = Table('share_instances', self.db_metadata, autoload_with=self.engine)
         stmt = select([instances.c.id,
                        instances.c.share_id,
                        instances.c.status,
@@ -703,8 +703,8 @@ class ManilaShareSyncNanny(ManilaNanny):
 
     def set_share_size(self, share_id, share_size):
         now = datetime.utcnow()
-        shares_t = Table('shares', self.db_metadata, autoload=True)
-        share_instances_t = Table('share_instances', self.db_metadata, autoload=True)
+        shares_t = Table('shares', self.db_metadata, autoload_with=self.engine)
+        share_instances_t = Table('share_instances', self.db_metadata, autoload_with=self.engine)
         update(shares_t) \
             .values(updated_at=now, size=share_size) \
             .where(shares_t.c.id == share_instances_t.c.share_id) \

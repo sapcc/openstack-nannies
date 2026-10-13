@@ -72,7 +72,6 @@ class ManilaNanny(http.server.HTTPServer):
         Session = sessionmaker(bind=engine)
         self.db_session = Session()
         self.db_metadata = MetaData()
-        self.db_metadata.bind = engine
         self.db_base = declarative_base()
         self.engine = engine
 
@@ -89,7 +88,7 @@ class ManilaNanny(http.server.HTTPServer):
 
     def db_table(self, table_name):
         """Return the database table"""
-        return Table(table_name, self.db_metadata, autoload=True)
+        return Table(table_name, self.db_metadata, autoload_with=self.engine)
 
     def renew_manila_client(self):
         self.manilaclient = create_manila_client(self.config_file, self.microversion)

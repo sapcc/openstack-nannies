@@ -90,8 +90,8 @@ class ManilaShareSnapshotNanny(ManilaNanny):
             self.sync_share_snapshot_state(snapshots, dry_run)
 
     def _query_share_snapshots(self):
-        Snapshots = Table('share_snapshots', self.db_metadata, autoload=True)
-        instances = Table('share_snapshot_instances', self.db_metadata, autoload=True)
+        Snapshots = Table('share_snapshots', self.db_metadata, autoload_with=self.engine)
+        instances = Table('share_snapshot_instances', self.db_metadata, autoload_with=self.engine)
         q = select([Snapshots.c.id,
                     Snapshots.c.share_id,
                     Snapshots.c.display_name,
@@ -121,7 +121,7 @@ class ManilaShareSnapshotNanny(ManilaNanny):
 
     def _query_share_snapshot_instances(self, snapshot_id):
         """ Get snapshot instances for given snapshot and that are not deleted """
-        instances = Table('share_snapshot_instances', self.db_metadata, autoload=True)
+        instances = Table('share_snapshot_instances', self.db_metadata, autoload_with=self.engine)
         stmt = select([instances.c.id,
                        instances.c.snapshot_id,
                        instances.c.status,
@@ -143,8 +143,8 @@ class ManilaShareSnapshotNanny(ManilaNanny):
         return snapshot_instances
 
     def query_orphan_snapshots(self):
-        Snapshots = Table('share_snapshots', self.db_metadata, autoload=True)
-        Shares = Table('shares', self.db_metadata, autoload=True)
+        Snapshots = Table('share_snapshots', self.db_metadata, autoload_with=self.engine)
+        Shares = Table('shares', self.db_metadata, autoload_with=self.engine)
         q = select([Snapshots.c.id, Snapshots.c.share_id])\
             .select_from(Snapshots.join(Shares, Snapshots.c.share_id == Shares.c.id))\
             .where(Snapshots.c.deleted == 'False')\
