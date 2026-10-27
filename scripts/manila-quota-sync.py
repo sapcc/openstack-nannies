@@ -149,16 +149,19 @@ class ManilaQuotaSyncNanny(ManilaNanny):
         # quota_usages_t = Table('quota_usages', self.db_metadata, autoload_with=self.engine)
         pass
 
-    def _run(self):
+    def _run(self, project_id=None):
         # prepare the output
         ptable_user = PrettyTable(["Project ID", "User ID", "Resource", "Quota -> Real", "Sync Status"])
         ptable_type = PrettyTable(["Project ID", "Share Type ID", "Resource", "Quota -> Real", "Sync Status"])
 
-        try:
-            projects = self.get_projects()
-        except sqlalchemy.exc.OperationalError:
-            self.init_db_connection()
-            projects = self.get_projects()
+        if project_id:
+            projects = [project_id]
+        else:
+            try:
+                projects = self.get_projects()
+            except sqlalchemy.exc.OperationalError:
+                self.init_db_connection()
+                projects = self.get_projects()
 
         for project_id in projects:
             # get the quota usage of a project
@@ -422,6 +425,12 @@ def main():
         parser.add_argument("--dry-run",
                             action="store_true",
                             help="never sync resources (no interactive check)")
+        parser.add_argument("--project-id",
+                            type=str,
+                            help="sync only this project and exit")
+        parser.add_argument("--list-projects",
+                            action="store_true",
+                            help="list all projects and exit")
         args = parser.parse_args()
     except Exception as e:
         sys.stdout.write("Check command line arguments (%s)" % e)
@@ -434,8 +443,18 @@ def main():
         logging.fatal("start_http_server: %s", e)
         sys.exit(-1)
 
-    # args.dry_run = True
-    ManilaQuotaSyncNanny(args.config, args.interval, args.dry_run).run()
+    nanny = ManilaQuotaSyncNanny(args.config, args.interval, args.dry_run)
+
+    if args.list_projects:
+        for p in nanny.get_projects():
+            print(p)
+        sys.exit(0)
+    elif args.project_id:
+        nanny._run(project_id=args.project_id)
+        sys.exit(0)
+    else:
+        # args.dry_run = True
+        nanny.run()
 
 
 if __name__ == "__main__":
