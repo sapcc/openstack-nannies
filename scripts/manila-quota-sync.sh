@@ -22,11 +22,15 @@ unset http_proxy https_proxy all_proxy no_proxy
 
 # we run an endless loop to run the script periodically
 if [ "$MANILA_QUOTA_SYNC_ENABLED" = "True" ] || [ "$MANILA_QUOTA_SYNC_ENABLED" = "true" ]; then
+    EXTRA_ARGS=""
+    if [ -n "$MANILA_QUOTA_SYNC_PROJECT_ID" ]; then
+        EXTRA_ARGS="--project-id $MANILA_QUOTA_SYNC_PROJECT_ID"
+    fi
     if [ "$MANILA_QUOTA_SYNC_DRY_RUN" = "False" ] || [ "$MANILA_QUOTA_SYNC_DRY_RUN" = "false" ]; then
         echo "INFO: run nanny job for the manila quota sync"
-        /var/lib/openstack/bin/python /scripts/manila-quota-sync.py
+        /var/lib/openstack/bin/python /scripts/manila-quota-sync.py $EXTRA_ARGS
     else
         echo "INFO: run nanny job for the manila quota sync in dry-run mode only!"
-        /var/lib/openstack/bin/python /scripts/manila-quota-sync.py --dry-run
+        /var/lib/openstack/bin/python /scripts/manila-quota-sync.py --dry-run $EXTRA_ARGS
     fi
 fi
